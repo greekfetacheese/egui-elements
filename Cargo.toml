@@ -1,0 +1,36 @@
+[package]
+name = "egui-elements"
+authors = ["Michalis Molfetas <greekfetacheese@proton.me>"]
+version = "0.1.0"
+edition = "2024"
+description = "A collection of widgets and utilities for the egui GUI library."
+license = "MIT"
+keywords = ["gui", "egui", "widgets", "ui"]
+categories = ["gui"]
+repository = "https://github.com/greekfetacheese/egui-elements"
+
+[dependencies]
+egui = "0.36"
+palette = "0.7"
+
+serde_json = { version = "1", optional = true }
+serde = { version = "1", optional = true, features = ["derive"] }
+secure-types = {version = "0.3", optional = true}
+
+xcap = { version = "0.8", optional = true }
+enigo = { version = "0.6", optional = true }
+rqrr = { version = "0.10", optional = true }
+
+qrcodegen-no-heap = {version = "1", optional = true}
+image = {version = "0.25", optional = true}
+
+
+[features]
+serde = ["dep:serde", "palette/serde", "dep:serde_json", "egui/serde"]
+qr-scanner = ["dep:secure-types", "dep:xcap", "dep:enigo", "dep:rqrr"]
+secure-types = ["dep:secure-types"]
+qr-image = ["dep:qrcodegen-no-heap", "dep:image"]
+full = ["serde", "qr-scanner", "secure-types", "qr-image"]
+
+[dev-dependencies]
+eframe = "0.36"
