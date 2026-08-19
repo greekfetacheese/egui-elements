@@ -6,6 +6,7 @@ use egui::{
    text::LayoutJob,
 };
 use std::sync::Arc;
+use crate::theme::Theme;
 use crate::visuals::LabelVisuals;
 
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
@@ -195,7 +196,11 @@ impl Label {
          );
 
          let text_color =
-            self.visuals.as_ref().map(|v| v.text).unwrap_or(button_visuals.text_color());
+            self.visuals
+               .or_else(|| Theme::label_visuals_from_ctx(ui.ctx()))
+               .as_ref()
+               .map(|v| v.text)
+               .unwrap_or(button_visuals.text_color());
          ui.painter().add(TextShape::new(
             text_pos,
             galley.clone(),
@@ -303,32 +308,33 @@ impl Widget for Label {
       // Paint
       if ui.is_rect_visible(rect) {
          let visuals = ui.style().interact_selectable(&response, self.selected);
+         let label_visuals = self.visuals.or_else(|| Theme::label_visuals_from_ctx(ui.ctx()));
 
          let fill = if self.selected {
-            self.visuals.as_ref().map(|v| v.bg_selected).unwrap_or(visuals.bg_fill)
+            label_visuals.as_ref().map(|v| v.bg_selected).unwrap_or(visuals.bg_fill)
          } else if response.hovered() || response.has_focus() {
             match self.interactive {
-               true => self.visuals.as_ref().map(|v| v.bg_hover).unwrap_or(visuals.weak_bg_fill),
+               true => label_visuals.as_ref().map(|v| v.bg_hover).unwrap_or(visuals.weak_bg_fill),
                false => Color32::TRANSPARENT,
             }
          } else {
-            self.visuals.as_ref().map(|v| v.bg).unwrap_or(Color32::TRANSPARENT)
+            label_visuals.as_ref().map(|v| v.bg).unwrap_or(Color32::TRANSPARENT)
          };
 
          let stroke = if self.selected {
-            self.visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke)
+            label_visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke)
          } else if response.hovered() || response.has_focus() {
             match self.interactive {
-               true => self.visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke),
+               true => label_visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke),
                false => Stroke::new(0.0, Color32::TRANSPARENT),
             }
          } else {
-            self.visuals.as_ref().map(|v| v.border).unwrap_or(Stroke::NONE)
+            label_visuals.as_ref().map(|v| v.border).unwrap_or(Stroke::NONE)
          };
 
          let expansion = self.expansion.unwrap_or(visuals.expansion);
          let corner =
-            self.visuals.as_ref().map(|v| v.corner_radius).unwrap_or(visuals.corner_radius);
+            label_visuals.as_ref().map(|v| v.corner_radius).unwrap_or(visuals.corner_radius);
          let background_rect = rect.expand(expansion);
 
          ui.painter().add(RectShape::new(
@@ -349,7 +355,7 @@ impl Widget for Label {
             self.text_first,
          );
 
-         let text_color = self.visuals.as_ref().map(|v| v.text).unwrap_or(visuals.text_color());
+         let text_color = label_visuals.as_ref().map(|v| v.text).unwrap_or(visuals.text_color());
 
          ui.painter().add(TextShape::new(
             text_pos,

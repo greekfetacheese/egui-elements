@@ -8,6 +8,7 @@ use egui::{
 };
 
 use std::{fmt::Debug, hash::Hash, sync::Arc};
+use crate::theme::Theme;
 use crate::visuals::TextEditVisuals;
 
 #[cfg(feature = "secure-types")]
@@ -329,7 +330,8 @@ impl<'a> SecureTextEdit<'a> {
       self
    }
 
-   pub fn show(self, ui: &mut Ui) -> SecureTextEditOutput {
+   pub fn show(mut self, ui: &mut Ui) -> SecureTextEditOutput {
+      self.visuals = self.visuals.or_else(|| Theme::text_edit_visuals_from_ctx(ui.ctx()));
       let frame = self.frame;
       let where_to_put_background = ui.painter().add(Shape::Noop);
       let background_color =

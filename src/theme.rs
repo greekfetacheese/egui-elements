@@ -1,8 +1,8 @@
 use crate::overlay::OverlayManager;
 use crate::themes::tokyo_night;
-use crate::visuals::*;
 use crate::utils::*;
-use egui::{Color32, Context, Frame, Id, Style};
+use crate::visuals::*;
+use egui::{Color32, Context, Frame, Id, Style, Vec2};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +29,7 @@ impl ThemeKind {
 #[derive(Debug, Clone)]
 pub struct Theme {
     /// True if the theme is dark
-    pub dark_mode: bool,
+    pub dark: bool,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub overlay_manager: OverlayManager,
 
@@ -53,11 +53,25 @@ pub struct Theme {
 
     pub frame1_visuals: FrameVisuals,
     pub frame2_visuals: FrameVisuals,
+
+    /// Corner radius for widgets
+    pub corner_radius: u8,
+
+    /// Inner margin for widgets
+    pub inner_margin: i8,
+
+    /// Outer margin for widgets
+    pub outer_margin: i8,
+
+    /// Padding inside buttons
+    /// 
+    /// Must use this from [egui::Ui::spacing_mut] to change the padding
+    pub button_padding: Vec2,
 }
 
 impl PartialEq for Theme {
     fn eq(&self, other: &Self) -> bool {
-        self.dark_mode == other.dark_mode
+        self.dark == other.dark
             && self.kind == other.kind
             && self.style == other.style
             && self.colors == other.colors
@@ -85,7 +99,7 @@ impl Theme {
         self.colors.button_visuals
     }
 
-    pub fn label_visuals(&self) -> ButtonVisuals {
+    pub fn label_visuals(&self) -> LabelVisuals {
         self.colors.label_visuals
     }
 
@@ -101,7 +115,44 @@ impl Theme {
         Id::new("elements::theme")
     }
 
-    /// Install this theme into the given egui context
+    fn button_visuals_id() -> Id {
+        Id::new("elements::button_visuals")
+    }
+
+    fn label_visuals_id() -> Id {
+        Id::new("elements::label_visuals")
+    }
+
+    fn combo_box_visuals_id() -> Id {
+        Id::new("elements::combo_box_visuals")
+    }
+
+    fn text_edit_visuals_id() -> Id {
+        Id::new("elements::text_edit_visuals")
+    }
+
+    /// Widget visuals stored by [`Theme::install`], if any.
+    ///
+    /// Widgets resolve in this order: `self.visuals` → context → [`egui::Style`].
+    pub fn button_visuals_from_ctx(ctx: &Context) -> Option<ButtonVisuals> {
+        ctx.data(|d| d.get_temp(Self::button_visuals_id()))
+    }
+
+    pub fn label_visuals_from_ctx(ctx: &Context) -> Option<LabelVisuals> {
+        ctx.data(|d| d.get_temp(Self::label_visuals_id()))
+    }
+
+    pub fn combo_box_visuals_from_ctx(ctx: &Context) -> Option<ComboBoxVisuals> {
+        ctx.data(|d| d.get_temp(Self::combo_box_visuals_id()))
+    }
+
+    pub fn text_edit_visuals_from_ctx(ctx: &Context) -> Option<TextEditVisuals> {
+        ctx.data(|d| d.get_temp(Self::text_edit_visuals_id()))
+    }
+
+    /// Install this theme into the given egui context.
+    ///
+    /// Widgets then pick up their visuals from `ctx` automatically.
     pub fn install(self, ctx: &Context) {
         let unchanged = ctx.data(|d| {
             d.get_temp::<Theme>(Self::storage_id())
@@ -112,8 +163,18 @@ impl Theme {
             return;
         }
 
+        let button_visuals = self.button_visuals();
+        let label_visuals = self.label_visuals();
+        let combo_box_visuals = self.combo_box_visuals();
+        let text_edit_visuals = self.text_edit_visuals();
+
         ctx.set_global_style(self.style.clone());
         ctx.data_mut(|d| d.insert_temp(Self::storage_id(), self));
+
+        ctx.data_mut(|d| d.insert_temp(Self::button_visuals_id(), button_visuals));
+        ctx.data_mut(|d| d.insert_temp(Self::label_visuals_id(), label_visuals));
+        ctx.data_mut(|d| d.insert_temp(Self::combo_box_visuals_id(), combo_box_visuals));
+        ctx.data_mut(|d| d.insert_temp(Self::text_edit_visuals_id(), text_edit_visuals));
     }
 
     /// Read the current theme from the context

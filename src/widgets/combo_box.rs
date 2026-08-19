@@ -4,6 +4,7 @@ use egui::{
    epaint::{RectShape, Shape, StrokeKind},
    style::WidgetVisuals,
 };
+use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use super::label::Label;
 
@@ -86,13 +87,14 @@ impl ComboBox {
       let popup_id = button_id.with("popup");
 
       let is_popup_open = Popup::is_id_open(ui.ctx(), popup_id);
+      let visuals = self.visuals.or_else(|| Theme::combo_box_visuals_from_ctx(ui.ctx()));
 
       // Button Rendering
       let button_response = combo_box_with_image_button(
          ui,
          button_id,
          is_popup_open,
-         self.visuals.as_ref(),
+         visuals.as_ref(),
          &self.selected_item,
          self.icon,
          self.wrap_mode,

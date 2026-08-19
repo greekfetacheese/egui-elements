@@ -4,6 +4,7 @@ use egui::{
    WidgetText, WidgetType,
 };
 
+use crate::theme::Theme;
 use crate::visuals::ButtonVisuals;
 
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
@@ -216,6 +217,8 @@ impl<'a> Button<'a> {
          image_tint_follows_text_color,
          limit_image_size,
       } = self;
+
+      let visuals = visuals.or_else(|| Theme::button_visuals_from_ctx(ui.ctx()));
 
       if !small {
          min_size.y = min_size.y.at_least(ui.spacing().interact_size.y);

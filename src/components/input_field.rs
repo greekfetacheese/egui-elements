@@ -170,12 +170,12 @@ impl SecureInputField {
                     let output = text_edit.show(ui);
 
                     let img_source = if hidden {
-                        match theme.dark_mode {
+                        match theme.dark {
                             true => INVISIBLE_WHITE,
                             false => INVISIBLE_BLACK,
                         }
                     } else {
-                        match theme.dark_mode {
+                        match theme.dark {
                             true => VISIBLE_WHITE,
                             false => VISIBLE_BLACK,
                         }
@@ -197,7 +197,7 @@ impl SecureInputField {
                     #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
                     {
                         if self.qr_enabled {
-                            let img_source = match theme.dark_mode {
+                            let img_source = match theme.dark {
                                 true => QR_CODE_WHITE,
                                 false => QR_CODE_BLACK,
                             };

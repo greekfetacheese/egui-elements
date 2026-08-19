@@ -2,7 +2,7 @@ use crate::theme::{Theme, Typography, ThemeColors, ThemeKind};
 use crate::overlay::OverlayManager;
 use crate::visuals::*;
 use egui::{
-    Color32, CornerRadius, Frame, Margin, Shadow, Spacing, Stroke, Style, Visuals,
+    Color32, CornerRadius, Frame, Margin, Shadow, vec2, Spacing, Stroke, Style, Visuals,
     style::{Selection, WidgetVisuals, Widgets},
 };
 
@@ -35,10 +35,14 @@ const WARNING: Color32 = CAMEL;
 const SUCCESS: Color32 = GREEN;
 const INFO: Color32 = PASTEL_PURPLE;
 
+const CORNER_RADIUS: u8 = 6;
+const INNER_MARGIN: i8 = 10;
+const OUTER_MARGIN: i8 = 5;
+
 /// Return this theme
 pub fn theme() -> Theme {
     Theme {
-        dark_mode: true,
+        dark: true,
         overlay_manager: OverlayManager::new(),
         image_tint_recommended: true,
         kind: ThemeKind::TokyoNight,
@@ -50,6 +54,10 @@ pub fn theme() -> Theme {
         frame2: frame2(&colors()),
         frame1_visuals: frame1_visuals(&colors()),
         frame2_visuals: frame2_visuals(&colors()),
+        corner_radius: CORNER_RADIUS,
+        inner_margin: INNER_MARGIN,
+        outer_margin: OUTER_MARGIN,
+        button_padding: vec2(10.0, 8.0),
     }
 }
 
@@ -95,8 +103,8 @@ pub fn window_frame(colors: &ThemeColors) -> Frame {
         color: colors.border,
     };
     Frame {
-        corner_radius: CornerRadius::same(6),
-        inner_margin: Margin::same(10),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
+        inner_margin: Margin::same(INNER_MARGIN),
         fill: colors.widget_bg,
         stroke: Stroke::new(1.0, colors.border),
         shadow: shadow,
@@ -113,8 +121,8 @@ pub fn frame1(colors: &ThemeColors) -> Frame {
         color: colors.border,
     };
     Frame {
-        corner_radius: CornerRadius::same(6),
-        inner_margin: Margin::same(10),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
+        inner_margin: Margin::same(INNER_MARGIN),
         fill: colors.widget_bg,
         stroke: Stroke::NONE,
         shadow: shadow,
@@ -140,9 +148,9 @@ pub fn frame2(colors: &ThemeColors) -> Frame {
         color: colors.border,
     };
     Frame {
-        corner_radius: CornerRadius::same(6),
-        inner_margin: Margin::same(10),
-        outer_margin: Margin::same(5),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
+        inner_margin: Margin::same(INNER_MARGIN),
+        outer_margin: Margin::same(OUTER_MARGIN),
         fill: colors.bg,
         stroke: Stroke::NONE,
         shadow: shadow,
@@ -188,7 +196,7 @@ pub fn combo_box_visuals() -> ComboBoxVisuals {
         border: Stroke::new(1.0, Color32::TRANSPARENT),
         border_hover: Stroke::new(1.0, DUSK),
         border_open: Stroke::new(1.0, Color32::TRANSPARENT),
-        corner_radius: CornerRadius::same(3),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
         shadow: Shadow {
             offset: (0, 0).into(),
             blur: 2,
@@ -215,7 +223,7 @@ pub fn text_edit_visuals() -> TextEditVisuals {
         border: Stroke::new(1.0, BORDER),
         border_hover: Stroke::new(1.0, LIGHT_BLUE),
         border_open: Stroke::new(1.0, LIGHT_BLUE),
-        corner_radius: CornerRadius::same(3),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
         shadow: Shadow::NONE,
     }
 }
@@ -251,7 +259,7 @@ fn visuals(widgets: Widgets, colors: &ThemeColors) -> Visuals {
         code_bg_color: colors.bg,
         warn_fg_color: colors.warning,
         error_fg_color: colors.error,
-        window_corner_radius: CornerRadius::same(6),
+        window_corner_radius: CornerRadius::same(CORNER_RADIUS),
         window_shadow: Shadow {
             offset: (0, 0).into(),
             blur: 3,
@@ -270,7 +278,7 @@ fn widgets(colors: ThemeColors) -> Widgets {
         bg_fill: colors.widget_bg,
         weak_bg_fill: colors.bg,
         bg_stroke: Stroke::new(1.0, colors.border),
-        corner_radius: CornerRadius::same(4),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
         fg_stroke: Stroke::new(1.0, colors.text),
         expansion: 0.0,
     };
