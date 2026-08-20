@@ -20,14 +20,17 @@ pub const CAMEL: Color32 = Color32::from_rgba_premultiplied(218, 147, 61, 255);
 pub const GREEN: Color32 = Color32::from_rgba_premultiplied(72, 182, 120, 255);
 pub const PASTEL_PURPLE: Color32 = Color32::from_rgba_premultiplied(194, 111, 255, 255);
 pub const FADED_BLUE: Color32 = Color32::from_rgba_premultiplied(65, 73, 97, 118);
+/// DUSK mixed 35% toward POWDER_BLUE. Readable muted type (AA on bg / widget_bg).
+pub const MUTED: Color32 = Color32::from_rgba_premultiplied(120, 134, 174, 255);
+/// DARK3 mixed 20% toward LIGHT_BLUE. Selected / emphasis fill, not hover.
+pub const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(56, 80, 103, 255);
 
 const TITLE_BAR: Color32 = DARK;
 const MAIN_BG: Color32 = DARK;
 const WIDGET_BG: Color32 = DARK2;
 const HOVER: Color32 = DARK3;
 const TEXT: Color32 = POWDER_BLUE;
-const TEXT_MUTED: Color32 = DUSK;
-const HIGHLIGHT: Color32 = HOVER;
+const TEXT_MUTED: Color32 = MUTED;
 const BORDER: Color32 = SOFT_BLUE;
 const ACCENT: Color32 = LIGHT_BLUE;
 const ERROR: Color32 = SALMON_PINK;
@@ -255,8 +258,8 @@ fn visuals(widgets: Widgets, colors: &ThemeColors) -> Visuals {
         override_text_color: Some(colors.text),
         widgets,
         selection: Selection {
-            bg_fill: colors.text_muted, // affects selected text color, combox selected item bg
-            stroke: Stroke::new(1.0, colors.highlight), // also affects TextEdit border color when active
+            bg_fill: colors.highlight, // selected text / combo selected row
+            stroke: Stroke::new(1.0, colors.accent), // also affects TextEdit border color when active
         },
         hyperlink_color: colors.info,
         faint_bg_color: colors.bg,
@@ -302,8 +305,8 @@ fn widgets(colors: ThemeColors) -> Widgets {
         inactive: inactive_visuals,
         hovered: WidgetVisuals {
             bg_fill: colors.widget_bg,
-            weak_bg_fill: colors.highlight,
-            bg_stroke: Stroke::new(1.0, colors.highlight),
+            weak_bg_fill: colors.hover,
+            bg_stroke: Stroke::new(1.0, colors.hover),
             ..base_visuals
         },
         active: WidgetVisuals {

@@ -262,7 +262,7 @@ pub struct ThemeColors {
     /// For example a hint inside a text field
     pub text_muted: Color32,
 
-    /// Highlight color
+    /// Selected / emphasis fill. Distinct from [`Self::hover`].
     pub highlight: Color32,
 
     /// Border color

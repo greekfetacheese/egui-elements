@@ -488,27 +488,29 @@ impl DemoApp {
                 .min_size(button_size);
             ui.add(btn);
 
-            let btn = Button::new(RichText::new("Accent fill").size(size).color(text_color))
+            let on_fill = self.theme.colors.bg;
+
+            let btn = Button::new(RichText::new("Accent fill").size(size).color(on_fill))
                 .bg_color(self.theme.colors.accent)
                 .min_size(button_size);
             ui.add(btn);
 
-            let btn = Button::new(RichText::new("Success").size(size).color(text_color))
+            let btn = Button::new(RichText::new("Success").size(size).color(on_fill))
                 .bg_color(self.theme.colors.success)
                 .min_size(button_size);
             ui.add(btn);
 
-            let btn = Button::new(RichText::new("Warning").size(size).color(text_color))
+            let btn = Button::new(RichText::new("Warning").size(size).color(on_fill))
                 .bg_color(self.theme.colors.warning)
                 .min_size(button_size);
             ui.add(btn);
 
-            let btn = Button::new(RichText::new("Error").size(size).color(text_color))
+            let btn = Button::new(RichText::new("Error").size(size).color(on_fill))
                 .bg_color(self.theme.colors.error)
                 .min_size(button_size);
             ui.add(btn);
 
-            let btn = Button::new(RichText::new("Info").size(size).color(text_color))
+            let btn = Button::new(RichText::new("Info").size(size).color(on_fill))
                 .bg_color(self.theme.colors.info)
                 .min_size(button_size);
             ui.add(btn);
