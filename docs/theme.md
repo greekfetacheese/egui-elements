@@ -293,7 +293,64 @@ Not palette problems. Track them when they block a theme or the demo.
 
 1. **`on_*` slots** are a rule (`bg`) but not fields on `ThemeColors` yet.
 2. **`Button::bg_color`** still snaps hover/click to gray `hover` / `widget_bg`. Semantic fills must stay in-family.
-3. **`DUSK`** is theme-local chrome. A second theme needs its own mid hover-border; do not overload `text_muted` or `border` for it.
-4. **`error` / `info` on `hover`** sit just under 4.5:1. Acceptable; don’t lighten the semantic set unless glyphs-on-hovered-rows become common.
+3. **Hover-border chrome** is theme-local (Tokyo Night `DUSK`, McLaren `HOVER_CHROME`). Do not overload `text_muted` or `border` for it.
+4. **`error` / `info` on `hover`** may sit just under 4.5:1. Acceptable; don’t lighten the semantic set unless glyphs-on-hovered-rows become common.
 
-When Tokyo Night’s hex change, update §12. When a **role** changes, update §2–§9 first, then the implementation.
+When a theme’s hex change, update its reference section. When a **role** changes, update §2–§9 first, then the implementations.
+
+---
+
+## 14. Reference: McLaren 650GTS GT3
+
+2015 McLaren 650S GT3 — carbon weave canvas, papaya body, steering-wheel HUD cyan/green. Cypherpunk night UI: dark carbon, orange punch, cyan chrome.
+
+`ThemeKind::McLaren650GtsGt3` — `src/themes/mclaren_650gts_gt3.rs`.
+
+### Role split
+
+| Slot | Paint | Why |
+|------|-------|-----|
+| `accent` | papaya `#ff7a08` | Brand / focus / text-edit open |
+| `info` | HUD cyan `#38d2e6` | Links, tech glow |
+| `highlight` | papaya wash `#613f25` | Selected ≠ hover |
+| Hover border | `HOVER_CHROME` `#397683` | Cyan chrome, not a slot |
+| `hover` | carbon lift `#242830` | Gray step, no chroma |
+
+### Named paints
+
+| Const | RGB | Hex | Maps to |
+|-------|-----|-----|---------|
+| `CARBON` | 12, 13, 16 | `#0c0d10` | `bg`, `title_bar`, text on chromatic fills |
+| `CARBON2` | 18, 20, 24 | `#121418` | `widget_bg` |
+| `CARBON3` | 36, 40, 48 | `#242830` | `hover` |
+| `HIGHLIGHT` | 97, 63, 37 | `#613f25` | `highlight` (`CARBON3` + 28% papaya) |
+| `STEEL` | 58, 68, 78 | `#3a444e` | `border`, widget shadow |
+| `FADED_STEEL` | 58, 68, 78, 118 | | Native window shadow only |
+| `HOVER_CHROME` | 57, 118, 131 | `#397683` | Hover **border** only |
+| `MUTED` | 131, 144, 151 | `#839097` | `text_muted` |
+| `HUD_WHITE` | 220, 236, 240 | `#dcecf0` | `text` |
+| `PAPAYA` | 255, 122, 8 | `#ff7a08` | `accent` |
+| `SIGNAL_RED` | 235, 80, 85 | `#eb5055` | `error` |
+| `AMBER` | 240, 186, 48 | `#f0ba30` | `warning` |
+| `HUD_GREEN` | 48, 210, 130 | `#30d282` | `success` |
+| `HUD_CYAN` | 56, 210, 230 | `#38d2e6` | `info` |
+
+### Contrast (approx.)
+
+| Pair | Ratio |
+|------|-------|
+| `text` on `bg` / `widget_bg` / `hover` | 16.0 / 15.2 / 12.2 |
+| `text` on `highlight` | 7.7 |
+| `text_muted` on `bg` / `widget_bg` | 5.9 / 5.6 |
+| `bg` on accent / error / warning / success / info | 7.4 / 5.4 / 10.9 / 9.9 / 10.7 |
+| Chromatics as glyphs on `bg` / `widget_bg` | all ≥ 4.5 |
+| `bg` vs `widget_bg` | 1.05 |
+| `highlight` vs `hover` | 1.58 |
+
+### Geometry
+
+- Corner radius: 4 (frames, combo, text edit), 2 (buttons)
+- Inner margin 10, outer 5, button padding (10, 8)
+- Animation 0.3s
+- `image_tint_recommended`: true
+

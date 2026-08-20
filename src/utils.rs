@@ -148,7 +148,7 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
     let current = Label::new(text, None);
 
     ComboBox::new("Theme switcher", current)
-        .width(150.0)
+        .width(200.0)
         .show_ui(ui, |ui| {
             for kind in ThemeKind::to_vec() {
                 let label = RichText::new(kind.to_str()).size(current_theme.typography.normal);

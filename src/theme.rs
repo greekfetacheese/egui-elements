@@ -1,5 +1,5 @@
 use crate::overlay::OverlayManager;
-use crate::themes::tokyo_night;
+use crate::themes::{mclaren_650gts_gt3, tokyo_night};
 use crate::utils::*;
 use crate::visuals::*;
 use egui::{Color32, Context, Frame, Id, Style, Vec2};
@@ -9,17 +9,20 @@ use egui::{Color32, Context, Frame, Id, Style, Vec2};
 pub enum ThemeKind {
     /// Based on https://github.com/tokyo-night/tokyo-night-vscode-theme
     TokyoNight,
+    /// Based on 2015 McLaren 650S GT3
+    McLaren650GtsGt3,
 }
 
 impl ThemeKind {
     pub fn to_str(&self) -> &str {
         match self {
             ThemeKind::TokyoNight => "Tokyo Night",
+            ThemeKind::McLaren650GtsGt3 => "McLaren 650GTS GT3",
         }
     }
 
     pub fn to_vec() -> Vec<Self> {
-        vec![Self::TokyoNight]
+        vec![Self::TokyoNight, Self::McLaren650GtsGt3]
     }
 }
 
@@ -83,6 +86,7 @@ impl Theme {
     pub fn new(kind: ThemeKind) -> Self {
         let theme = match kind {
             ThemeKind::TokyoNight => tokyo_night::theme(),
+            ThemeKind::McLaren650GtsGt3 => mclaren_650gts_gt3::theme(),
         };
 
         theme
@@ -91,6 +95,7 @@ impl Theme {
     pub fn style(&self) -> Style {
         match self.kind {
             ThemeKind::TokyoNight => tokyo_night::style(),
+            ThemeKind::McLaren650GtsGt3 => mclaren_650gts_gt3::style(),
         }
     }
 
