@@ -150,8 +150,9 @@ impl eframe::App for DemoApp {
 
         if let Some(new_theme) = self.editor.show(&mut self.theme, ui) {
             self.theme = new_theme;
-            self.install_theme(ui.ctx());
         }
+
+        self.theme.clone().install(ui.ctx());
 
         self.show_window(ui);
         self.show_modal(ui);

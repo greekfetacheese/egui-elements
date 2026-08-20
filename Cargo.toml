@@ -11,7 +11,6 @@ repository = "https://github.com/greekfetacheese/egui-elements"
 
 [dependencies]
 egui = "0.36"
-palette = "0.7"
 
 serde_json = { version = "1", optional = true }
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -26,7 +25,7 @@ image = {version = "0.25", optional = true}
 
 
 [features]
-serde = ["dep:serde", "palette/serde", "dep:serde_json", "egui/serde"]
+serde = ["dep:serde", "dep:serde_json", "egui/serde"]
 qr-scanner = ["dep:secure-types", "dep:xcap", "dep:enigo", "dep:rqrr"]
 secure-types = ["dep:secure-types"]
 qr-image = ["dep:qrcodegen-no-heap", "dep:image"]

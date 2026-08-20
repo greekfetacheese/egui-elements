@@ -2,7 +2,6 @@ use crate::theme::*;
 use crate::visuals::FrameVisuals;
 use crate::widgets::{ComboBox, Label};
 use egui::{Color32, Frame, RichText, Sense, Ui};
-use palette::{Hsl, IntoColor, Srgba};
 
 /// Should work for most images that are shown on a very dark background
 pub const TINT_1: Color32 = Color32::from_rgba_premultiplied(216, 216, 216, 255);
@@ -22,22 +21,13 @@ pub struct Hsla {
 
 impl Hsla {
     pub fn from_color32(c: Color32) -> Self {
-        let srgba = Srgba::new(
-            c.r() as f32 / 255.0,
-            c.g() as f32 / 255.0,
-            c.b() as f32 / 255.0,
-            c.a() as f32 / 255.0,
-        );
-        let hsl: Hsl = srgba.into_color();
-        let (h, s, l) = hsl.into_components();
-        // Normalize hue to [0, 360)
-        let mut hue = h.into_degrees();
-        hue = (hue % 360.0 + 360.0) % 360.0;
+        let (r, g, b) = unpremultiply_srgb(c);
+        let (h, s, l) = srgb_to_hsl(r, g, b);
         Hsla {
-            h: hue,
+            h,
             s: s * 100.0,
             l: l * 100.0,
-            a: srgba.alpha,
+            a: c.a() as f32 / 255.0,
         }
     }
 
@@ -49,29 +39,18 @@ impl Hsla {
     }
 
     pub fn to_color32(&self) -> Color32 {
-        let srgba = self.to_srgba();
-        let (r, g, b, a) = srgba.into_components();
-        Color32::from_rgba_unmultiplied(
-            (r * 255.0) as u8,
-            (g * 255.0) as u8,
-            (b * 255.0) as u8,
-            (a * 255.0) as u8,
-        )
-    }
-
-    pub fn to_srgba(&self) -> Srgba {
-        let hsl = Hsl::new(self.h, self.s / 100.0, self.l / 100.0);
-        hsl.into_color()
+        let (r, g, b, a) = self.to_rgba_components();
+        Color32::from_rgba_unmultiplied(r, g, b, a)
     }
 
     pub fn to_rgba_components(&self) -> (u8, u8, u8, u8) {
-        let srgba = self.to_srgba();
-        let (r, g, b, a) = srgba.into_components();
-        let r = (r * 255.0) as u8;
-        let g = (g * 255.0) as u8;
-        let b = (b * 255.0) as u8;
-        let a = (a * 255.0) as u8;
-        (r, g, b, a)
+        let (r, g, b) = hsl_to_srgb(self.h, self.s / 100.0, self.l / 100.0);
+        (
+            channel_to_u8(r),
+            channel_to_u8(g),
+            channel_to_u8(b),
+            channel_to_u8(self.a),
+        )
     }
 
     pub fn shades(&self, num_shades: usize, direction: ShadeDirection) -> Vec<Color32> {
@@ -94,6 +73,68 @@ impl Hsla {
 pub enum ShadeDirection {
     Lighter,
     Darker,
+}
+
+/// `Color32` stores premultiplied sRGB. HSL is computed in unpremultiplied space.
+fn unpremultiply_srgb(c: Color32) -> (f32, f32, f32) {
+    let a = c.a();
+    if a == 0 {
+        (0.0, 0.0, 0.0)
+    } else if a == 255 {
+        (
+            c.r() as f32 / 255.0,
+            c.g() as f32 / 255.0,
+            c.b() as f32 / 255.0,
+        )
+    } else {
+        let a = a as f32;
+        (c.r() as f32 / a, c.g() as f32 / a, c.b() as f32 / a)
+    }
+}
+
+/// Gamma-encoded sRGB → HSL (CSS / Wikipedia). `s` and `l` in 0..=1, `h` in 0..360.
+fn srgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) * 0.5;
+    let d = max - min;
+
+    if d == 0.0 {
+        return (0.0, 0.0, l);
+    }
+
+    let s = d / (1.0 - (2.0 * l - 1.0).abs());
+    let h = if max == r {
+        (g - b) / d
+    } else if max == g {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    (h.rem_euclid(6.0) * 60.0, s, l)
+}
+
+/// HSL → gamma-encoded sRGB. `h` in degrees, `s` and `l` in 0..=1.
+fn hsl_to_srgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
+    let s = s.clamp(0.0, 1.0);
+    let l = l.clamp(0.0, 1.0);
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let hp = h.rem_euclid(360.0) / 60.0;
+    let x = c * (1.0 - (hp.rem_euclid(2.0) - 1.0).abs());
+    let m = l - c * 0.5;
+    let (r, g, b) = match hp as u8 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    (r + m, g + m, b + m)
+}
+
+fn channel_to_u8(channel: f32) -> u8 {
+    (channel.clamp(0.0, 1.0) * 255.0) as u8
 }
 
 pub fn frame_palette_changed(old: &ThemeColors, new: &ThemeColors) -> bool {
@@ -166,4 +207,59 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
             }
         });
     new_theme_opt
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_near_color(a: Color32, b: Color32) {
+        let dr = (a.r() as i16 - b.r() as i16).abs();
+        let dg = (a.g() as i16 - b.g() as i16).abs();
+        let db = (a.b() as i16 - b.b() as i16).abs();
+        assert!(
+            dr <= 1 && dg <= 1 && db <= 1 && a.a() == b.a(),
+            "roundtrip {a:?} -> {b:?}"
+        );
+    }
+
+    #[test]
+    fn color32_hsla_roundtrip() {
+        let samples = [
+            Color32::from_rgba_unmultiplied(0, 0, 0, 255),
+            Color32::from_rgba_unmultiplied(255, 255, 255, 255),
+            Color32::from_rgba_unmultiplied(255, 0, 0, 255),
+            Color32::from_rgba_unmultiplied(0, 255, 0, 255),
+            Color32::from_rgba_unmultiplied(0, 0, 255, 255),
+            Color32::from_rgba_unmultiplied(128, 64, 192, 128),
+            Color32::from_rgba_unmultiplied(26, 27, 38, 255),
+            Color32::from_rgba_unmultiplied(122, 162, 247, 200),
+        ];
+        for c in samples {
+            assert_near_color(c, Hsla::from_color32(c).to_color32());
+        }
+    }
+
+    #[test]
+    fn from_hex_parses_and_preserves_alpha() {
+        let hsla = Hsla::from_hex("#7aa2f7").unwrap();
+        let (r, g, b, a) = hsla.to_rgba_components();
+        assert_eq!((r, g, b, a), (122, 162, 247, 255));
+
+        let hsla = Hsla::from_hex("#7aa2f780").unwrap();
+        assert!((hsla.a - 128.0 / 255.0).abs() < 1e-5);
+        assert_eq!(hsla.to_color32().a(), 128);
+    }
+
+    #[test]
+    fn hsl_pure_red() {
+        let c = Hsla {
+            h: 0.0,
+            s: 100.0,
+            l: 50.0,
+            a: 1.0,
+        }
+        .to_color32();
+        assert_eq!(c, Color32::from_rgb(255, 0, 0));
+    }
 }
