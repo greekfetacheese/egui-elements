@@ -688,7 +688,7 @@ impl DemoApp {
                             }
                         });
                         ui.add_space(8.0);
-                        self.credentials.show(&self.theme, ui);
+                        self.credentials.show(ui);
                     });
                 });
             });
@@ -709,7 +709,7 @@ impl DemoApp {
                         self.subheading(ui, "Secure input + QR");
                         self.muted(ui, "Toggle visibility; QR scan button on Linux.");
 
-                        let output = self.secure_field.show(&self.theme, ui);
+                        let output = self.secure_field.show(ui);
                         self.subheading(ui, "QrImage");
 
                         if let Some(output) = output {

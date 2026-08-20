@@ -27,6 +27,7 @@ pub struct SecureInputField {
     id: &'static str,
     icon_size: Vec2,
     min_size: Vec2,
+    inner_margin: Option<Margin>,
     #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
     qr_scanner: QRScanner,
     qr_enabled: bool,
@@ -52,6 +53,7 @@ impl SecureInputField {
             id,
             icon_size: vec2(20.0, 20.0),
             min_size: vec2(300.0, 20.0),
+            inner_margin: None,
             #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
             qr_scanner: QRScanner::new(),
             qr_enabled: true,
@@ -73,6 +75,26 @@ impl SecureInputField {
     /// Erase the text from memory
     pub fn erase(&mut self) {
         self.text.erase();
+    }
+
+    pub fn icon_size(mut self, size: Vec2) -> Self {
+        self.icon_size = size;
+        self
+    }
+
+    pub fn min_size(mut self, size: Vec2) -> Self {
+        self.min_size = size;
+        self
+    }
+
+    pub fn inner_margin(mut self, margin: Margin) -> Self {
+        self.inner_margin = Some(margin);
+        self
+    }
+
+    pub fn qr_enabled(mut self, enabled: bool) -> Self {
+        self.qr_enabled = enabled;
+        self
     }
 
     pub fn is_text_hidden(&self) -> bool {
@@ -109,6 +131,11 @@ impl SecureInputField {
         self.icon_size = size;
     }
 
+    /// Set the inner margin of this input field
+    pub fn set_inner_margin(&mut self, margin: Margin) {
+        self.inner_margin = Some(margin);
+    }
+
     /// Enable the QR scanner
     pub fn enable_qr_scanner(&mut self) {
         self.qr_enabled = true;
@@ -119,33 +146,17 @@ impl SecureInputField {
         self.qr_enabled = false;
     }
 
-    pub fn with_icon_size(mut self, size: Vec2) -> Self {
-        self.icon_size = size;
-        self
-    }
-
-    pub fn with_min_size(mut self, size: Vec2) -> Self {
-        self.min_size = size;
-        self
-    }
-
-    pub fn with_qr_enabled(mut self, enabled: bool) -> Self {
-        self.qr_enabled = enabled;
-        self
-    }
-
     /// Show this input field
     ///
     /// # Returns
     /// `SecureTextEditOutput`
-    pub fn show(&mut self, theme: &Theme, ui: &mut Ui) -> Option<SecureTextEditOutput> {
+    pub fn show(&mut self, ui: &mut Ui) -> Option<SecureTextEditOutput> {
         if !self.open {
             return None;
         }
 
         let ui_size = self.min_size;
-        let text_edit_visuals = theme.text_edit_visuals();
-        let button_visuals = theme.button_visuals();
+        let theme = Theme::current(ui.ctx());
 
         let mut hidden = self.is_text_hidden();
         let field_name = self.id.to_string();
@@ -154,14 +165,16 @@ impl SecureInputField {
         ui.label(RichText::new(field_name).size(theme.typography.large));
 
         let response = self.text.secure_mut(|text_str| {
-            let text_margin = Margin::same(10);
-            let row_height = (theme.typography.normal + text_margin.sum().y).max(ui_size.y);
+            let margin = self.inner_margin.unwrap_or_else(|| {
+                Margin::same(theme.inner_margin)
+            });
+
+            let row_height = (theme.typography.normal + margin.sum().y).max(ui_size.y);
             let row_size = vec2(ui_size.x, row_height);
 
             let text_edit = SecureTextEdit::singleline(text_str)
-                .visuals(text_edit_visuals)
                 .min_size(ui_size)
-                .margin(text_margin)
+                .margin(margin)
                 .password(hidden)
                 .font(FontId::proportional(theme.typography.normal));
 
@@ -189,7 +202,7 @@ impl SecureInputField {
                         Image::new(img_source).fit_to_exact_size(img_size)
                     };
 
-                    let button = Button::image(img).visuals(button_visuals);
+                    let button = Button::image(img);
                     if ui.add(button).clicked() {
                         hidden = !hidden;
                     }
@@ -210,7 +223,7 @@ impl SecureInputField {
                                 Image::new(img_source).fit_to_exact_size(img_size)
                             };
 
-                            let button = Button::image(img).visuals(button_visuals);
+                            let button = Button::image(img);
                             if ui.add(button).clicked() {
                                 self.qr_scanner.open(ui.ctx().clone());
                             }

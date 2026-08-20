@@ -157,6 +157,10 @@ impl OverlayCounter {
             return 0;
         }
 
+        if counter > 3 {
+            return 220;
+        }
+
         let mut a = 80;
         for _ in 1..counter {
             a += 40;
@@ -193,13 +197,7 @@ impl OverlayCounter {
         }
 
         let order = if recommend_order {
-            if counter == 1 {
-                Order::Background
-            } else if counter == 2 {
-                Order::Middle
-            } else {
-                Order::Foreground
-            }
+            self.recommended_order()
         } else {
             self.order()
         };

@@ -1,4 +1,4 @@
-use crate::theme::{Theme, Typography, ThemeColors, ThemeKind};
+use crate::theme::{Theme, Typography, ThemeVisuals, ThemeColors, ThemeKind};
 use crate::overlay::OverlayManager;
 use crate::visuals::*;
 use egui::{
@@ -46,14 +46,12 @@ pub fn theme() -> Theme {
         overlay_manager: OverlayManager::new(),
         image_tint_recommended: true,
         kind: ThemeKind::TokyoNight,
-        style: style(),
         colors: colors(),
         typography: typography(),
         window_frame: window_frame(&colors()),
         frame1: frame1(&colors()),
         frame2: frame2(&colors()),
-        frame1_visuals: frame1_visuals(&colors()),
-        frame2_visuals: frame2_visuals(&colors()),
+        visuals: theme_visuals(),
         corner_radius: CORNER_RADIUS,
         inner_margin: INNER_MARGIN,
         outer_margin: OUTER_MARGIN,
@@ -64,10 +62,6 @@ pub fn theme() -> Theme {
 /// Return the theme colors for this theme
 fn colors() -> ThemeColors {
     ThemeColors {
-        button_visuals: button_visuals(),
-        label_visuals: label_visuals(),
-        combo_box_visuals: combo_box_visuals(),
-        text_edit_visuals: text_edit_visuals(),
         title_bar: TITLE_BAR,
         bg: MAIN_BG,
         widget_bg: WIDGET_BG,
@@ -228,7 +222,7 @@ pub fn text_edit_visuals() -> TextEditVisuals {
     }
 }
 
-fn style() -> Style {
+pub fn style() -> Style {
     let widgets = widgets(colors());
     let visuals = visuals(widgets, &colors());
     let spacing = Spacing {
@@ -244,13 +238,24 @@ fn style() -> Style {
     }
 }
 
+fn theme_visuals() -> ThemeVisuals {
+    ThemeVisuals {
+        button_visuals: button_visuals(),
+        label_visuals: label_visuals(),
+        combo_box_visuals: combo_box_visuals(),
+        text_edit_visuals: text_edit_visuals(),
+        frame1_visuals: frame1_visuals(&colors()),
+        frame2_visuals: frame2_visuals(&colors()),
+    }
+}
+
 fn visuals(widgets: Widgets, colors: &ThemeColors) -> Visuals {
     Visuals {
         dark_mode: true,
         override_text_color: Some(colors.text),
         widgets,
         selection: Selection {
-            bg_fill: colors.highlight, // affects selected text color, combox selected item bg
+            bg_fill: colors.text_muted, // affects selected text color, combox selected item bg
             stroke: Stroke::new(1.0, colors.highlight), // also affects TextEdit border color when active
         },
         hyperlink_color: colors.info,

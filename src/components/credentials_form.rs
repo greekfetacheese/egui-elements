@@ -1,6 +1,5 @@
 use super::input_field::SecureInputField;
 use super::virtual_keyboard::VirtualKeyboard;
-use crate::theme::Theme;
 use egui::*;
 
 use secure_types::SecureString;
@@ -101,6 +100,14 @@ impl CredentialsForm {
         self
     }
 
+    /// Initialize with a custom icon size.
+    pub fn with_icon_size(mut self, size: Vec2) -> Self {
+        self.username.set_icon_size(size);
+        self.password.set_icon_size(size);
+        self.confirm_password.set_icon_size(size);
+        self
+    }
+
     /// Enable the virtual keyboard.
     pub fn enable_virtual_keyboard(&mut self) {
         self.virtual_keyboard.open();
@@ -168,9 +175,9 @@ impl CredentialsForm {
         let password = self.password.clone();
         let confirm_password = self.confirm_password.clone();
 
-        let username = username.with_min_size(size);
-        let password = password.with_min_size(size);
-        let confirm_password = confirm_password.with_min_size(size);
+        let username = username.min_size(size);
+        let password = password.min_size(size);
+        let confirm_password = confirm_password.min_size(size);
 
         self.username = username;
         self.password = password;
@@ -179,7 +186,7 @@ impl CredentialsForm {
         self
     }
 
-    pub fn show(&mut self, theme: &Theme, ui: &mut Ui) {
+    pub fn show(&mut self, ui: &mut Ui) {
         if !self.open {
             return;
         }
@@ -188,11 +195,11 @@ impl CredentialsForm {
             ui.spacing_mut().item_spacing.y = self.y_spacing;
             ui.spacing_mut().item_spacing.x = self.x_spacing;
 
-            let user_res = self.username.show(theme, ui);
-            let pass_res = self.password.show(theme, ui);
+            let user_res = self.username.show(ui);
+            let pass_res = self.password.show(ui);
 
             let confirm_password_focused = if self.confrim_password {
-                let res = self.confirm_password.show(theme, ui);
+                let res = self.confirm_password.show(ui);
                 res.map(|res| res.response.gained_focus()).unwrap_or(false)
             } else {
                 self.copy_passwd_to_confirm();
@@ -228,7 +235,7 @@ impl CredentialsForm {
 
             ui.add_space(10.0);
 
-            self.virtual_keyboard.show(theme, target_text, ui);
+            self.virtual_keyboard.show(target_text, ui);
         });
     }
 }

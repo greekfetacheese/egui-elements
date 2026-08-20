@@ -7,9 +7,7 @@ use egui::{Color32, Context, Frame, Id, Style, Vec2};
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThemeKind {
-    /// Inspired by the https://github.com/tokyo-night/tokyo-night-vscode-theme
-    ///
-    /// With some slight palette adjustments
+    /// Based on https://github.com/tokyo-night/tokyo-night-vscode-theme
     TokyoNight,
 }
 
@@ -40,8 +38,8 @@ pub struct Theme {
     pub image_tint_recommended: bool,
 
     pub kind: ThemeKind,
-    pub style: Style,
     pub colors: ThemeColors,
+    pub visuals: ThemeVisuals,
     pub typography: Typography,
 
     /// Used for [Frame] not native windows
@@ -50,9 +48,6 @@ pub struct Theme {
     pub frame1: Frame,
     /// Frame for nested elements, like individual list items.
     pub frame2: Frame,
-
-    pub frame1_visuals: FrameVisuals,
-    pub frame2_visuals: FrameVisuals,
 
     /// Corner radius for widgets
     pub corner_radius: u8,
@@ -73,14 +68,12 @@ impl PartialEq for Theme {
     fn eq(&self, other: &Self) -> bool {
         self.dark == other.dark
             && self.kind == other.kind
-            && self.style == other.style
             && self.colors == other.colors
             && self.typography == other.typography
             && self.window_frame == other.window_frame
             && self.frame1 == other.frame1
             && self.frame2 == other.frame2
-            && self.frame1_visuals == other.frame1_visuals
-            && self.frame2_visuals == other.frame2_visuals
+            && self.visuals == other.visuals
     }
 }
 
@@ -95,20 +88,26 @@ impl Theme {
         theme
     }
 
+    pub fn style(&self) -> Style {
+        match self.kind {
+            ThemeKind::TokyoNight => tokyo_night::style(),
+        }
+    }
+
     pub fn button_visuals(&self) -> ButtonVisuals {
-        self.colors.button_visuals
+        self.visuals.button_visuals
     }
 
     pub fn label_visuals(&self) -> LabelVisuals {
-        self.colors.label_visuals
+        self.visuals.label_visuals
     }
 
     pub fn combo_box_visuals(&self) -> ComboBoxVisuals {
-        self.colors.combo_box_visuals
+        self.visuals.combo_box_visuals
     }
 
     pub fn text_edit_visuals(&self) -> TextEditVisuals {
-        self.colors.text_edit_visuals
+        self.visuals.text_edit_visuals
     }
 
     fn storage_id() -> Id {
@@ -158,8 +157,9 @@ impl Theme {
         let label_visuals = self.label_visuals();
         let combo_box_visuals = self.combo_box_visuals();
         let text_edit_visuals = self.text_edit_visuals();
+        let style = self.style();
 
-        ctx.set_global_style(self.style.clone());
+        ctx.set_global_style(style);
         ctx.data_mut(|d| d.insert_temp(Self::storage_id(), self));
 
         ctx.data_mut(|d| d.insert_temp(Self::button_visuals_id(), button_visuals));
@@ -204,7 +204,7 @@ impl Theme {
         );
         remap_frame(&mut self.frame2, old.bg, new.bg, old.border, new.border);
         remap_frame_visuals(
-            &mut self.frame1_visuals,
+            &mut self.visuals.frame1_visuals,
             old.hover,
             new.hover,
             old.widget_bg,
@@ -213,7 +213,7 @@ impl Theme {
             new.highlight,
         );
         remap_frame_visuals(
-            &mut self.frame2_visuals,
+            &mut self.visuals.frame2_visuals,
             old.hover,
             new.hover,
             old.bg,
@@ -224,18 +224,22 @@ impl Theme {
     }
 }
 
+/// Theme visuals
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ThemeVisuals {
+    pub button_visuals: ButtonVisuals,
+    pub label_visuals: LabelVisuals,
+    pub combo_box_visuals: ComboBoxVisuals,
+    pub text_edit_visuals: TextEditVisuals,
+    pub frame1_visuals: FrameVisuals,
+    pub frame2_visuals: FrameVisuals,
+}
+
 /// This is the color palette of the theme
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ThemeColors {
-    pub button_visuals: ButtonVisuals,
-
-    pub label_visuals: LabelVisuals,
-
-    pub combo_box_visuals: ComboBoxVisuals,
-
-    pub text_edit_visuals: TextEditVisuals,
-
     /// The color for the title bar of the app (if using custom window frame)
     pub title_bar: Color32,
 

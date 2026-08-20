@@ -45,7 +45,7 @@ impl VirtualKeyboard {
         self.active_target = target;
     }
 
-    pub fn show(&mut self, theme: &Theme, target_str: &mut SecureString, ui: &mut Ui) {
+    pub fn show(&mut self, target_str: &mut SecureString, ui: &mut Ui) {
         if !self.open {
             return;
         }
@@ -106,7 +106,7 @@ impl VirtualKeyboard {
             ],
         ];
 
-        let button_visuals = theme.button_visuals();
+        let theme = Theme::current(ui.ctx());
         let frame = theme.frame2.stroke(Stroke::new(1.0, theme.colors.border));
 
         frame.show(ui, |ui| {
@@ -122,9 +122,7 @@ impl VirtualKeyboard {
                     ui.horizontal(|ui| {
                         for &key in row {
                             let text = RichText::new(key).size(theme.typography.normal);
-                            let key_button = Button::new(text)
-                                .visuals(button_visuals)
-                                .min_size(vec2(30.0, 30.0));
+                            let key_button = Button::new(text).min_size(vec2(30.0, 30.0));
                             if ui.add(key_button).clicked() {
                                 self.handle_key_press(key, target_str);
                             }
@@ -134,7 +132,7 @@ impl VirtualKeyboard {
 
                 let avail_width = ui.available_width();
                 let min_size = vec2((avail_width * 0.5).min(280.0), 30.0);
-                let button = Button::new(" ").visuals(button_visuals).min_size(min_size);
+                let button = Button::new(" ").min_size(min_size);
                 if ui.add(button).clicked() {
                     target_str.push_str(" ");
                 }
