@@ -1,6 +1,7 @@
 use crate::theme::*;
 use crate::visuals::FrameVisuals;
-use egui::{Color32, ComboBox, Frame, Ui};
+use crate::widgets::{ComboBox, Label};
+use egui::{Color32, Frame, RichText, Sense, Ui};
 use palette::{Hsl, IntoColor, Srgba};
 
 /// Should work for most images that are shown on a very dark background
@@ -139,20 +140,28 @@ pub fn remap_frame_visuals(
 
 /// Show a ComboBox to change the theme
 ///
-/// Returns the new theme if we select one, the new theme is also applied to the [egui::Context]
-pub fn change_theme(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
+/// Returns the new theme if we select one, the new theme is installed to the [egui::Context]
+pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
     let mut new_theme_opt = None;
-    ComboBox::from_label("Theme")
-        .selected_text(current_theme.kind.to_str())
+
+    let text = RichText::new(current_theme.kind.to_str()).size(current_theme.typography.normal);
+    let current = Label::new(text, None);
+
+    ComboBox::new("Theme switcher", current)
+        .width(150.0)
         .show_ui(ui, |ui| {
             for kind in ThemeKind::to_vec() {
-                if ui
-                    .selectable_label(current_theme.kind == kind, kind.to_str())
-                    .clicked()
-                {
+                let label = RichText::new(kind.to_str()).size(current_theme.typography.normal);
+                let label = Label::new(label, None)
+                    .interactive(true)
+                    .fill_width(true)
+                    .sense(Sense::click())
+                    .expand(Some(3.0));
+
+                if ui.add(label).clicked() {
                     let new_theme = Theme::new(kind);
-                    ui.ctx().set_global_style(new_theme.style.clone());
-                    new_theme_opt = Some(new_theme);
+                    new_theme_opt = Some(new_theme.clone());
+                    new_theme.install(ui.ctx());
                 }
             }
         });

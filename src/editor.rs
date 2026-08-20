@@ -8,6 +8,7 @@ use egui::{
 };
 
 use crate::theme::{Theme, ThemeColors};
+use crate::themes::tokyo_night::DARK;
 use crate::visuals::*;
 use crate::utils::{self, Hsla};
 
@@ -162,7 +163,7 @@ impl ThemeEditor {
          widget_state: WidgetState::NonInteractive,
          hsla_edit_button: HslaEditButton::new(),
          color: Color::Bg(Color32::TRANSPARENT),
-         bg_color: Color32::from_rgba_premultiplied(32, 45, 70, 255),
+         bg_color: DARK,
          size: (300.0, 300.0),
       }
    }
@@ -187,9 +188,8 @@ impl ThemeEditor {
             ui.set_min_width(self.size.0);
             ui.set_min_height(self.size.1);
             ui.spacing_mut().button_padding = vec2(10.0, 8.0);
-           // ui.style_mut().visuals = super::themes::dark::theme().style.visuals.clone();
 
-            new_theme = utils::change_theme(theme, ui);
+            new_theme = utils::theme_switcher(theme, ui);
 
             ui.add_space(20.0);
 

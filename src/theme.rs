@@ -64,7 +64,7 @@ pub struct Theme {
     pub outer_margin: i8,
 
     /// Padding inside buttons
-    /// 
+    ///
     /// Must use this from [egui::Ui::spacing_mut] to change the padding
     pub button_padding: Vec2,
 }
@@ -154,15 +154,6 @@ impl Theme {
     ///
     /// Widgets then pick up their visuals from `ctx` automatically.
     pub fn install(self, ctx: &Context) {
-        let unchanged = ctx.data(|d| {
-            d.get_temp::<Theme>(Self::storage_id())
-                .is_some_and(|t| t == self)
-        });
-
-        if unchanged {
-            return;
-        }
-
         let button_visuals = self.button_visuals();
         let label_visuals = self.label_visuals();
         let combo_box_visuals = self.combo_box_visuals();

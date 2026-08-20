@@ -6,3 +6,9 @@ Its the successor of [zeus-theme](https://crates.io/crates/zeus-theme), [zeus-ui
 
 The goal of this crate is to make it easy for people to create nice
 looking apps with egui.
+
+## Demo
+
+```bash
+cargo run --example demo --features full
+```
