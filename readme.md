@@ -7,6 +7,8 @@ Its the successor of [zeus-theme](https://crates.io/crates/zeus-theme), [zeus-ui
 The goal of this crate is to make it easy for people to create nice
 looking apps with egui.
 
+Theme roles, surfaces, and state mapping: [docs/theme.md](docs/theme.md).
+
 ## Demo
 
 ```bash
