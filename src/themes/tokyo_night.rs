@@ -8,22 +8,22 @@ use egui::{
 
 // Color Pallete
 
-pub const DARK: Color32 = Color32::from_rgba_premultiplied(22, 22, 30, 255);
-pub const DARK2: Color32 = Color32::from_rgba_premultiplied(26, 27, 38, 255);
-pub const DARK3: Color32 = Color32::from_rgba_premultiplied(40, 47, 65, 255);
-pub const POWDER_BLUE: Color32 = Color32::from_rgba_premultiplied(190, 204, 244, 255);
-pub const SOFT_BLUE: Color32 = Color32::from_rgba_premultiplied(65, 73, 97, 255);
-pub const DUSK: Color32 = Color32::from_rgba_premultiplied(83, 97, 136, 255);
-pub const LIGHT_BLUE: Color32 = Color32::from_rgba_premultiplied(118, 210, 253, 255);
-pub const SALMON_PINK: Color32 = Color32::from_rgba_premultiplied(255, 91, 103, 255);
-pub const CAMEL: Color32 = Color32::from_rgba_premultiplied(218, 147, 61, 255);
-pub const GREEN: Color32 = Color32::from_rgba_premultiplied(72, 182, 120, 255);
-pub const PASTEL_PURPLE: Color32 = Color32::from_rgba_premultiplied(194, 111, 255, 255);
-pub const FADED_BLUE: Color32 = Color32::from_rgba_premultiplied(65, 73, 97, 118);
+const DARK: Color32 = Color32::from_rgba_premultiplied(22, 22, 30, 255);
+const DARK2: Color32 = Color32::from_rgba_premultiplied(26, 27, 38, 255);
+const DARK3: Color32 = Color32::from_rgba_premultiplied(40, 47, 65, 255);
+const POWDER_BLUE: Color32 = Color32::from_rgba_premultiplied(190, 204, 244, 255);
+const SOFT_BLUE: Color32 = Color32::from_rgba_premultiplied(65, 73, 97, 255);
+const DUSK: Color32 = Color32::from_rgba_premultiplied(83, 97, 136, 255);
+const LIGHT_BLUE: Color32 = Color32::from_rgba_premultiplied(118, 210, 253, 255);
+const SALMON_PINK: Color32 = Color32::from_rgba_premultiplied(255, 91, 103, 255);
+const CAMEL: Color32 = Color32::from_rgba_premultiplied(218, 147, 61, 255);
+const GREEN: Color32 = Color32::from_rgba_premultiplied(72, 182, 120, 255);
+const PASTEL_PURPLE: Color32 = Color32::from_rgba_premultiplied(194, 111, 255, 255);
+const FADED_BLUE: Color32 = Color32::from_rgba_premultiplied(65, 73, 97, 118);
 /// DUSK mixed 35% toward POWDER_BLUE. Readable muted type (AA on bg / widget_bg).
-pub const MUTED: Color32 = Color32::from_rgba_premultiplied(120, 134, 174, 255);
+const MUTED: Color32 = Color32::from_rgba_premultiplied(120, 134, 174, 255);
 /// DARK3 mixed 20% toward LIGHT_BLUE. Selected / emphasis fill, not hover.
-pub const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(56, 80, 103, 255);
+const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(56, 80, 103, 255);
 
 const TITLE_BAR: Color32 = DARK;
 const MAIN_BG: Color32 = DARK;

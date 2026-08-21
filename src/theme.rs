@@ -1,5 +1,5 @@
 use crate::overlay::OverlayManager;
-use crate::themes::{mclaren_650gts_gt3, reverie, tokyo_night};
+use crate::themes::{mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night};
 use crate::utils::*;
 use crate::visuals::*;
 use egui::{Color32, Context, Frame, Id, Style, Vec2};
@@ -13,6 +13,8 @@ pub enum ThemeKind {
     McLaren650GtsGt3,
     /// Based on https://github.com/santiyounger/Reverie-Obsidian-Theme
     Reverie,
+    /// Based on https://github.com/Elevict/Shade-Sanctuary
+    ShadeSanctuary,
 }
 
 impl ThemeKind {
@@ -21,11 +23,17 @@ impl ThemeKind {
             ThemeKind::TokyoNight => "Tokyo Night",
             ThemeKind::McLaren650GtsGt3 => "McLaren 650GTS GT3",
             ThemeKind::Reverie => "Reverie",
+            ThemeKind::ShadeSanctuary => "Shade Sanctuary",
         }
     }
 
     pub fn to_vec() -> Vec<Self> {
-        vec![Self::TokyoNight, Self::McLaren650GtsGt3, Self::Reverie]
+        vec![
+            Self::TokyoNight,
+            Self::McLaren650GtsGt3,
+            Self::Reverie,
+            Self::ShadeSanctuary,
+        ]
     }
 }
 
@@ -91,6 +99,7 @@ impl Theme {
             ThemeKind::TokyoNight => tokyo_night::theme(),
             ThemeKind::McLaren650GtsGt3 => mclaren_650gts_gt3::theme(),
             ThemeKind::Reverie => reverie::theme(),
+            ThemeKind::ShadeSanctuary => shade_sanctuary::theme(),
         };
 
         theme
@@ -101,6 +110,7 @@ impl Theme {
             ThemeKind::TokyoNight => tokyo_night::style(),
             ThemeKind::McLaren650GtsGt3 => mclaren_650gts_gt3::style(),
             ThemeKind::Reverie => reverie::style(),
+            ThemeKind::ShadeSanctuary => shade_sanctuary::style(),
         }
     }
 

@@ -8,9 +8,10 @@ use egui::{
 };
 
 use crate::theme::{Theme, ThemeColors};
-use crate::themes::tokyo_night::DARK;
 use crate::utils::{self, Hsla};
 use crate::visuals::*;
+
+const DARK: Color32 = Color32::from_rgba_premultiplied(22, 22, 30, 255);
 
 /// Identify which state of the widget we should edit
 #[derive(Clone, PartialEq)]

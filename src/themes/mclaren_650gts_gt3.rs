@@ -9,32 +9,32 @@ use egui::{
 // Color Pallete — carbon weave, papaya body, HUD cyan / green from the 2015 650S GT3.
 
 /// Roof / deep carbon canvas.
-pub const CARBON: Color32 = Color32::from_rgba_premultiplied(12, 13, 16, 255);
+const CARBON: Color32 = Color32::from_rgba_premultiplied(12, 13, 16, 255);
 /// Lifted carbon (mirror housing).
-pub const CARBON2: Color32 = Color32::from_rgba_premultiplied(18, 20, 24, 255);
+const CARBON2: Color32 = Color32::from_rgba_premultiplied(18, 20, 24, 255);
 /// Hover lift — gray step, no chroma.
-pub const CARBON3: Color32 = Color32::from_rgba_premultiplied(36, 40, 48, 255);
+const CARBON3: Color32 = Color32::from_rgba_premultiplied(36, 40, 48, 255);
 /// Papaya from the body / GT3 lettering (mirror ring ~#fe8501, pulled back for UI).
-pub const PAPAYA: Color32 = Color32::from_rgba_premultiplied(255, 122, 8, 255);
+const PAPAYA: Color32 = Color32::from_rgba_premultiplied(255, 122, 8, 255);
 /// Steering-wheel HUD cyan.
-pub const HUD_CYAN: Color32 = Color32::from_rgba_premultiplied(56, 210, 230, 255);
+const HUD_CYAN: Color32 = Color32::from_rgba_premultiplied(56, 210, 230, 255);
 /// HUD / LED green.
-pub const HUD_GREEN: Color32 = Color32::from_rgba_premultiplied(48, 210, 130, 255);
+const HUD_GREEN: Color32 = Color32::from_rgba_premultiplied(48, 210, 130, 255);
 /// MAP / warning amber.
-pub const AMBER: Color32 = Color32::from_rgba_premultiplied(240, 186, 48, 255);
+const AMBER: Color32 = Color32::from_rgba_premultiplied(240, 186, 48, 255);
 /// Wheel kill / error red.
-pub const SIGNAL_RED: Color32 = Color32::from_rgba_premultiplied(235, 80, 85, 255);
+const SIGNAL_RED: Color32 = Color32::from_rgba_premultiplied(235, 80, 85, 255);
 /// Cool HUD white.
-pub const HUD_WHITE: Color32 = Color32::from_rgba_premultiplied(220, 236, 240, 255);
+const HUD_WHITE: Color32 = Color32::from_rgba_premultiplied(220, 236, 240, 255);
 /// Steel-cyan structural stroke / shadow.
-pub const STEEL: Color32 = Color32::from_rgba_premultiplied(58, 68, 78, 255);
-pub const FADED_STEEL: Color32 = Color32::from_rgba_premultiplied(58, 68, 78, 118);
+const STEEL: Color32 = Color32::from_rgba_premultiplied(58, 68, 78, 255);
+const FADED_STEEL: Color32 = Color32::from_rgba_premultiplied(58, 68, 78, 118);
 /// STEEL mixed 45% toward HUD_WHITE. Readable muted type (AA on bg / widget_bg).
-pub const MUTED: Color32 = Color32::from_rgba_premultiplied(131, 144, 151, 255);
+const MUTED: Color32 = Color32::from_rgba_premultiplied(131, 144, 151, 255);
 /// CARBON3 mixed 28% toward PAPAYA. Selected / emphasis fill, not hover.
-pub const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(97, 63, 37, 255);
+const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(97, 63, 37, 255);
 /// STEEL mixed 35% toward HUD_CYAN. Hover border chrome only — not a ThemeColors slot.
-pub const HOVER_CHROME: Color32 = Color32::from_rgba_premultiplied(57, 118, 131, 255);
+const HOVER_CHROME: Color32 = Color32::from_rgba_premultiplied(57, 118, 131, 255);
 
 const TITLE_BAR: Color32 = CARBON;
 const MAIN_BG: Color32 = CARBON;
