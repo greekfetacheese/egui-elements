@@ -18,7 +18,7 @@ secure-types = {version = "0.3", optional = true}
 
 xcap = { version = "0.8", optional = true }
 enigo = { version = "0.6", optional = true }
-rqrr = { version = "0.10", optional = true }
+rqrr-zeroize = { version = "0.10", optional = true }
 
 qrcodegen-no-heap = {version = "1", optional = true}
 image = {version = "0.25", optional = true}
@@ -26,7 +26,7 @@ image = {version = "0.25", optional = true}
 
 [features]
 serde = ["dep:serde", "dep:serde_json", "egui/serde"]
-qr-scanner = ["dep:secure-types", "dep:xcap", "dep:enigo", "dep:rqrr"]
+qr-scanner = ["dep:secure-types", "dep:xcap", "dep:enigo", "dep:rqrr-zeroize"]
 secure-types = ["dep:secure-types"]
 qr-image = ["dep:qrcodegen-no-heap", "dep:image"]
 full = ["serde", "qr-scanner", "secure-types", "qr-image"]
