@@ -1,7 +1,7 @@
 use crate::theme::*;
 use crate::visuals::FrameVisuals;
 use crate::widgets::{ComboBox, Label};
-use egui::{Color32, Frame, RichText, Sense, Ui};
+use egui::{Color32, Frame, Response, RichText, Sense, Stroke, Ui};
 
 /// Should work for most images that are shown on a very dark background
 pub const TINT_1: Color32 = Color32::from_rgba_premultiplied(216, 216, 216, 255);
@@ -207,6 +207,33 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
             }
         });
     new_theme_opt
+}
+
+pub fn frame(
+    frame: &mut Frame,
+    visuals: FrameVisuals,
+    ui: &mut Ui,
+    add_contents: impl FnOnce(&mut Ui),
+) -> Response {
+    let mut frame = frame.begin(ui);
+    let res = frame.content_ui.scope(|ui| add_contents(ui));
+
+    if res.response.interact(Sense::click()).clicked() {
+        frame.frame = frame.frame.fill(visuals.bg_on_click);
+        frame.frame = frame.frame.stroke(Stroke::new(
+            visuals.border_on_click.0,
+            visuals.border_on_click.1,
+        ));
+    } else if res.response.hovered() {
+        frame.frame = frame.frame.fill(visuals.bg_on_hover);
+        frame.frame = frame.frame.stroke(Stroke::new(
+            visuals.border_on_hover.0,
+            visuals.border_on_hover.1,
+        ));
+    }
+
+    frame.end(ui);
+    res.response
 }
 
 #[cfg(test)]

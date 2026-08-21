@@ -125,7 +125,14 @@ impl ComboBox {
                      .max(button_response.rect.width() - ui.spacing().button_padding.x * 2.0),
                );
                ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
-               menu_contents(ui)
+               // Menu items often use Label::expand() which paints outside the
+               // allocated rect. The scroll-area clip would otherwise shave the
+               // first/last row highlight (selected looks smaller than hovered).
+               let item_expand_pad = 4.0;
+               ui.add_space(item_expand_pad);
+               let inner = menu_contents(ui);
+               ui.add_space(item_expand_pad);
+               inner
             })
             .inner
       });

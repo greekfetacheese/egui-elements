@@ -29,26 +29,66 @@ fn main() -> eframe::Result {
     )
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum Options {
-    Option1,
-    Option2,
-    Option3,
-    Option4,
+#[derive(Clone, PartialEq)]
+pub struct Items {
+    pub items: Vec<String>,
+    pub selected: Option<String>,
 }
 
-impl Options {
-    fn to_str(self) -> &'static str {
-        match self {
-            Self::Option1 => "Option 1",
-            Self::Option2 => "Option 2",
-            Self::Option3 => "Option 3",
-            Self::Option4 => "Option 4",
+impl Default for Items {
+    fn default() -> Self {
+        Self {
+            items: vec![
+                "Item 1".to_owned(),
+                "Item 2".to_owned(),
+                "Item 3".to_owned(),
+            ],
+            selected: None,
+        }
+    }
+}
+
+impl Items {
+    fn selected_str(&self) -> String {
+        match self.selected {
+            Some(ref item) => item.clone(),
+            None => "Select an Item".to_owned(),
         }
     }
 
-    fn all() -> [Self; 4] {
-        [Self::Option1, Self::Option2, Self::Option3, Self::Option4]
+    fn all(&self) -> Vec<String> {
+        self.items.clone()
+    }
+
+    fn add(&mut self) {
+        let mut num = self.items.len();
+        loop {
+            let item = format!("Item {}", num);
+            if !self.items.contains(&item) {
+                self.items.push(item);
+                break;
+            }
+            num += 1;
+        }
+    }
+
+    fn remove(&mut self) {
+        if let Some(selected) = self.selected.clone() {
+            self.items.retain(|item| item != &selected);
+            if self.items.len() > 0 {
+                self.selected = Some(self.items[0].clone());
+            } else {
+                self.selected = None;
+            }
+        } else {
+            // remove last item
+            self.items.pop();
+            if self.items.len() > 0 {
+                self.selected = Some(self.items[0].clone());
+            } else {
+                self.selected = None;
+            }
+        }
     }
 }
 
@@ -61,7 +101,7 @@ struct DemoApp {
     virtual_keyboard: bool,
     check: bool,
     slider: f32,
-    options: Options,
+    items: Items,
     text_single: String,
     text_multi: String,
     text_password: String,
@@ -95,7 +135,7 @@ impl DemoApp {
             virtual_keyboard: true,
             check: true,
             slider: 42.0,
-            options: Options::Option1,
+            items: Items::default(),
             text_single: String::from("Single-line text"),
             text_multi: String::from("Multiline\nSecureTextEdit"),
             text_password: String::from("hunter2"),
@@ -103,10 +143,6 @@ impl DemoApp {
             secure_field,
             qr: QrImage::new("egui-elements", "bytes://egui-elements-demo".to_string()),
         }
-    }
-
-    fn install_theme(&self, ctx: &Context) {
-        self.theme.clone().install(ctx);
     }
 
     fn heading(&self, ui: &mut Ui, text: &str) {
@@ -122,6 +158,14 @@ impl DemoApp {
         ui.label(
             RichText::new(text)
                 .size(self.theme.typography.large)
+                .color(self.theme.colors.text),
+        );
+    }
+
+    fn text(&self, ui: &mut Ui, text: &str) {
+        ui.label(
+            RichText::new(text)
+                .size(self.theme.typography.normal)
                 .color(self.theme.colors.text),
         );
     }
@@ -230,7 +274,7 @@ impl DemoApp {
                 ui.add_space(12.0);
 
                 if let Some(new_theme) = utils::theme_switcher(&self.theme, ui) {
-                  println!("Switched to {:?}", new_theme.kind);
+                    println!("Switched to {:?}", new_theme.kind);
                     self.theme = new_theme;
                 }
             });
@@ -322,7 +366,8 @@ impl DemoApp {
         ui.add_space(8.0);
 
         let frame1 = self.theme.frame1;
-        let frame2 = self.theme.frame2.outer_margin(Margin::ZERO);
+        let mut frame2 = self.theme.frame2.outer_margin(Margin::ZERO);
+        let frame2_visuals = self.theme.visuals.frame2_visuals;
 
         ScrollArea::horizontal()
             .id_salt("frames_section")
@@ -331,8 +376,13 @@ impl DemoApp {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 20.0;
 
+                    let large_t = self.theme.typography.large;
+                    let normal_t = self.theme.typography.normal;
+                    let muted_color = self.theme.colors.text_muted;
+
                     ui.vertical(|ui| {
                         ui.set_width(360.0);
+
                         frame1.show(ui, |ui| {
                             ui.vertical(|ui| {
                                 ui.set_width(ui.available_width());
@@ -340,14 +390,28 @@ impl DemoApp {
                                 self.subheading(ui, "Frame 1");
                                 self.muted(ui, "Base container on bg");
                                 ui.add_space(4.0);
-                                frame2.show(ui, |ui| {
-                                    ui.vertical(|ui| {
-                                        ui.set_width(ui.available_width());
-                                        ui.spacing_mut().item_spacing.y = 6.0;
-                                        self.subheading(ui, "Frame 2");
-                                        self.muted(ui, "Nested list-item frame");
+
+                                self.text(ui, "Interactive nested list-item frames");
+
+                                for i in 0..4 {
+                                    utils::frame(&mut frame2, frame2_visuals, ui, |ui| {
+                                        ui.vertical(|ui| {
+                                            ui.set_width(ui.available_width());
+                                            ui.spacing_mut().item_spacing.y = 6.0;
+
+                                            let text =
+                                                RichText::new(format!("Frame {}", i)).size(large_t);
+                                            let label = Label::new(text, None).interactive(false);
+                                            ui.add(label);
+
+                                            let text = RichText::new("Nested list-item frame")
+                                                .size(normal_t)
+                                                .color(muted_color);
+                                            let label = Label::new(text, None).interactive(false);
+                                            ui.add(label);
+                                        });
                                     });
-                                });
+                                }
                             });
                         });
                     });
@@ -390,7 +454,8 @@ impl DemoApp {
                     ui.horizontal(|ui| {
                         ui.add(
                             Label::new(RichText::new(name).size(size).color(text_color), None)
-                                .expand(Some(4.0)),
+                                .expand(Some(4.0))
+                                .interactive(false),
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.label(RichText::new(status).size(small).color(status_color));
@@ -409,7 +474,7 @@ impl DemoApp {
                 ui.horizontal(|ui| {
                     ui.add(
                         Label::new(RichText::new("Wallets").size(size).color(text_color), None)
-                            .expand(Some(4.0)),
+                            .interactive(false),
                     );
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.label(
@@ -556,33 +621,45 @@ impl DemoApp {
             ui.spacing_mut().item_spacing.x = 12.0;
 
             let selected = Label::new(
-                RichText::new(self.options.to_str())
+                RichText::new(self.items.selected_str())
                     .size(size)
                     .color(text_color),
                 None,
             );
 
-            ComboBox::new(format!("{id_salt}_options"), selected)
+            ComboBox::new(format!("{id_salt}_items"), selected)
                 .width(180.0)
-                .label("Options")
+                .label("Items")
                 .show_ui(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 12.0;
 
-                    for opt in Options::all() {
-                        let label = Label::new(
-                            RichText::new(opt.to_str()).size(size).color(text_color),
-                            None,
-                        )
-                        .expand(Some(4.0))
-                        .selected(self.options == opt)
-                        .sense(Sense::click())
-                        .fill_width(true);
+                    for item in self.items.all() {
+                        let label =
+                            Label::new(RichText::new(&item).size(size).color(text_color), None)
+                                .expand(Some(4.0))
+                                .selected(self.items.selected == Some(item.clone()))
+                                .sense(Sense::click())
+                                .fill_width(true);
 
                         if ui.add(label).clicked() {
-                            self.options = opt;
+                            self.items.selected = Some(item);
                         }
                     }
                 });
+
+            let add_btn = Button::new(RichText::new("Add").size(size).color(text_color))
+                .min_size(vec2(20.0, 20.0));
+
+            if ui.add(add_btn).clicked() {
+                self.items.add();
+            }
+
+            let remove_btn = Button::new(RichText::new("Remove").size(size).color(text_color))
+                .min_size(vec2(20.0, 20.0));
+
+            if ui.add(remove_btn).clicked() {
+                self.items.remove();
+            }
         });
 
         ui.add_space(8.0);
@@ -710,7 +787,10 @@ impl DemoApp {
                         ui.spacing_mut().button_padding = vec2(4.0, 4.0);
 
                         self.subheading(ui, "Secure input + QR");
-                        self.muted(ui, "Toggle visibility; QR scan button on Linux.");
+                        self.muted(
+                            ui,
+                            "Toggle visibility, QR scan button available only on Linux.",
+                        );
 
                         let output = self.secure_field.show(ui);
                         self.subheading(ui, "QrImage");
