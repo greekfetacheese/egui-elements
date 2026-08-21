@@ -14,6 +14,7 @@ use egui::{
 };
 
 use super::button::Button;
+use super::frame::Frame as ElementsFrame;
 use crate::theme::Theme;
 
 /// Boxed `FnOnce(&mut Ui)` callback used by the footer slots.
@@ -282,7 +283,7 @@ impl<'a> Modal<'a> {
                 });
 
                 ui.set_max_width(self.max_width);
-                Frame::new()
+                ElementsFrame::new()
                     .fill(theme.colors.widget_bg)
                     .stroke(Stroke::new(1.0, theme.colors.border))
                     .corner_radius(theme.frame1.corner_radius)

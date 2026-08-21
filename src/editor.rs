@@ -7,6 +7,7 @@ use egui::{
     vec2,
 };
 
+use crate::gradient::Fill;
 use crate::theme::{Theme, ThemeColors};
 use crate::themes::tokyo_night::DARK;
 use crate::utils::{self, Hsla};
@@ -543,46 +544,22 @@ impl ThemeEditor {
 
         ui.label("Background Color");
         ui.horizontal(|ui| {
-            let color = self.color_select("2", visuals.bg, &colors, ui);
-            if let Some(color) = color {
-                visuals.bg = color.color32();
-            }
-
-            self.hsla_edit_button.show("bg1", ui, &mut visuals.bg);
+            self.edit_fill("2", "bg1", &mut visuals.bg, &colors, ui);
         });
 
         ui.label("Background Hover Color");
         ui.horizontal(|ui| {
-            let color = self.color_select("3", visuals.bg_hover, &colors, ui);
-            if let Some(color) = color {
-                visuals.bg_hover = color.color32();
-            }
-
-            self.hsla_edit_button
-                .show("bg_hover1", ui, &mut visuals.bg_hover);
+            self.edit_fill("3", "bg_hover1", &mut visuals.bg_hover, &colors, ui);
         });
 
         ui.label("Background Click Color");
         ui.horizontal(|ui| {
-            let color = self.color_select("4", visuals.bg_click, &colors, ui);
-            if let Some(color) = color {
-                visuals.bg_click = color.color32();
-            }
-
-            self.hsla_edit_button
-                .show("bg_click1", ui, &mut visuals.bg_click);
+            self.edit_fill("4", "bg_click1", &mut visuals.bg_click, &colors, ui);
         });
 
         ui.label("Background Selected");
         ui.horizontal(|ui| {
-            let color = self.color_select("5", visuals.bg_selected, &colors, ui);
-
-            if let Some(color) = color {
-                visuals.bg_selected = color.color32();
-            }
-
-            self.hsla_edit_button
-                .show("bg_selected1", ui, &mut visuals.bg_selected);
+            self.edit_fill("5", "bg_selected1", &mut visuals.bg_selected, &colors, ui);
         });
 
         ui.label("Border Color");
@@ -662,23 +639,12 @@ impl ThemeEditor {
     ) {
         ui.label("Background Color");
         ui.horizontal(|ui| {
-            let color = self.color_select("2", visuals.bg, &colors, ui);
-            if let Some(color) = color {
-                visuals.bg = color.color32();
-            }
-
-            self.hsla_edit_button.show("bg1", ui, &mut visuals.bg);
+            self.edit_fill("2", "bg1", &mut visuals.bg, &colors, ui);
         });
 
         ui.label("Background Hover Color");
         ui.horizontal(|ui| {
-            let color = self.color_select("3", visuals.bg_hover, &colors, ui);
-            if let Some(color) = color {
-                visuals.bg_hover = color.color32();
-            }
-
-            self.hsla_edit_button
-                .show("bg_hover1", ui, &mut visuals.bg_hover);
+            self.edit_fill("3", "bg_hover1", &mut visuals.bg_hover, &colors, ui);
         });
 
         ui.label("Border Color");
@@ -760,12 +726,7 @@ impl ThemeEditor {
 
         ui.label("Background Color");
         ui.horizontal(|ui| {
-            let color = self.color_select("2", visuals.bg, &colors, ui);
-            if let Some(color) = color {
-                visuals.bg = color.color32();
-            }
-
-            self.hsla_edit_button.show("bg1", ui, &mut visuals.bg);
+            self.edit_fill("2", "bg1", &mut visuals.bg, &colors, ui);
         });
 
         ui.label("Border Color");
@@ -941,6 +902,28 @@ impl ThemeEditor {
                     }
                 }
             });
+    }
+
+    fn edit_fill(
+        &mut self,
+        color_id: &str,
+        hsla_id: &str,
+        fill: &mut Fill,
+        colors: &ThemeColors,
+        ui: &mut Ui,
+    ) {
+        match fill {
+            Fill::Solid(c) => {
+                let color = self.color_select(color_id, *c, colors, ui);
+                if let Some(color) = color {
+                    *c = color.color32();
+                }
+                self.hsla_edit_button.show(hsla_id, ui, c);
+            }
+            Fill::Gradient(_) => {
+                ui.label(RichText::new("gradient").italics());
+            }
+        }
     }
 
     fn color_select(

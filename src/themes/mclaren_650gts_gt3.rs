@@ -1,9 +1,11 @@
-use crate::theme::{Theme, Typography, ThemeVisuals, ThemeColors, ThemeKind};
+use crate::gradient::Fill;
 use crate::overlay::OverlayManager;
+use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVisuals, Typography};
 use crate::visuals::*;
 use egui::{
-    Color32, CornerRadius, Frame, Margin, Shadow, vec2, Spacing, Stroke, Style, Visuals,
+    Color32, CornerRadius, Frame, Margin, Shadow, Spacing, Stroke, Style, Visuals,
     style::{Selection, WidgetVisuals, Widgets},
+    vec2,
 };
 
 // Color Pallete — carbon weave, papaya body, HUD cyan / green from the 2015 650S GT3.
@@ -140,10 +142,19 @@ pub fn frame1(colors: &ThemeColors) -> Frame {
 
 pub fn frame1_visuals(colors: &ThemeColors) -> FrameVisuals {
     FrameVisuals {
-        bg_on_hover: colors.hover,
-        bg_on_click: colors.widget_bg,
-        border_on_hover: (0.0, colors.highlight),
-        border_on_click: (0.0, colors.highlight),
+        bg: Fill::solid(colors.widget_bg),
+        bg_hover: Fill::solid(colors.hover),
+        bg_click: Fill::solid(colors.widget_bg),
+        border: Stroke::NONE,
+        border_hover: Stroke::new(0.0, colors.highlight),
+        border_click: Stroke::new(0.0, colors.highlight),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
+        shadow: Shadow {
+            offset: (0, 0).into(),
+            blur: 2,
+            spread: 0,
+            color: colors.border,
+        },
     }
 }
 
@@ -168,20 +179,29 @@ pub fn frame2(colors: &ThemeColors) -> Frame {
 
 pub fn frame2_visuals(colors: &ThemeColors) -> FrameVisuals {
     FrameVisuals {
-        bg_on_hover: colors.hover,
-        bg_on_click: colors.bg,
-        border_on_hover: (0.0, colors.highlight),
-        border_on_click: (0.0, colors.highlight),
+        bg: Fill::solid(colors.bg),
+        bg_hover: Fill::solid(colors.hover),
+        bg_click: Fill::solid(colors.bg),
+        border: Stroke::NONE,
+        border_hover: Stroke::new(0.0, colors.highlight),
+        border_click: Stroke::new(0.0, colors.highlight),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
+        shadow: Shadow {
+            offset: (0, 0).into(),
+            blur: 2,
+            spread: 0,
+            color: colors.border,
+        },
     }
 }
 
 pub fn button_visuals() -> ButtonVisuals {
     ButtonVisuals {
         text: TEXT,
-        bg: WIDGET_BG,
-        bg_hover: HOVER,
-        bg_click: WIDGET_BG,
-        bg_selected: HIGHLIGHT,
+        bg: Fill::solid(WIDGET_BG),
+        bg_hover: Fill::solid(HOVER),
+        bg_click: Fill::solid(WIDGET_BG),
+        bg_selected: Fill::solid(HIGHLIGHT),
         border: Stroke::new(1.0, Color32::TRANSPARENT),
         border_hover: Stroke::new(1.0, HOVER_CHROME),
         border_click: Stroke::new(1.0, Color32::TRANSPARENT),
@@ -197,10 +217,10 @@ pub fn button_visuals() -> ButtonVisuals {
 
 pub fn combo_box_visuals() -> ComboBoxVisuals {
     ComboBoxVisuals {
-        bg: WIDGET_BG,
+        bg: Fill::solid(WIDGET_BG),
         icon: TEXT,
-        bg_hover: HOVER,
-        bg_open: WIDGET_BG,
+        bg_hover: Fill::solid(HOVER),
+        bg_open: Fill::solid(WIDGET_BG),
         border: Stroke::new(1.0, Color32::TRANSPARENT),
         border_hover: Stroke::new(1.0, HOVER_CHROME),
         border_open: Stroke::new(1.0, Color32::TRANSPARENT),
@@ -216,10 +236,11 @@ pub fn combo_box_visuals() -> ComboBoxVisuals {
 
 pub fn label_visuals() -> ButtonVisuals {
     ButtonVisuals {
-        bg: Color32::TRANSPARENT,
+        bg: Fill::solid(Color32::TRANSPARENT),
         border: Stroke::new(1.0, Color32::TRANSPARENT),
         border_hover: Stroke::new(1.0, Color32::TRANSPARENT),
         border_click: Stroke::new(1.0, Color32::TRANSPARENT),
+        shadow: Shadow::NONE,
         ..button_visuals()
     }
 }
@@ -227,7 +248,7 @@ pub fn label_visuals() -> ButtonVisuals {
 pub fn text_edit_visuals() -> TextEditVisuals {
     TextEditVisuals {
         text: TEXT,
-        bg: WIDGET_BG,
+        bg: Fill::solid(WIDGET_BG),
         border: Stroke::new(1.0, BORDER),
         border_hover: Stroke::new(1.0, PAPAYA),
         border_open: Stroke::new(1.0, PAPAYA),

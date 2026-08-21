@@ -1,3 +1,4 @@
+use crate::gradient::Fill;
 use crate::overlay::OverlayManager;
 use crate::themes::{mclaren_650gts_gt3, tokyo_night};
 use crate::utils::*;
@@ -115,6 +116,74 @@ impl Theme {
         self.visuals.text_edit_visuals
     }
 
+    pub fn frame1_visuals(&self) -> FrameVisuals {
+        self.visuals.frame1_visuals
+    }
+
+    pub fn frame2_visuals(&self) -> FrameVisuals {
+        self.visuals.frame2_visuals
+    }
+
+    /// Idle / hover / click / selected fills as vertical gradients from
+    /// [`ThemeColors`]. Stroke, shadow, and text are copied from
+    /// [`Self::button_visuals`].
+    pub fn button_gradient_visuals(&self) -> ButtonVisuals {
+        let c = self.colors;
+        let mut v = self.button_visuals();
+        v.bg = Fill::vertical(c.widget_bg, c.bg);
+        v.bg_hover = Fill::vertical(c.hover, c.widget_bg);
+        v.bg_click = Fill::vertical(c.widget_bg, c.hover);
+        v.bg_selected = Fill::vertical(c.highlight, c.hover);
+        v
+    }
+
+    /// Same as [`Self::button_gradient_visuals`] but idle fill stays
+    /// transparent (labels have no chrome at rest).
+    pub fn label_gradient_visuals(&self) -> LabelVisuals {
+        let c = self.colors;
+        let mut v = self.label_visuals();
+        v.bg = Fill::solid(Color32::TRANSPARENT);
+        v.bg_hover = Fill::vertical(c.hover, c.widget_bg);
+        v.bg_click = Fill::vertical(c.widget_bg, c.hover);
+        v.bg_selected = Fill::vertical(c.highlight, c.hover);
+        v.shadow = egui::Shadow::NONE;
+        v
+    }
+
+    pub fn combo_box_gradient_visuals(&self) -> ComboBoxVisuals {
+        let c = self.colors;
+        let mut v = self.combo_box_visuals();
+        v.bg = Fill::vertical(c.widget_bg, c.bg);
+        v.bg_hover = Fill::vertical(c.hover, c.widget_bg);
+        v.bg_open = Fill::vertical(c.widget_bg, c.hover);
+        v
+    }
+
+    pub fn text_edit_gradient_visuals(&self) -> TextEditVisuals {
+        let c = self.colors;
+        let mut v = self.text_edit_visuals();
+        v.bg = Fill::vertical(c.widget_bg, c.bg);
+        v
+    }
+
+    pub fn frame1_gradient_visuals(&self) -> FrameVisuals {
+        let c = self.colors;
+        let mut v = self.frame1_visuals();
+        v.bg = Fill::vertical(c.widget_bg, c.bg);
+        v.bg_hover = Fill::vertical(c.hover, c.widget_bg);
+        v.bg_click = Fill::vertical(c.widget_bg, c.hover);
+        v
+    }
+
+    pub fn frame2_gradient_visuals(&self) -> FrameVisuals {
+        let c = self.colors;
+        let mut v = self.frame2_visuals();
+        v.bg = Fill::vertical(c.bg, c.widget_bg);
+        v.bg_hover = Fill::vertical(c.hover, c.bg);
+        v.bg_click = Fill::vertical(c.bg, c.hover);
+        v
+    }
+
     fn storage_id() -> Id {
         Id::new("elements::theme")
     }
@@ -217,6 +286,16 @@ impl Theme {
             old.highlight,
             new.highlight,
         );
+        remap_frame_visuals_idle(
+            &mut self.visuals.frame1_visuals,
+            old.widget_bg,
+            new.widget_bg,
+        );
+        remap_if_eq(
+            &mut self.visuals.frame1_visuals.shadow.color,
+            old.border,
+            new.border,
+        );
         remap_frame_visuals(
             &mut self.visuals.frame2_visuals,
             old.hover,
@@ -225,6 +304,12 @@ impl Theme {
             new.bg,
             old.highlight,
             new.highlight,
+        );
+        remap_frame_visuals_idle(&mut self.visuals.frame2_visuals, old.bg, new.bg);
+        remap_if_eq(
+            &mut self.visuals.frame2_visuals.shadow.color,
+            old.border,
+            new.border,
         );
     }
 }

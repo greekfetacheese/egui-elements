@@ -6,6 +6,7 @@
 use eframe::egui::*;
 use egui_elements::components::{CredentialsForm, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
+use egui_elements::gradient::{Fill, Gradient, GradientDir};
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit};
@@ -214,9 +215,13 @@ impl eframe::App for DemoApp {
 
                         self.palette_section(ui);
                         ui.add_space(28.0);
+                        self.gradient_section(ui);
+                        ui.add_space(28.0);
                         self.typography_section(ui);
                         ui.add_space(28.0);
                         self.frames_section(ui);
+                        ui.add_space(28.0);
+                        self.elements_frame_section(ui);
                         ui.add_space(28.0);
                         self.widgets_on_bg(ui);
                         ui.add_space(28.0);
@@ -336,6 +341,67 @@ impl DemoApp {
             });
     }
 
+    fn gradient_section(&mut self, ui: &mut Ui) {
+        self.heading(ui, "Gradients");
+        self.muted(
+            ui,
+            "Vertex-colored meshes via Painter. Two-stop linear fills; building block for widget backgrounds.",
+        );
+        ui.add_space(8.0);
+
+        let c = self.theme.colors;
+        let samples: [(&str, Fill); 5] = [
+            (
+                "vertical bg",
+                Fill::Gradient(Gradient::vertical(c.widget_bg, c.bg)),
+            ),
+            (
+                "horizontal accent",
+                Fill::Gradient(Gradient::horizontal(c.accent, c.info)),
+            ),
+            (
+                "bottom-up hover",
+                Fill::Gradient(Gradient::new(c.hover, c.highlight).with_dir(GradientDir::BottomUp)),
+            ),
+            (
+                "semantic",
+                Fill::Gradient(Gradient::horizontal(c.success, c.warning)),
+            ),
+            ("solid widget_bg", Fill::Solid(c.widget_bg)),
+        ];
+
+        let radius = CornerRadius::same(self.theme.corner_radius);
+        ScrollArea::horizontal()
+            .id_salt("gradients")
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 12.0;
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 16.0;
+                        for (name, fill) in samples {
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 8.0;
+                                ui.set_min_width(128.0);
+                                fill.show(ui, vec2(128.0, 44.0));
+                                fill.show_rounded(ui, vec2(128.0, 44.0), radius);
+                                ui.label(
+                                    RichText::new(name)
+                                        .size(self.theme.typography.very_small)
+                                        .color(self.theme.colors.text),
+                                );
+                            });
+                        }
+                    });
+                    ui.label(
+                        RichText::new("Top sharp, bottom rounded")
+                            .size(self.theme.typography.very_small)
+                            .color(self.theme.colors.text_muted),
+                    );
+                });
+            });
+    }
+
     fn typography_section(&mut self, ui: &mut Ui) {
         self.heading(ui, "Typography");
         ui.add_space(8.0);
@@ -431,6 +497,79 @@ impl DemoApp {
                     });
                 });
             });
+    }
+
+    fn elements_frame_section(&mut self, ui: &mut Ui) {
+        self.heading(ui, "Frame widget");
+        self.muted(
+            ui,
+            "egui-elements Frame. Same geometry as egui::Frame; fill is Fill (solid or gradient). Hover the third card.",
+        );
+        ui.add_space(8.0);
+
+        let c = self.theme.colors;
+        let radius = CornerRadius::same(self.theme.corner_radius);
+        let pad = Margin::same(self.theme.inner_margin);
+        let shadow = self.theme.frame1.shadow;
+        let size = self.theme.typography.normal;
+        let muted = self.theme.colors.text_muted;
+
+        let frame1 = egui_elements::widgets::Frame::from_egui(self.theme.frame1);
+        let frame_visuals = self.theme.frame1_gradient_visuals();
+
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 16.0;
+
+            egui_elements::widgets::Frame::new()
+                .inner_margin(pad)
+                .fill(c.widget_bg)
+                .corner_radius(radius)
+                .shadow(shadow)
+                .show(ui, |ui| {
+                    ui.set_width(200.0);
+                    let text = RichText::new("Solid").size(size).color(c.text);
+                    let label = Label::new(text, None).interactive(false);
+                    ui.add(label);
+
+                    let text = RichText::new("Fill::Solid(widget_bg)")
+                        .size(self.theme.typography.very_small)
+                        .color(muted);
+                    let label = Label::new(text, None).interactive(false);
+                    ui.add(label);
+                });
+
+            frame1
+                .visuals(frame_visuals)
+                .interactive(false)
+                .show(ui, |ui| {
+                    ui.set_width(200.0);
+                   let text = RichText::new("Gradient").size(size).color(c.text);
+                    let label = Label::new(text, None).interactive(false);
+                    ui.add(label);
+
+                    let text = RichText::new("vertical widget_bg -> bg")
+                        .size(self.theme.typography.very_small)
+                        .color(muted);
+                    let label = Label::new(text, None).interactive(false);
+                    ui.add(label);
+                });
+
+            frame1
+                .visuals(frame_visuals)
+                .interactive(true)
+                .show(ui, |ui| {
+                    ui.set_width(200.0);
+                   let text = RichText::new("Interactive").size(size).color(c.text);
+                    let label = Label::new(text, None).interactive(false);
+                    ui.add(label);
+
+                    let text = RichText::new("hover / click fills")
+                        .size(self.theme.typography.very_small)
+                        .color(muted);
+                    let label = Label::new(text, None).interactive(false);
+                    ui.add(label);
+                });
+        });
     }
 
     fn nested_list(&mut self, ui: &mut Ui) {
@@ -554,31 +693,13 @@ impl DemoApp {
                 .min_size(button_size);
             ui.add(btn);
 
-            let on_fill = self.theme.colors.bg;
-
-            let btn = Button::new(RichText::new("Accent fill").size(size).color(on_fill))
-                .bg_color(self.theme.colors.accent)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Success").size(size).color(on_fill))
-                .bg_color(self.theme.colors.success)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Warning").size(size).color(on_fill))
-                .bg_color(self.theme.colors.warning)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Error").size(size).color(on_fill))
-                .bg_color(self.theme.colors.error)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Info").size(size).color(on_fill))
-                .bg_color(self.theme.colors.info)
-                .min_size(button_size);
+            let btn = Button::new(
+                RichText::new("Gradient")
+                    .size(size)
+                    .color(text_color),
+            )
+            .visuals(self.theme.button_gradient_visuals())
+            .min_size(button_size);
             ui.add(btn);
         });
 

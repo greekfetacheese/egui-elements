@@ -1,5 +1,6 @@
 pub mod components;
 pub mod editor;
+pub mod gradient;
 pub mod overlay;
 pub mod theme;
 pub mod themes;
