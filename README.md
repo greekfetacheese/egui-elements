@@ -1,6 +1,6 @@
 # egui-elements
 
-Themed widgets, palettes, and optional components for [egui](https://github.com/emilk/egui).
+Themes, widgets, and components for [egui](https://github.com/emilk/egui).
 
 The goal of this crate is to make it easy to create nice
 looking apps with egui.
