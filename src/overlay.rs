@@ -1,54 +1,74 @@
+//! Full-screen dimming used when stacking windows or modals.
+//!
+//! Call [`OverlayManager::window_opened`] / [`OverlayManager::window_closed`]
+//! when toggling a window, then [`OverlayManager::paint_overlay`] each frame.
+
 use egui::{Color32, Context, Id, LayerId, Order, Rect};
 use std::sync::{Arc, RwLock};
 
+/// Counts open windows and paints a darkening overlay.
+///
+/// Cheap to clone (`Arc`). Stored on [`crate::theme::Theme::overlay_manager`].
 #[derive(Clone, Debug, Default)]
 pub struct OverlayManager(Arc<RwLock<OverlayCounter>>);
 
 impl OverlayManager {
+   /// Create a manager with no open windows.
    pub fn new() -> Self {
       Self(Arc::new(RwLock::new(OverlayCounter::new())))
    }
 
+   /// Lightest preset tint.
    pub fn tint_0(&self) -> Color32 {
       Color32::from_black_alpha(40)
    }
 
+   /// Light preset tint.
    pub fn tint_1(&self) -> Color32 {
       Color32::from_black_alpha(60)
    }
 
+   /// Medium preset tint.
    pub fn tint_2(&self) -> Color32 {
       Color32::from_black_alpha(80)
    }
 
+   /// Darkest preset tint.
    pub fn tint_3(&self) -> Color32 {
       Color32::from_black_alpha(100)
    }
 
+   /// Number of currently tracked open windows.
    pub fn counter(&self) -> u8 {
       self.0.read().unwrap().counter()
    }
 
+   /// Last paint layer selected via `paint_*`.
    pub fn order(&self) -> Order {
       self.0.read().unwrap().order()
    }
 
+   /// Paint the next overlay on the background layer.
    pub fn paint_background(&self) {
       self.0.write().unwrap().paint_background()
    }
 
+   /// Paint the next overlay on the middle layer.
    pub fn paint_middle(&self) {
       self.0.write().unwrap().paint_middle()
    }
 
+   /// Paint the next overlay on the foreground layer.
    pub fn paint_foreground(&self) {
       self.0.write().unwrap().paint_foreground()
    }
 
+   /// Paint the next overlay on the tooltip layer.
    pub fn paint_tooltip(&self) {
       self.0.write().unwrap().paint_tooltip()
    }
 
+   /// Paint the next overlay on the debug layer.
    pub fn paint_debug(&self) {
       self.0.write().unwrap().paint_debug()
    }
@@ -63,10 +83,12 @@ impl OverlayManager {
       self.0.write().unwrap().window_closed();
    }
 
+   /// Layer suggested by the current window count.
    pub fn recommended_order(&self) -> Order {
       self.0.read().unwrap().recommended_order()
    }
 
+   /// Alpha derived from the window count (0 if none are open).
    pub fn calculate_alpha(&self) -> u8 {
       self.0.read().unwrap().calculate_alpha()
    }

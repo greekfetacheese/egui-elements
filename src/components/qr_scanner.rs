@@ -26,16 +26,17 @@ const VIEWPORT_ID: &str = "qr_scanner";
 ///
 /// # Usage:
 ///
-/// ```
-///  use egui::*;
-///  let mut scanner = QRScanner::new();
-///  scanner.open(Context::default());
-///  let res = scanner.get_result();
-///  if let Some(res) = res {
-///     // reset the state
-///     scanner.reset();
-///     // use the decoded string
-///  }
+/// ```no_run
+/// # use egui::Context;
+/// # use egui_elements::components::QRScanner;
+/// let mut scanner = QRScanner::new();
+/// scanner.open(Context::default());
+/// let res = scanner.get_result();
+/// if let Some(res) = res {
+///    // reset the state
+///    scanner.reset();
+///    // use the decoded string
+/// }
 /// ```
 #[derive(Clone)]
 pub struct QRScanner {
@@ -48,6 +49,7 @@ pub struct QRScanner {
 }
 
 impl QRScanner {
+   /// Create a closed scanner with no result.
    pub fn new() -> Self {
       Self {
          open: Arc::new(AtomicBool::new(false)),
@@ -59,6 +61,7 @@ impl QRScanner {
       }
    }
 
+   /// Open the overlay viewport. Starts a repaint thread the first time.
    pub fn open(&self, ctx: Context) {
       if !self.is_open() {
          let open = self.open.clone();
@@ -67,18 +70,22 @@ impl QRScanner {
       self.open.store(true, Ordering::Relaxed);
    }
 
+   /// Hide the overlay. Does not clear a captured result.
    pub fn close(&self) {
       self.open.store(false, Ordering::Relaxed);
    }
 
+   /// Drop any result / error and return to a fresh scanner.
    pub fn reset(&mut self) {
       *self = Self::new();
    }
 
+   /// Whether the overlay viewport is currently requested open.
    pub fn is_open(&self) -> bool {
       self.open.load(Ordering::Relaxed)
    }
 
+   /// Drive the overlay. Call every frame while you want the scanner available.
    pub fn show(&mut self, ctx: &egui::Context) {
       if !self.is_open() {
          return;
@@ -262,6 +269,7 @@ impl QRScanner {
       );
    }
 
+   /// Clone of the last successful decode, if any.
    pub fn get_result(&self) -> Option<SecureString> {
       self.result.lock().unwrap().clone()
    }
@@ -279,6 +287,10 @@ fn repaint_thread(ctx: Context, open: Arc<AtomicBool>) {
    }
 }
 
+/// Capture a square around the cursor on `monitor` and decode the first QR.
+///
+/// The RGBA screenshot is wiped after the luma copy. The prepared detector
+/// image is wiped on drop (`rqrr-zeroize`).
 pub fn capture_and_decode(capture_size: i32, monitor: &Monitor) -> Result<SecureString, Error> {
    // Get global mouse position
    let enigo = enigo::Enigo::new(&enigo::Settings::default())?;

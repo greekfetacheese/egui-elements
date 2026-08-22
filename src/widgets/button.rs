@@ -7,6 +7,22 @@ use egui::{
 use crate::theme::Theme;
 use crate::visuals::ButtonVisuals;
 
+/// Clickable themed button, built on egui [`Atom`]s.
+///
+/// Reads [`ButtonVisuals`] from the installed [`Theme`] unless you pass
+/// [`.visuals(...)`](Self::visuals). Use [`Button::bg_color`] for a one-off
+/// idle fill (semantic actions). Chromatic fills should use `theme.colors.bg`
+/// as the text color so glyphs stay readable.
+///
+/// ```
+/// # use egui::__run_test_ui;
+/// # use egui_elements::widgets::Button;
+/// # __run_test_ui(|ui| {
+/// if ui.add(Button::new("Save")).clicked() {
+///     // …
+/// }
+/// # });
+/// ```
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 pub struct Button<'a> {
    layout: AtomLayout<'a>,
@@ -21,6 +37,7 @@ pub struct Button<'a> {
 }
 
 impl<'a> Button<'a> {
+   /// Create a button from atoms (text, images, or a mix).
    pub fn new(atoms: impl IntoAtoms<'a>) -> Self {
       Self {
          layout: AtomLayout::new(atoms.into_atoms())
@@ -58,7 +75,7 @@ impl<'a> Button<'a> {
    /// Creates a button with an image. The size of the image as displayed is defined by the provided size.
    ///
    /// Note: In contrast to [`Button::new`], this limits the image size to the default font height
-   /// (using [`crate::AtomExt::atom_max_height_font_size`]).
+   /// (using [`egui::AtomExt::atom_max_height_font_size`]).
    pub fn image(image: impl Into<Image<'a>>) -> Self {
       Self::opt_image_and_text(Some(image.into()), None)
    }
@@ -66,7 +83,7 @@ impl<'a> Button<'a> {
    /// Creates a button with an image to the left of the text.
    ///
    /// Note: In contrast to [`Button::new`], this limits the image size to the default font height
-   /// (using [`crate::AtomExt::atom_max_height_font_size`]).
+   /// (using [`egui::AtomExt::atom_max_height_font_size`]).
    pub fn image_and_text(image: impl Into<Image<'a>>, text: impl Into<WidgetText>) -> Self {
       Self::opt_image_and_text(Some(image.into()), Some(text.into()))
    }
@@ -74,7 +91,7 @@ impl<'a> Button<'a> {
    /// Create a button with an optional image and optional text.
    ///
    /// Note: In contrast to [`Button::new`], this limits the image size to the default font height
-   /// (using [`crate::AtomExt::atom_max_height_font_size`]).
+   /// (using [`egui::AtomExt::atom_max_height_font_size`]).
    pub fn opt_image_and_text(image: Option<Image<'a>>, text: Option<WidgetText>) -> Self {
       let mut button = Self::new(());
       if let Some(image) = image {
@@ -89,7 +106,7 @@ impl<'a> Button<'a> {
 
    /// Set the wrap mode for the text.
    ///
-   /// By default, [`crate::Ui::wrap_mode`] will be used, which can be overridden with [`crate::Style::wrap_mode`].
+   /// By default, [`egui::Ui::wrap_mode`] will be used, which can be overridden with [`egui::Style::wrap_mode`].
    ///
    /// Note that any `\n` in the text will always produce a new line.
    #[inline]
@@ -121,7 +138,7 @@ impl<'a> Button<'a> {
    ///
    /// Default: `true`.
    ///
-   /// Note: When [`Self::frame`] (or `ui.visuals().button_frame`) is `false`, this setting
+   /// Note: When `ui.visuals().button_frame` is `false`, this setting
    /// has no effect.
    #[inline]
    pub fn frame_when_inactive(mut self, frame_when_inactive: bool) -> Self {
@@ -160,7 +177,7 @@ impl<'a> Button<'a> {
    ///
    /// Designed for menu buttons, for setting a keyboard shortcut text (e.g. `Ctrl+S`).
    ///
-   /// The text can be created with [`crate::Context::format_shortcut`].
+   /// The text can be created with [`egui::Context::format_shortcut`].
    ///
    /// See also [`Self::right_text`].
    #[inline]

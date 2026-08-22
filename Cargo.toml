@@ -5,6 +5,7 @@ version = "0.1.0"
 edition = "2024"
 description = "A collection of widgets and utilities for the egui GUI library."
 license = "MIT"
+readme = "README.md"
 keywords = ["gui", "egui", "widgets", "ui"]
 categories = ["gui"]
 repository = "https://github.com/greekfetacheese/egui-elements"

@@ -1,3 +1,5 @@
+//! Helpers: theme switcher, HSLA colors, and interactive frames.
+
 use crate::theme::*;
 use crate::visuals::FrameVisuals;
 use crate::widgets::{ComboBox, Label};
@@ -6,6 +8,7 @@ use egui::{Color32, Frame, Response, RichText, Sense, Stroke, Ui};
 /// Should work for most images that are shown on a very dark background
 pub const TINT_1: Color32 = Color32::from_rgba_premultiplied(216, 216, 216, 255);
 
+/// HSLA color used by the theme editor (hue 0..=360, s/l 0..=100, a 0..=1).
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy)]
 pub struct Hsla {
@@ -20,6 +23,7 @@ pub struct Hsla {
 }
 
 impl Hsla {
+   /// Convert a premultiplied [`Color32`] to unpremultiplied HSLA.
    pub fn from_color32(c: Color32) -> Self {
       let (r, g, b) = unpremultiply_srgb(c);
       let (h, s, l) = srgb_to_hsl(r, g, b);
@@ -31,6 +35,7 @@ impl Hsla {
       }
    }
 
+   /// Parse `#RGB`, `#RRGGBB`, or `#RRGGBBAA`.
    pub fn from_hex(hex: &str) -> Option<Self> {
       match Color32::from_hex(hex) {
          Ok(c) => Some(Self::from_color32(c)),
@@ -38,11 +43,13 @@ impl Hsla {
       }
    }
 
+   /// Convert back to a premultiplied [`Color32`].
    pub fn to_color32(&self) -> Color32 {
       let (r, g, b, a) = self.to_rgba_components();
       Color32::from_rgba_unmultiplied(r, g, b, a)
    }
 
+   /// Unpremultiplied `(r, g, b, a)` in 0..=255.
    pub fn to_rgba_components(&self) -> (u8, u8, u8, u8) {
       let (r, g, b) = hsl_to_srgb(self.h, self.s / 100.0, self.l / 100.0);
       (
@@ -53,6 +60,7 @@ impl Hsla {
       )
    }
 
+   /// Walk lightness in 5% steps, including `self` as the first entry.
    pub fn shades(&self, num_shades: usize, direction: ShadeDirection) -> Vec<Color32> {
       let mut shades = Vec::new();
       let step = if direction == ShadeDirection::Lighter {
@@ -69,9 +77,12 @@ impl Hsla {
    }
 }
 
+/// Direction for [`Hsla::shades`].
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ShadeDirection {
+   /// Increase lightness.
    Lighter,
+   /// Decrease lightness.
    Darker,
 }
 
@@ -141,6 +152,7 @@ fn channel_to_u8(channel: f32) -> u8 {
    (channel.clamp(0.0, 1.0) * 255.0) as u8
 }
 
+/// `true` if any frame-related palette slot changed.
 pub fn frame_palette_changed(old: &ThemeColors, new: &ThemeColors) -> bool {
    old.title_bar != new.title_bar
       || old.bg != new.bg
@@ -150,12 +162,15 @@ pub fn frame_palette_changed(old: &ThemeColors, new: &ThemeColors) -> bool {
       || old.border != new.border
 }
 
+/// Write `new` into `slot` only if it still equals `old`.
 pub fn remap_if_eq(slot: &mut Color32, old: Color32, new: Color32) {
    if *slot == old {
       *slot = new;
    }
 }
 
+/// Remap fill, stroke, and shadow colors on an [`egui::Frame`] when they
+/// still match the previous palette.
 pub fn remap_frame(
    frame: &mut Frame,
    old_fill: Color32,
@@ -168,6 +183,8 @@ pub fn remap_frame(
    remap_if_eq(&mut frame.shadow.color, old_border, new_border);
 }
 
+/// Remap hover/click fills on [`FrameVisuals`] when they still match the
+/// previous palette.
 pub fn remap_frame_visuals(
    visuals: &mut FrameVisuals,
    old_hover: Color32,
@@ -221,6 +238,9 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
    new_theme_opt
 }
 
+/// Paint `frame` with hover/click fills from `visuals`.
+///
+/// The closure runs inside the frame. Returns the inner content response.
 pub fn frame(
    frame: &mut Frame,
    visuals: FrameVisuals,

@@ -1,3 +1,5 @@
+//! McLaren 650S GT3 (2015 livery).
+
 use crate::overlay::OverlayManager;
 use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVisuals, Typography};
 use crate::visuals::*;

@@ -1,3 +1,5 @@
+//! Tokyo Night (dark). Source: <https://github.com/tokyo-night/tokyo-night-vscode-theme>.
+
 use crate::overlay::OverlayManager;
 use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVisuals, Typography};
 use crate::visuals::*;

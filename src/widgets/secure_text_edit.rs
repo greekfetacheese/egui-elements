@@ -14,11 +14,21 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 #[cfg(feature = "secure-types")]
 use secure_types::{SecureString, Zeroize};
 
+/// Buffer used by [`SecureTextEdit`].
+///
+/// Implemented for [`String`] always, and for [`secure_types::SecureString`]
+/// when the `secure-types` feature is on. Secure buffers report
+/// [`TextBuffer::is_secure`] so the widget can avoid extra copies.
 pub trait TextBuffer {
+   /// `true` when the backing store should not be cloned into egui history.
    fn is_secure(&self) -> bool;
+   /// Insert `text_to_insert` at the given char index. Returns chars written.
    fn insert_text_at_char_idx(&mut self, char_idx: usize, text_to_insert: &str) -> usize;
+   /// Delete the half-open char range.
    fn delete_text_char_range(&mut self, char_range: core::ops::Range<usize>);
+   /// Number of Unicode scalar values.
    fn char_len(&self) -> usize;
+   /// Snapshot the contents. Prefer not calling this on a secure buffer.
    fn to_string(&self) -> String;
 }
 
@@ -78,10 +88,14 @@ impl TextBuffer for String {
    }
 }
 
+/// Persistent cursor / IME state for a [`SecureTextEdit`].
 #[derive(Clone, Debug, Default)]
 pub struct SecureTextEditState {
+   /// Selection and cursor.
    pub cursor: text_selection::TextCursorState,
+   /// Horizontal scroll offset for single-line fields.
    pub singleline_offset: f32,
+   /// Seconds since start, last time the user interacted.
    pub last_interaction_time: f64,
    /// True while a non-empty IME preedit is in the buffer.
    ///
@@ -95,18 +109,24 @@ pub struct SecureTextEditState {
 }
 
 impl SecureTextEditState {
+   /// Load persisted state for `id`, if any.
    pub fn load(ctx: &egui::Context, id: egui::Id) -> Option<Self> {
       ctx.data_mut(|d| d.get_persisted(id))
    }
 
+   /// Persist this state under `id`.
    pub fn store(self, ctx: &egui::Context, id: egui::Id) {
       ctx.data_mut(|d| d.insert_persisted(id, self));
    }
 }
 
+/// Output of [`SecureTextEdit::show`].
 pub struct SecureTextEditOutput {
+   /// Interaction response of the field.
    pub response: Response,
+   /// Updated cursor / IME state (already stored on the context).
    pub state: SecureTextEditState,
+   /// Cursor range after this frame, if the field had focus.
    pub cursor_range: Option<CCursorRange>,
 }
 
@@ -150,6 +170,7 @@ pub struct SecureTextEdit<'a> {
 }
 
 impl<'a> SecureTextEdit<'a> {
+   /// Single-line field. Enter is consumed (see [`Self::return_key`]).
    pub fn singleline(text: &'a mut dyn TextBuffer) -> Self {
       Self {
          text,
@@ -182,6 +203,7 @@ impl<'a> SecureTextEdit<'a> {
       }
    }
 
+   /// Multi-line field. Text wraps; Enter inserts a newline by default.
    pub fn multiline(text: &'a mut dyn TextBuffer) -> Self {
       Self {
          text,
@@ -214,100 +236,122 @@ impl<'a> SecureTextEdit<'a> {
       }
    }
 
+   /// Override the chrome that would otherwise come from the installed theme.
    pub fn visuals(mut self, visuals: TextEditVisuals) -> Self {
       self.visuals = Some(visuals);
       self
    }
 
+   /// Force a widget id (otherwise derived from the `Ui` id + salt).
    pub fn id(mut self, id: Id) -> Self {
       self.id = Some(id);
       self
    }
 
+   /// Alias for [`Self::id_salt`].
    pub fn id_source(self, id_source: impl Hash + Debug) -> Self {
       self.id_salt(id_source)
    }
 
+   /// Extra id salt so two fields in the same `Ui` do not share state.
    pub fn id_salt(mut self, id_salt: impl Hash + Debug) -> Self {
       self.id_salt = Some(Id::new(id_salt));
       self
    }
 
+   /// Placeholder shown when the buffer is empty.
    pub fn hint_text(mut self, hint_text: impl Into<WidgetText>) -> Self {
       self.hint_text = hint_text.into();
       self
    }
 
+   /// Font used to lay out the text.
    pub fn font(mut self, font_selection: impl Into<FontSelection>) -> Self {
       self.font_selection = font_selection.into();
       self
    }
 
+   /// Override the text color.
    pub fn text_color(mut self, text_color: Color32) -> Self {
       self.text_color = Some(text_color);
       self
    }
 
+   /// Optional text color. `None` keeps the theme / style default.
    pub fn text_color_opt(mut self, text_color: Option<Color32>) -> Self {
       self.text_color = text_color;
       self
    }
 
+   /// Mask glyphs and skip extra copies of the buffer.
+   ///
+   /// Required if you want the entered text not to linger in egui allocations.
    pub fn password(mut self, password: bool) -> Self {
       self.password = password;
       self
    }
 
+   /// Draw the framed background. Default: `true`.
    pub fn frame(mut self, frame: bool) -> Self {
       self.frame = frame;
       self
    }
 
+   /// Inner margin around the text.
    pub fn margin(mut self, margin: impl Into<Margin>) -> Self {
       self.margin = margin.into();
       self
    }
 
+   /// If `false`, the field is painted but ignores input.
    pub fn interactive(mut self, interactive: bool) -> Self {
       self.interactive = interactive;
       self
    }
 
+   /// Preferred width. Defaults to [`egui::Spacing::text_edit_width`].
    pub fn desired_width(mut self, desired_width: f32) -> Self {
       self.desired_width = Some(desired_width);
       self
    }
 
+   /// Preferred height, in rows of text (multiline).
    pub fn desired_rows(mut self, desired_height_rows: usize) -> Self {
       self.desired_height_rows = desired_height_rows;
       self
    }
 
+   /// If `true`, Tab inserts a tab instead of moving focus.
    pub fn lock_focus(mut self, tab_will_indent: bool) -> Self {
       self.event_filter.tab = tab_will_indent;
       self
    }
 
+   /// Place the cursor at the end when the field first gains focus.
    pub fn cursor_at_end(mut self, b: bool) -> Self {
       self.cursor_at_end = b;
       self
    }
 
+   /// Minimum allocated size.
    pub fn min_size(mut self, min_size: Vec2) -> Self {
       self.min_size = min_size;
       self
    }
 
+   /// Horizontal alignment of the text inside the field.
    pub fn horizontal_align(mut self, align: Align) -> Self {
       self.align.0[0] = align;
       self
    }
 
+   /// Vertical alignment of the text inside the field.
    pub fn vertical_align(mut self, align: Align) -> Self {
       self.align.0[1] = align;
       self
    }
 
+   /// Clip overflowing text in single-line mode. Ignored for multiline.
    pub fn clip_text(mut self, b: bool) -> Self {
       if !self.multiline {
          self.clip_text = b;
@@ -315,21 +359,25 @@ impl<'a> SecureTextEdit<'a> {
       self
    }
 
+   /// Maximum number of characters accepted.
    pub fn char_limit(mut self, limit: usize) -> Self {
       self.char_limit = limit;
       self
    }
 
+   /// Key that finishes editing on a single-line field. `None` disables it.
    pub fn return_key(mut self, return_key: impl Into<Option<KeyboardShortcut>>) -> Self {
       self.return_key = return_key.into();
       self
    }
 
+   /// Override the background fill.
    pub fn background_color(mut self, color: Color32) -> Self {
       self.background_color = Some(color);
       self
    }
 
+   /// Paint the field and return the response plus updated cursor state.
    pub fn show(mut self, ui: &mut Ui) -> SecureTextEditOutput {
       self.visuals = self.visuals.or_else(|| Theme::text_edit_visuals_from_ctx(ui.ctx()));
       let frame = self.frame;

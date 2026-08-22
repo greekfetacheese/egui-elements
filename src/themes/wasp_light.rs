@@ -1,3 +1,5 @@
+//! Wasp (light). Source: <https://github.com/santiyounger/Wasp-Obsidian-Theme>.
+
 use crate::overlay::OverlayManager;
 use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVisuals, Typography};
 use crate::visuals::*;

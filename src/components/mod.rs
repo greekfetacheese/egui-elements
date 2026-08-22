@@ -1,3 +1,19 @@
+//! Higher-level composites built on the themed widgets.
+//!
+//! Every item here is feature-gated:
+//!
+//! | Type | Feature | Notes |
+//! |------|---------|-------|
+//! | [`SecureInputField`] | `secure-types` | Masked field with show/hide; optional QR fill on Linux |
+//! | [`CredentialsForm`] | `secure-types` | Username / password / confirm + optional virtual keyboard |
+//! | [`VirtualKeyboard`] | `secure-types` | On-screen keyboard writing into a `SecureString` |
+//! | [`QrImage`] | `qr-image` | Encode text as a PNG QR `egui::Image` |
+//! | [`QRScanner`] | `qr-scanner` | Linux-only overlay that captures the monitor and decodes a QR |
+//!
+//! `qr-scanner` also pulls in `secure-types` (decoded payload is a
+//! `SecureString`). Enabling `qr-scanner` on a non-Linux target compiles
+//! the crate but does not export [`QRScanner`].
+
 #[cfg(feature = "secure-types")]
 mod input_field;
 

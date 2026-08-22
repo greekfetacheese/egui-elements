@@ -9,6 +9,19 @@ use egui::{
 };
 use std::sync::Arc;
 
+/// Themed text label with an optional trailing (or leading) image.
+///
+/// Interactive by default: hover/click paints a background from
+/// [`LabelVisuals`]. Set [`Label::interactive`] to `false` for static text.
+/// Used as the selected-item face of [`ComboBox`](crate::widgets::ComboBox).
+///
+/// ```
+/// # use egui::__run_test_ui;
+/// # use egui_elements::widgets::Label;
+/// # __run_test_ui(|ui| {
+/// ui.add(Label::new("Hello", None));
+/// # });
+/// ```
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 #[derive(Clone)]
 pub struct Label {
@@ -79,11 +92,13 @@ impl Label {
       self
    }
 
+   /// Set the wrap mode for the text. Defaults to [`Ui::wrap_mode`].
    pub fn wrap_mode(mut self, wrap_mode: TextWrapMode) -> Self {
       self.wrap_mode = Some(wrap_mode);
       self
    }
 
+   /// Set [`Self::wrap_mode`] to [`TextWrapMode::Wrap`].
    pub fn wrap(mut self) -> Self {
       self.wrap_mode = Some(TextWrapMode::Wrap);
       self
@@ -101,11 +116,13 @@ impl Label {
       self
    }
 
+   /// Paint the selected fill from [`LabelVisuals`] even when not hovered.
    pub fn selected(mut self, selected: bool) -> Self {
       self.selected = selected;
       self
    }
 
+   /// Stretch the label to the available width (useful inside combo popups).
    pub fn fill_width(mut self, fill: bool) -> Self {
       self.fill_width = fill;
       self

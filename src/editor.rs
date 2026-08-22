@@ -1,3 +1,9 @@
+//! Live theme editor window.
+//!
+//! [`ThemeEditor::show`] mutates `theme` in place and only returns `Some`
+//! when the inner switcher picks a new [`crate::theme::ThemeKind`]. Always
+//! call [`crate::theme::Theme::install`] after `show`, not only on `Some`.
+
 use egui::{
    Align, Button, CollapsingHeader, Color32, ComboBox, CornerRadius, DragValue, Frame, Layout,
    Margin, Order, Popup, PopupCloseBehavior, Rect, Response, RichText, ScrollArea, Sense,
@@ -16,13 +22,19 @@ const DARK: Color32 = Color32::from_rgba_premultiplied(22, 22, 30, 255);
 /// Identify which state of the widget we should edit
 #[derive(Clone, PartialEq)]
 pub enum WidgetState {
+   /// Not interactive.
    NonInteractive,
+   /// Idle, enabled.
    Inactive,
+   /// Pointer over the widget.
    Hovered,
+   /// Pointer down / focused.
    Active,
+   /// Popup or combo is open.
    Open,
 }
 
+/// Named palette slot, holding the current [`Color32`] for that slot.
 #[derive(Clone, PartialEq)]
 pub enum Color {
    Bg(Color32),
@@ -40,6 +52,7 @@ pub enum Color {
 }
 
 impl Color {
+   /// Every named slot, filled from `theme`.
    pub fn all_colors_from(theme: &ThemeColors) -> Vec<Color> {
       vec![
          Color::Bg(theme.bg),
@@ -57,6 +70,7 @@ impl Color {
       ]
    }
 
+   /// Short label for this slot.
    pub fn to_str(&self) -> &'static str {
       match self {
          Color::Bg(_) => "Bg",
@@ -74,6 +88,7 @@ impl Color {
       }
    }
 
+   /// The wrapped [`Color32`].
    pub fn color32(&self) -> Color32 {
       match self {
          Color::Bg(color) => *color,
@@ -91,6 +106,7 @@ impl Color {
       }
    }
 
+   /// Slot name if `color` matches a palette entry, otherwise `"Unknown"`.
    pub fn name_from(color: Color32, theme_colors: &ThemeColors) -> &'static str {
       if color == theme_colors.bg {
          "Bg"
@@ -146,18 +162,28 @@ impl WidgetState {
    }
 }
 
+/// In-app editor for a [`Theme`].
+///
+/// Toggle [`ThemeEditor::open`], then call [`ThemeEditor::show`] every
+/// frame. Always install the (possibly mutated) theme afterwards.
 #[derive(Clone)]
 pub struct ThemeEditor {
+   /// When `false`, [`ThemeEditor::show`] is a no-op.
    pub open: bool,
    /// The current widget state being edited
    pub widget_state: WidgetState,
+   /// Shared HSLA popup used by the color rows.
    pub hsla_edit_button: HslaEditButton,
+   /// Currently selected named slot in the palette list.
    pub color: Color,
+   /// Editor window background.
    pub bg_color: Color32,
+   /// Minimum `(width, height)` of the editor contents.
    pub size: (f32, f32),
 }
 
 impl ThemeEditor {
+   /// Closed editor with default size and Tokyo-Night-ish preview bg.
    pub fn new() -> Self {
       Self {
          open: false,
@@ -1015,18 +1041,21 @@ fn edit_shadow(shadow: &mut Shadow, ui: &mut Ui) {
    color_edit_button_srgba(ui, &mut shadow.color, Alpha::BlendOrAdditive);
 }
 
+/// Swatch button that opens an HSLA / hex editor popup.
 #[derive(Clone)]
 pub struct HslaEditButton {
    from_hex_text: String,
 }
 
 impl HslaEditButton {
+   /// Empty hex field.
    pub fn new() -> Self {
       Self {
          from_hex_text: String::new(),
       }
    }
 
+   /// Paint the swatch and popup. Mutates `color32` when the user edits it.
    pub fn show(&mut self, id: &str, ui: &mut Ui, color32: &mut Color32) -> Response {
       let stroke = Stroke::new(1.0, Color32::GRAY);
       let button_size = Vec2::new(50.0, 20.0);

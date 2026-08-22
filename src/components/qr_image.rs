@@ -6,14 +6,19 @@ use std::sync::Arc;
 #[cfg(feature = "secure-types")]
 use secure_types::Zeroize;
 
+/// Failure while encoding or rendering a [`QrImage`].
 #[derive(Debug, Clone)]
 pub enum QrError {
+   /// The payload could not be encoded as a QR symbol.
    EncodingFailed(String),
+   /// PNG encoding of the raster failed.
    ImageError(String),
+   /// Any other failure (including [`QrImage::empty_with_error`]).
    Other(String),
 }
 
 impl QrError {
+   /// Human-readable description of the error.
    pub fn to_string(&self) -> String {
       match self {
          QrError::EncodingFailed(message) => format!("Encoding failed: {}", message),
@@ -58,9 +63,9 @@ fn zeroize_image_data(_data: &mut [u8]) -> bool {
 ///
 /// # Usage
 ///
-/// ```
+/// ```no_run
 /// use egui::*;
-/// use zeus_ui_components::QrImage;
+/// use egui_elements::components::QrImage;
 ///
 /// struct MyUi {
 ///  open: bool,
@@ -136,10 +141,12 @@ impl QrImage {
       }
    }
 
+   /// `true` if encoding or rendering failed.
    pub fn has_error(&self) -> bool {
       self.error.is_some()
    }
 
+   /// The stored error, if any.
    pub fn error(&self) -> Option<&QrError> {
       self.error.as_ref()
    }

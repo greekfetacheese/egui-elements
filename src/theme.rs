@@ -1,3 +1,12 @@
+//! Installed look: palette, typography, frames, and per-widget visuals.
+//!
+//! Construct with [`Theme::new`], then [`Theme::install`] so custom widgets
+//! can read visuals from [`egui::Context`]. [`Theme::current`] reads that
+//! stored copy (or falls back to Tokyo Night).
+//!
+//! Built-in palettes live in [`crate::themes`]. Slot roles are documented
+//! in the crate `docs/theme.md`.
+
 use crate::overlay::OverlayManager;
 use crate::themes::{
    mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, tokyo_night_light, wasp, wasp_light,
@@ -9,6 +18,7 @@ use egui::{Color32, Context, Frame, Id, Style, Vec2};
 #[cfg(feature = "elegance")]
 use elegance::{Palette, Theme as EleganceTheme, Typography as EleganceTypography};
 
+/// Temp-data key used to store the mirrored `egui-elegance` theme.
 #[cfg(feature = "elegance")]
 pub fn elegance_theme_key() -> Id {
    Id::new("elegance::theme")
@@ -51,26 +61,28 @@ impl EleganceThemeKey {
    }
 }
 
+/// Built-in palette. See each variant for the source look.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThemeKind {
-   /// Based on https://github.com/tokyo-night/tokyo-night-vscode-theme
+   /// Based on <https://github.com/tokyo-night/tokyo-night-vscode-theme>
    TokyoNight,
-   /// Based on https://github.com/tokyo-night/tokyo-night-vscode-theme (light)
+   /// Based on <https://github.com/tokyo-night/tokyo-night-vscode-theme> (light)
    TokyoNightLight,
    /// Based on the 2015 McLaren 650S GT3
    McLaren650Gts,
-   /// Based on https://github.com/santiyounger/Reverie-Obsidian-Theme
+   /// Based on <https://github.com/santiyounger/Reverie-Obsidian-Theme>
    Reverie,
-   /// Based on https://github.com/Elevict/Shade-Sanctuary
+   /// Based on <https://github.com/Elevict/Shade-Sanctuary>
    ShadeSanctuary,
-   /// Based on https://github.com/santiyounger/Wasp-Obsidian-Theme (dark)
+   /// Based on <https://github.com/santiyounger/Wasp-Obsidian-Theme> (dark)
    Wasp,
-   /// Based on https://github.com/santiyounger/Wasp-Obsidian-Theme (light)
+   /// Based on <https://github.com/santiyounger/Wasp-Obsidian-Theme> (light)
    WaspLight,
 }
 
 impl ThemeKind {
+   /// Human-readable name, used by [`crate::utils::theme_switcher`].
    pub fn to_str(&self) -> &str {
       match self {
          ThemeKind::TokyoNight => "Tokyo Night",
@@ -83,6 +95,7 @@ impl ThemeKind {
       }
    }
 
+   /// Every built-in kind, in switcher order.
    pub fn to_vec() -> Vec<Self> {
       vec![
          Self::TokyoNight,
@@ -96,11 +109,25 @@ impl ThemeKind {
    }
 }
 
+/// Complete look: colors, typography, frames, and widget visuals.
+///
+/// `Theme` is `Clone`. [`Theme::install`] takes `&mut self` (the elegance
+/// path records a key on `self`). Clone before install if you need to keep
+/// an unmodified copy:
+///
+/// ```no_run
+/// # use egui::Context;
+/// # use egui_elements::theme::{Theme, ThemeKind};
+/// # let ctx = Context::default();
+/// let mut theme = Theme::new(ThemeKind::TokyoNight);
+/// theme.install(&ctx);
+/// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone)]
 pub struct Theme {
    /// True if the theme is dark
    pub dark: bool,
+   /// Tracks open windows so [`OverlayManager::paint_overlay`] can dim the canvas.
    #[cfg_attr(feature = "serde", serde(skip))]
    pub overlay_manager: OverlayManager,
 
@@ -110,9 +137,13 @@ pub struct Theme {
    /// This is usually true for themes with very dark background
    pub image_tint_recommended: bool,
 
+   /// Which built-in palette this theme was constructed from.
    pub kind: ThemeKind,
+   /// Semantic color slots.
    pub colors: ThemeColors,
+   /// Per-widget chrome (button, label, combo, text edit, frames).
    pub visuals: ThemeVisuals,
+   /// Font sizes used by this crate's widgets and the demo.
    pub typography: Typography,
 
    /// Used for [Frame] not native windows
@@ -138,6 +169,7 @@ pub struct Theme {
 
    #[cfg(feature = "elegance")]
    #[cfg_attr(feature = "serde", serde(skip))]
+   /// Snapshot used to skip reinstalling an unchanged elegance theme.
    pub elegance_key: Option<EleganceThemeKey>,
 }
 
@@ -157,6 +189,7 @@ impl PartialEq for Theme {
 impl Eq for Theme {}
 
 impl Theme {
+   /// Construct a built-in theme.
    pub fn new(kind: ThemeKind) -> Self {
       let theme = match kind {
          ThemeKind::TokyoNight => tokyo_night::theme(),
@@ -171,6 +204,7 @@ impl Theme {
       theme
    }
 
+   /// Stock [`egui::Style`] for this kind (widgets, selection, window fill).
    pub fn style(&self) -> Style {
       match self.kind {
          ThemeKind::TokyoNight => tokyo_night::style(),
@@ -183,18 +217,22 @@ impl Theme {
       }
    }
 
+   /// Button visuals from [`ThemeVisuals`].
    pub fn button_visuals(&self) -> ButtonVisuals {
       self.visuals.button_visuals
    }
 
+   /// Label visuals from [`ThemeVisuals`] (same shape as button visuals).
    pub fn label_visuals(&self) -> LabelVisuals {
       self.visuals.label_visuals
    }
 
+   /// Combo-box visuals from [`ThemeVisuals`].
    pub fn combo_box_visuals(&self) -> ComboBoxVisuals {
       self.visuals.combo_box_visuals
    }
 
+   /// Text-edit visuals from [`ThemeVisuals`].
    pub fn text_edit_visuals(&self) -> TextEditVisuals {
       self.visuals.text_edit_visuals
    }
@@ -226,14 +264,17 @@ impl Theme {
       ctx.data(|d| d.get_temp(Self::button_visuals_id()))
    }
 
+   /// Same as [`Self::button_visuals_from_ctx`] for labels.
    pub fn label_visuals_from_ctx(ctx: &Context) -> Option<LabelVisuals> {
       ctx.data(|d| d.get_temp(Self::label_visuals_id()))
    }
 
+   /// Same as [`Self::button_visuals_from_ctx`] for combo boxes.
    pub fn combo_box_visuals_from_ctx(ctx: &Context) -> Option<ComboBoxVisuals> {
       ctx.data(|d| d.get_temp(Self::combo_box_visuals_id()))
    }
 
+   /// Same as [`Self::button_visuals_from_ctx`] for text edits.
    pub fn text_edit_visuals_from_ctx(ctx: &Context) -> Option<TextEditVisuals> {
       ctx.data(|d| d.get_temp(Self::text_edit_visuals_id()))
    }
@@ -389,11 +430,17 @@ impl Theme {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ThemeVisuals {
+   /// Visuals for [`crate::widgets::Button`].
    pub button_visuals: ButtonVisuals,
+   /// Visuals for [`crate::widgets::Label`].
    pub label_visuals: LabelVisuals,
+   /// Visuals for [`crate::widgets::ComboBox`].
    pub combo_box_visuals: ComboBoxVisuals,
+   /// Visuals for [`crate::widgets::SecureTextEdit`].
    pub text_edit_visuals: TextEditVisuals,
+   /// Hover/click fills for [`Theme::frame1`].
    pub frame1_visuals: FrameVisuals,
+   /// Hover/click fills for [`Theme::frame2`].
    pub frame2_visuals: FrameVisuals,
 }
 
@@ -451,13 +498,20 @@ pub struct ThemeColors {
    pub info: Color32,
 }
 
+/// Font sizes in points.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Typography {
+   /// Tiny captions.
    pub very_small: f32,
+   /// Secondary / hint text.
    pub small: f32,
+   /// Body and button text.
    pub normal: f32,
+   /// Emphasized body.
    pub large: f32,
+   /// Section titles below a heading.
    pub very_large: f32,
+   /// Page / modal headings.
    pub heading: f32,
 }

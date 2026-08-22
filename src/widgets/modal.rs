@@ -1,11 +1,11 @@
 //! Modal dialog — a centered themed card over a dimmed backdrop.
 //!
 //! Painted in two layers: a full-viewport dimmed backdrop that swallows
-//! clicks (and closes the modal when clicked), and a centered [`Card`]-
-//! like window with an optional heading row and a close "×" button.
+//! clicks (and closes the modal when clicked), and a centered card-like
+//! window with an optional heading row and a close "×" button.
 //! Press `Esc` to dismiss.
 //!
-//! Forked from https://github.com/stephenberry/egui-elegance
+//! Forked from <https://github.com/stephenberry/egui-elegance>
 
 use egui::{
    Align, Align2, Area, Color32, Context, CornerRadius, FontId, Frame, Id, Key, Layout, Margin,
@@ -26,7 +26,7 @@ type UiFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 /// presses `Esc`, or clicks the "×" button, it's flipped to `false`.
 ///
 /// ```no_run
-/// # use egui_elements::Modal;
+/// # use egui_elements::widgets::Modal;
 /// # let ctx = egui::Context::default();
 /// # let mut open = true;
 /// Modal::new("stats", &mut open)
@@ -123,9 +123,8 @@ impl<'a> Modal<'a> {
    }
 
    /// Paint a glyph in a tinted circular halo to the left of the heading.
-   /// Use any short text — `"⚠"`, `"✓"`, `"!"`, an emoji, or a symbol from
-   /// the bundled `Elegance Symbols` font. The halo's tint comes from
-   /// [`Modal::header_accent`] and defaults to [`Accent::Sky`].
+   /// Use any short text — `"⚠"`, `"✓"`, `"!"`, or an emoji. The halo
+   /// uses [`ThemeColors::accent`](crate::theme::ThemeColors::accent).
    pub fn header_icon(mut self, icon: impl Into<WidgetText>) -> Self {
       self.header_icon = Some(icon.into());
       self

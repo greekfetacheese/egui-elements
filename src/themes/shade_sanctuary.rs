@@ -1,3 +1,5 @@
+//! Shade Sanctuary. Source: <https://github.com/Elevict/Shade-Sanctuary>.
+
 use crate::overlay::OverlayManager;
 use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVisuals, Typography};
 use crate::visuals::*;

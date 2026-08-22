@@ -60,14 +60,17 @@ impl SecureInputField {
       }
    }
 
+   /// Whether the field is currently shown.
    pub fn is_open(&self) -> bool {
       self.open
    }
 
+   /// Start showing the field on the next [`Self::show`].
    pub fn open(&mut self) {
       self.open = true;
    }
 
+   /// Hide the field. Does not erase the text.
    pub fn close(&mut self) {
       self.open = false;
    }
@@ -77,26 +80,31 @@ impl SecureInputField {
       self.text.erase();
    }
 
+   /// Builder: icon size for the show/hide (and QR) buttons.
    pub fn icon_size(mut self, size: Vec2) -> Self {
       self.icon_size = size;
       self
    }
 
+   /// Builder: minimum allocated size of the text field.
    pub fn min_size(mut self, size: Vec2) -> Self {
       self.min_size = size;
       self
    }
 
+   /// Builder: inner margin around the text.
    pub fn inner_margin(mut self, margin: Margin) -> Self {
       self.inner_margin = Some(margin);
       self
    }
 
+   /// Builder: show the QR-scan button (Linux + `qr-scanner` only).
    pub fn qr_enabled(mut self, enabled: bool) -> Self {
       self.qr_enabled = enabled;
       self
    }
 
+   /// Whether the text is currently masked.
    pub fn is_text_hidden(&self) -> bool {
       self.text_hidden
    }

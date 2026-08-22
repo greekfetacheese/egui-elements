@@ -4,6 +4,7 @@ use egui::*;
 
 use secure_types::SecureString;
 
+/// Which credentials row a [`VirtualKeyboard`] is typing into.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum InputField {
    Username,
@@ -20,6 +21,7 @@ pub struct VirtualKeyboard {
 }
 
 impl VirtualKeyboard {
+   /// Create a keyboard. Pass `true` to show it immediately.
    pub fn new(open: bool) -> Self {
       Self {
          open,
@@ -29,22 +31,27 @@ impl VirtualKeyboard {
       }
    }
 
+   /// Show the keyboard on the next [`Self::show`].
    pub fn open(&mut self) {
       self.open = true;
    }
 
+   /// Whether the keyboard is currently shown.
    pub fn is_open(&self) -> bool {
       self.open
    }
 
+   /// Hide the keyboard.
    pub fn close(&mut self) {
       self.open = false;
    }
 
+   /// Direct keystrokes at a different credentials row.
    pub fn set_active_target(&mut self, target: InputField) {
       self.active_target = target;
    }
 
+   /// Paint the keyboard and write pressed keys into `target_str`.
    pub fn show(&mut self, target_str: &mut SecureString, ui: &mut Ui) {
       if !self.open {
          return;

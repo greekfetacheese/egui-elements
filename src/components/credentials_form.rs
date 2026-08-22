@@ -40,14 +40,17 @@ impl CredentialsForm {
       }
    }
 
+   /// Whether the form is currently shown.
    pub fn is_open(&self) -> bool {
       self.open
    }
 
+   /// Start showing the form on the next [`Self::show`].
    pub fn open(&mut self) {
       self.open = true;
    }
 
+   /// Hide the form. Does not erase the fields.
    pub fn close(&mut self) {
       self.open = false;
    }
@@ -64,6 +67,7 @@ impl CredentialsForm {
       *self = Self::new();
    }
 
+   /// Whether the confirm-password row is enabled.
    pub fn is_confirm_password(&self) -> bool {
       self.confrim_password
    }
@@ -89,6 +93,7 @@ impl CredentialsForm {
       self.confirm_password.text.clone()
    }
 
+   /// Builder: start open or closed.
    pub fn with_open(mut self, open: bool) -> Self {
       self.open = open;
       self
@@ -170,6 +175,7 @@ impl CredentialsForm {
       self
    }
 
+   /// Builder: set the minimum size of every input row.
    pub fn with_min_size(mut self, size: Vec2) -> Self {
       let username = self.username.clone();
       let password = self.password.clone();
@@ -186,6 +192,7 @@ impl CredentialsForm {
       self
    }
 
+   /// Paint the form (and the virtual keyboard, if enabled).
    pub fn show(&mut self, ui: &mut Ui) {
       if !self.open {
          return;

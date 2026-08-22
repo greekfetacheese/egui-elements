@@ -10,6 +10,18 @@ use egui::{
 
 use std::{fmt::Debug, hash::Hash};
 
+/// Dropdown whose closed face is a [`Label`] (text and/or image).
+///
+/// ```
+/// # use egui::__run_test_ui;
+/// # use egui_elements::widgets::{ComboBox, Label};
+/// # __run_test_ui(|ui| {
+/// let current = Label::new("Tokyo Night", None);
+/// ComboBox::new("theme", current).width(200.0).show_ui(ui, |ui| {
+///     ui.label("Tokyo Night Light");
+/// });
+/// # });
+/// ```
 #[must_use = "You should call .show_ui()"]
 pub struct ComboBox {
    id_salt: Id,
@@ -24,6 +36,7 @@ pub struct ComboBox {
 }
 
 impl ComboBox {
+   /// Create a combo box keyed by `id_salt`, showing `selected_item` on the button.
    pub fn new(id_salt: impl Hash + Debug, selected_item: Label) -> Self {
       Self {
          id_salt: Id::new(id_salt),
@@ -38,11 +51,13 @@ impl ComboBox {
       }
    }
 
+   /// Override the chrome that would otherwise come from the installed theme.
    pub fn visuals(mut self, visuals: ComboBoxVisuals) -> Self {
       self.visuals = Some(visuals);
       self
    }
 
+   /// Optional caption painted to the left of the button.
    pub fn label(mut self, label: impl Into<WidgetText>) -> Self {
       self.label = Some(label.into());
       self
@@ -62,6 +77,9 @@ impl ComboBox {
       self
    }
 
+   /// Replace the default disclosure triangle with a custom painter.
+   ///
+   /// The `bool` argument is `true` while the popup is open.
    pub fn icon(mut self, icon_fn: impl FnOnce(&Ui, Rect, &WidgetVisuals, bool) + 'static) -> Self {
       self.icon = Some(Box::new(icon_fn));
       self
@@ -73,11 +91,14 @@ impl ComboBox {
       self
    }
 
+   /// How the popup closes. Default: [`PopupCloseBehavior::CloseOnClick`].
    pub fn close_behavior(mut self, close_behavior: PopupCloseBehavior) -> Self {
       self.close_behavior = Some(close_behavior);
       self
    }
 
+   /// Paint the button and, while open, the popup. Returns the inner response
+   /// of the menu closure when the popup is visible.
    pub fn show_ui<R>(
       self,
       ui: &mut Ui,
