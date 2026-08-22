@@ -1,5 +1,5 @@
 use crate::overlay::OverlayManager;
-use crate::themes::{mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night};
+use crate::themes::{mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, wasp, wasp_light};
 use crate::utils::*;
 use crate::visuals::*;
 use egui::{Color32, Context, Frame, Id, Style, Vec2};
@@ -10,29 +10,37 @@ pub enum ThemeKind {
     /// Based on https://github.com/tokyo-night/tokyo-night-vscode-theme
     TokyoNight,
     /// Based on the 2015 McLaren 650S GT3
-    McLaren650GtsGt3,
+    McLaren650Gts,
     /// Based on https://github.com/santiyounger/Reverie-Obsidian-Theme
     Reverie,
     /// Based on https://github.com/Elevict/Shade-Sanctuary
     ShadeSanctuary,
+    /// Based on https://github.com/santiyounger/Wasp-Obsidian-Theme (dark)
+    Wasp,
+    /// Based on https://github.com/santiyounger/Wasp-Obsidian-Theme (light)
+    WaspLight,
 }
 
 impl ThemeKind {
     pub fn to_str(&self) -> &str {
         match self {
             ThemeKind::TokyoNight => "Tokyo Night",
-            ThemeKind::McLaren650GtsGt3 => "McLaren 650GTS GT3",
+            ThemeKind::McLaren650Gts => "McLaren 650GTS",
             ThemeKind::Reverie => "Reverie",
             ThemeKind::ShadeSanctuary => "Shade Sanctuary",
+            ThemeKind::Wasp => "Wasp",
+            ThemeKind::WaspLight => "Wasp Light",
         }
     }
 
     pub fn to_vec() -> Vec<Self> {
         vec![
             Self::TokyoNight,
-            Self::McLaren650GtsGt3,
+            Self::McLaren650Gts,
             Self::Reverie,
             Self::ShadeSanctuary,
+            Self::Wasp,
+            Self::WaspLight,
         ]
     }
 }
@@ -97,9 +105,11 @@ impl Theme {
     pub fn new(kind: ThemeKind) -> Self {
         let theme = match kind {
             ThemeKind::TokyoNight => tokyo_night::theme(),
-            ThemeKind::McLaren650GtsGt3 => mclaren_650gts_gt3::theme(),
+            ThemeKind::McLaren650Gts => mclaren_650gts_gt3::theme(),
             ThemeKind::Reverie => reverie::theme(),
             ThemeKind::ShadeSanctuary => shade_sanctuary::theme(),
+            ThemeKind::Wasp => wasp::theme(),
+            ThemeKind::WaspLight => wasp_light::theme(),
         };
 
         theme
@@ -108,9 +118,11 @@ impl Theme {
     pub fn style(&self) -> Style {
         match self.kind {
             ThemeKind::TokyoNight => tokyo_night::style(),
-            ThemeKind::McLaren650GtsGt3 => mclaren_650gts_gt3::style(),
+            ThemeKind::McLaren650Gts => mclaren_650gts_gt3::style(),
             ThemeKind::Reverie => reverie::style(),
             ThemeKind::ShadeSanctuary => shade_sanctuary::style(),
+            ThemeKind::Wasp => wasp::style(),
+            ThemeKind::WaspLight => wasp_light::style(),
         }
     }
 

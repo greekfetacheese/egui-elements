@@ -191,13 +191,15 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
     ComboBox::new("Theme switcher", current)
         .width(200.0)
         .show_ui(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 12.0;
+
             for kind in ThemeKind::to_vec() {
                 let label = RichText::new(kind.to_str()).size(current_theme.typography.normal);
                 let label = Label::new(label, None)
                     .interactive(true)
                     .fill_width(true)
                     .sense(Sense::click())
-                    .expand(Some(3.0));
+                    .expand(Some(4.0));
 
                 if ui.add(label).clicked() {
                     let new_theme = Theme::new(kind);

@@ -274,7 +274,6 @@ impl DemoApp {
                 ui.add_space(12.0);
 
                 if let Some(new_theme) = utils::theme_switcher(&self.theme, ui) {
-                    println!("Switched to {:?}", new_theme.kind);
                     self.theme = new_theme;
                 }
             });

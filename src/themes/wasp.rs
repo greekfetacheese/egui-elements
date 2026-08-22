@@ -6,50 +6,52 @@ use egui::{
     style::{Selection, WidgetVisuals, Widgets},
 };
 
-// Color Pallete — carbon weave, papaya body, HUD cyan / green from the 2015 650S GT3.
+// Color Palette — Wasp (Obsidian, dark). Warm parchment on charcoal,
+// honey-gold focus, sage links.
+// https://github.com/santiyounger/Wasp-Obsidian-Theme
 
-/// Roof / deep carbon canvas.
-const CARBON: Color32 = Color32::from_rgba_premultiplied(12, 13, 16, 255);
-/// Lifted carbon (mirror housing).
-const CARBON2: Color32 = Color32::from_rgba_premultiplied(18, 20, 24, 255);
-/// Hover lift — gray step, no chroma.
-const CARBON3: Color32 = Color32::from_rgba_premultiplied(36, 40, 48, 255);
-/// Papaya from the body / GT3 lettering (mirror ring ~#fe8501, pulled back for UI).
-const PAPAYA: Color32 = Color32::from_rgba_premultiplied(255, 122, 8, 255);
-/// Steering-wheel HUD cyan.
-const HUD_CYAN: Color32 = Color32::from_rgba_premultiplied(56, 210, 230, 255);
-/// HUD / LED green.
-const HUD_GREEN: Color32 = Color32::from_rgba_premultiplied(48, 210, 130, 255);
-/// MAP / warning amber.
-const AMBER: Color32 = Color32::from_rgba_premultiplied(240, 186, 48, 255);
-/// Wheel kill / error red.
-const SIGNAL_RED: Color32 = Color32::from_rgba_premultiplied(235, 80, 85, 255);
-/// Cool HUD white.
-const HUD_WHITE: Color32 = Color32::from_rgba_premultiplied(220, 236, 240, 255);
-/// Steel-cyan structural stroke / shadow.
-const STEEL: Color32 = Color32::from_rgba_premultiplied(58, 68, 78, 255);
-const FADED_STEEL: Color32 = Color32::from_rgba_premultiplied(58, 68, 78, 118);
-/// STEEL mixed 45% toward HUD_WHITE. Readable muted type (AA on bg / widget_bg).
-const MUTED: Color32 = Color32::from_rgba_premultiplied(131, 144, 151, 255);
-/// CARBON3 mixed 28% toward PAPAYA. Selected / emphasis fill, not hover.
-const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(97, 63, 37, 255);
-/// STEEL mixed 35% toward HUD_CYAN. Hover border chrome only — not a ThemeColors slot.
-const HOVER_CHROME: Color32 = Color32::from_rgba_premultiplied(57, 118, 131, 255);
+/// --color-base-00 / --background-secondary
+const NEST: Color32 = Color32::from_rgba_premultiplied(25, 25, 25, 255);
+/// --color-base-10 / --background-primary
+const COMB: Color32 = Color32::from_rgba_premultiplied(36, 36, 36, 255);
+/// --color-base-25. Hover lift — gray step, no chroma.
+const COMB2: Color32 = Color32::from_rgba_premultiplied(50, 50, 50, 255);
+/// --text-normal / --color-base-100
+const PARCHMENT: Color32 = Color32::from_rgba_premultiplied(250, 242, 214, 255);
+/// --text-faint / --text-muted
+const FAINT: Color32 = Color32::from_rgba_premultiplied(189, 174, 147, 255);
+/// --interactive-accent / --h1-color. Focus / primary action.
+const HONEY: Color32 = Color32::from_rgba_premultiplied(248, 197, 55, 255);
+/// --text-link / --inline-code. Links / info — cooler than honey.
+const SAGE: Color32 = Color32::from_rgba_premultiplied(131, 165, 152, 255);
+/// --h3-color / --button-bg-color
+const AMBER: Color32 = Color32::from_rgba_premultiplied(212, 147, 53, 255);
+/// --text-highlight-bg (#640211) lifted so glyphs clear AA on nest.
+const STING: Color32 = Color32::from_rgba_premultiplied(220, 96, 88, 255);
+/// Gruvbox moss — Wasp has no success token.
+const MOSS: Color32 = Color32::from_rgba_premultiplied(142, 192, 124, 255);
+/// --color-base-40. Structural stroke / shadow.
+const HUSK: Color32 = Color32::from_rgba_premultiplied(92, 92, 84, 255);
+const FADED_HUSK: Color32 = Color32::from_rgba_premultiplied(92, 92, 84, 118);
+/// --wasp-nav-active-background. Selected / emphasis fill, not hover.
+const HIGHLIGHT: Color32 = Color32::from_rgba_premultiplied(122, 92, 20, 255);
+/// --text-accent-hover. Hover border chrome only — not a ThemeColors slot.
+const HOVER_CHROME: Color32 = Color32::from_rgba_premultiplied(212, 147, 53, 255);
 
-const TITLE_BAR: Color32 = CARBON;
-const MAIN_BG: Color32 = CARBON;
-const WIDGET_BG: Color32 = CARBON2;
-const HOVER: Color32 = CARBON3;
-const TEXT: Color32 = HUD_WHITE;
-const TEXT_MUTED: Color32 = MUTED;
-const BORDER: Color32 = STEEL;
-const ACCENT: Color32 = PAPAYA;
-const ERROR: Color32 = SIGNAL_RED;
+const TITLE_BAR: Color32 = NEST;
+const MAIN_BG: Color32 = NEST;
+const WIDGET_BG: Color32 = COMB;
+const HOVER: Color32 = COMB2;
+const TEXT: Color32 = PARCHMENT;
+const TEXT_MUTED: Color32 = FAINT;
+const BORDER: Color32 = HUSK;
+const ACCENT: Color32 = HONEY;
+const ERROR: Color32 = STING;
 const WARNING: Color32 = AMBER;
-const SUCCESS: Color32 = HUD_GREEN;
-const INFO: Color32 = HUD_CYAN;
+const SUCCESS: Color32 = MOSS;
+const INFO: Color32 = SAGE;
 
-const CORNER_RADIUS: u8 = 4;
+const CORNER_RADIUS: u8 = 6;
 const INNER_MARGIN: i8 = 10;
 const OUTER_MARGIN: i8 = 5;
 
@@ -59,7 +61,7 @@ pub fn theme() -> Theme {
         dark: true,
         overlay_manager: OverlayManager::new(),
         image_tint_recommended: true,
-        kind: ThemeKind::McLaren650Gts,
+        kind: ThemeKind::Wasp,
         colors: colors(),
         typography: typography(),
         window_frame: window_frame(&colors()),
@@ -185,12 +187,12 @@ pub fn button_visuals() -> ButtonVisuals {
         border: Stroke::new(1.0, Color32::TRANSPARENT),
         border_hover: Stroke::new(1.0, HOVER_CHROME),
         border_click: Stroke::new(1.0, Color32::TRANSPARENT),
-        corner_radius: CornerRadius::same(2),
+        corner_radius: CornerRadius::same(3),
         shadow: Shadow {
             offset: (0, 0).into(),
             blur: 2,
             spread: 1,
-            color: STEEL,
+            color: HUSK,
         },
     }
 }
@@ -209,7 +211,7 @@ pub fn combo_box_visuals() -> ComboBoxVisuals {
             offset: (0, 0).into(),
             blur: 2,
             spread: 1,
-            color: STEEL,
+            color: HUSK,
         },
     }
 }
@@ -229,8 +231,8 @@ pub fn text_edit_visuals() -> TextEditVisuals {
         text: TEXT,
         bg: WIDGET_BG,
         border: Stroke::new(1.0, BORDER),
-        border_hover: Stroke::new(1.0, PAPAYA),
-        border_open: Stroke::new(1.0, PAPAYA),
+        border_hover: Stroke::new(1.0, HONEY),
+        border_open: Stroke::new(1.0, HONEY),
         corner_radius: CornerRadius::same(CORNER_RADIUS),
         shadow: Shadow::NONE,
     }
@@ -283,7 +285,7 @@ fn visuals(widgets: Widgets, colors: &ThemeColors) -> Visuals {
             offset: (0, 0).into(),
             blur: 3,
             spread: 0,
-            color: FADED_STEEL,
+            color: FADED_HUSK,
         },
         window_fill: colors.bg,
         window_stroke: Stroke::new(1.0, Color32::TRANSPARENT),
