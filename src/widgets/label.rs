@@ -1,3 +1,5 @@
+use crate::theme::Theme;
+use crate::visuals::LabelVisuals;
 use egui::{
    Align, Color32, FontSelection, Image, Pos2, Rect, Response, Sense, Stroke, StrokeKind,
    TextWrapMode, Ui, Vec2, Widget, WidgetText,
@@ -6,8 +8,6 @@ use egui::{
    text::LayoutJob,
 };
 use std::sync::Arc;
-use crate::theme::Theme;
-use crate::visuals::LabelVisuals;
 
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 #[derive(Clone)]
@@ -195,12 +195,12 @@ impl Label {
             self.text_first,
          );
 
-         let text_color =
-            self.visuals
-               .or_else(|| Theme::label_visuals_from_ctx(ui.ctx()))
-               .as_ref()
-               .map(|v| v.text)
-               .unwrap_or(button_visuals.text_color());
+         let text_color = self
+            .visuals
+            .or_else(|| Theme::label_visuals_from_ctx(ui.ctx()))
+            .as_ref()
+            .map(|v| v.text)
+            .unwrap_or(button_visuals.text_color());
          ui.painter().add(TextShape::new(
             text_pos,
             galley.clone(),

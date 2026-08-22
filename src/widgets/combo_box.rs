@@ -1,12 +1,12 @@
+use super::label::Label;
+use crate::theme::Theme;
+use crate::visuals::ComboBoxVisuals;
 use egui::{
    Align2, Id, InnerResponse, NumExt, Painter, Popup, PopupCloseBehavior, PopupKind, Rect,
    Response, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
    epaint::{RectShape, Shape, StrokeKind},
    style::WidgetVisuals,
 };
-use crate::theme::Theme;
-use crate::visuals::ComboBoxVisuals;
-use super::label::Label;
 
 use std::{fmt::Debug, hash::Hash};
 

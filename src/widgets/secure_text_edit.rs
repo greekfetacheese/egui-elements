@@ -7,9 +7,9 @@ use egui::{
    vec2,
 };
 
-use std::{fmt::Debug, hash::Hash, sync::Arc};
 use crate::theme::Theme;
 use crate::visuals::TextEditVisuals;
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 #[cfg(feature = "secure-types")]
 use secure_types::{SecureString, Zeroize};
