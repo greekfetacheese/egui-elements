@@ -290,13 +290,59 @@ Cool night canvas. Elevation by shadow. Cyan focus. Purple links. Salmon / camel
 
 ---
 
+## 12a. Reference: Tokyo Night Light
+
+Based on [tokyo-night-light-color-theme.json](https://github.com/tokyo-night/tokyo-night-vscode-theme/blob/master/themes/tokyo-night-light-color-theme.json), retuned for product UI.
+
+Cool paper canvas. Elevation by shadow. Teal focus. Iris links. Wine / amber / pine semantics. Same jobs as Tokyo Night.
+
+### Named paints
+
+| Const | RGB | Hex | Maps to |
+|-------|-----|-----|---------|
+| `STORM` | 214, 216, 223 | `#d6d8df` | `bg`, `title_bar`, text on chromatic fills |
+| `PAPER` | 230, 231, 237 | `#e6e7ed` | `widget_bg` |
+| `HAZE` | 200, 203, 214 | `#c8cbd6` | `hover` |
+| `HIGHLIGHT` | 172, 176, 191 | `#acb0bf` | `highlight` (selection, no alpha) |
+| `MIST` | 193, 194, 199 | `#c1c2c7` | `border`, widget shadow |
+| `FADED_MIST` | 193, 194, 199, 118 | | Native window shadow only |
+| `DUSK` | 122, 133, 168 | `#7a85a8` | Hover **border** only (not a `ThemeColors` slot) |
+| `MUTED` | 74, 82, 114 | `#4a5272` | `text_muted` (official placeholder; `#707280` fails AA) |
+| `INK` | 52, 59, 88 | `#343b58` | `text` |
+| `TEAL` | 22, 103, 117 | `#166775` | `accent` (official added/info teal; `#006c86` is 4.23 on storm) |
+| `WINE` | 140, 67, 81 | `#8c4351` | `error` |
+| `AMBER` | 129, 85, 19 | `#815513` | `warning` (`#8f5e15` darkened 10%) |
+| `PINE` | 51, 99, 92 | `#33635c` | `success` |
+| `IRIS` | 90, 62, 142 | `#5a3e8e` | `info` |
+
+### Contrast (approx.)
+
+| Pair | Ratio |
+|------|-------|
+| `text` on `bg` / `widget_bg` / `hover` | 7.7 / 8.9 / 6.8 |
+| `text` on `highlight` | 5.1 |
+| `text_muted` on `bg` / `widget_bg` | 5.4 / 6.2 |
+| `bg` on accent / error / warning / success / info | 4.6 / 4.9 / 4.6 / 4.8 / 5.9 |
+| Chromatics as glyphs on `bg` | all ≥ 4.5 (`accent` 4.56, `warning` 4.55) |
+| `bg` vs `widget_bg` | 1.15 |
+| `highlight` vs `hover` | 1.33 |
+
+### Geometry
+
+- Corner radius: 6 (frames, combo, text edit), 3 (buttons)
+- Inner margin 10, outer 5, button padding (10, 8)
+- Animation 0.3s
+- `image_tint_recommended`: false
+
+---
+
 ## 13. Known gaps
 
 Not palette problems. Track them when they block a theme or the demo.
 
 1. **`on_*` slots** are a rule (`bg`) but not fields on `ThemeColors` yet.
 2. **`Button::bg_color`** still snaps hover/click to gray `hover` / `widget_bg`. Semantic fills must stay in-family.
-3. **Hover-border chrome** is theme-local (Tokyo Night `DUSK`, McLaren `HOVER_CHROME`). Do not overload `text_muted` or `border` for it.
+3. **Hover-border chrome** is theme-local (Tokyo Night `DUSK`, Tokyo Night Light `DUSK`, McLaren `HOVER_CHROME`). Do not overload `text_muted` or `border` for it.
 4. **`error` / `info` on `hover`** may sit just under 4.5:1. Acceptable; don’t lighten the semantic set unless glyphs-on-hovered-rows become common.
 
 When a theme’s hex change, update its reference section. When a **role** changes, update §2–§9 first, then the implementations.

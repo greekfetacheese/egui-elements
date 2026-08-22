@@ -1,5 +1,7 @@
 use crate::overlay::OverlayManager;
-use crate::themes::{mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, wasp, wasp_light};
+use crate::themes::{
+    mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, tokyo_night_light, wasp, wasp_light,
+};
 use crate::utils::*;
 use crate::visuals::*;
 use egui::{Color32, Context, Frame, Id, Style, Vec2};
@@ -9,6 +11,8 @@ use egui::{Color32, Context, Frame, Id, Style, Vec2};
 pub enum ThemeKind {
     /// Based on https://github.com/tokyo-night/tokyo-night-vscode-theme
     TokyoNight,
+    /// Based on https://github.com/tokyo-night/tokyo-night-vscode-theme (light)
+    TokyoNightLight,
     /// Based on the 2015 McLaren 650S GT3
     McLaren650Gts,
     /// Based on https://github.com/santiyounger/Reverie-Obsidian-Theme
@@ -25,6 +29,7 @@ impl ThemeKind {
     pub fn to_str(&self) -> &str {
         match self {
             ThemeKind::TokyoNight => "Tokyo Night",
+            ThemeKind::TokyoNightLight => "Tokyo Night Light",
             ThemeKind::McLaren650Gts => "McLaren 650GTS",
             ThemeKind::Reverie => "Reverie",
             ThemeKind::ShadeSanctuary => "Shade Sanctuary",
@@ -36,6 +41,7 @@ impl ThemeKind {
     pub fn to_vec() -> Vec<Self> {
         vec![
             Self::TokyoNight,
+            Self::TokyoNightLight,
             Self::McLaren650Gts,
             Self::Reverie,
             Self::ShadeSanctuary,
@@ -105,6 +111,7 @@ impl Theme {
     pub fn new(kind: ThemeKind) -> Self {
         let theme = match kind {
             ThemeKind::TokyoNight => tokyo_night::theme(),
+            ThemeKind::TokyoNightLight => tokyo_night_light::theme(),
             ThemeKind::McLaren650Gts => mclaren_650gts_gt3::theme(),
             ThemeKind::Reverie => reverie::theme(),
             ThemeKind::ShadeSanctuary => shade_sanctuary::theme(),
@@ -118,6 +125,7 @@ impl Theme {
     pub fn style(&self) -> Style {
         match self.kind {
             ThemeKind::TokyoNight => tokyo_night::style(),
+            ThemeKind::TokyoNightLight => tokyo_night_light::style(),
             ThemeKind::McLaren650Gts => mclaren_650gts_gt3::style(),
             ThemeKind::Reverie => reverie::style(),
             ThemeKind::ShadeSanctuary => shade_sanctuary::style(),
