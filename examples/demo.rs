@@ -112,8 +112,8 @@ struct DemoApp {
 
 impl DemoApp {
    fn new(cc: &eframe::CreationContext<'_>) -> Self {
-      let theme = Theme::new(ThemeKind::TokyoNight);
-      theme.clone().install(&cc.egui_ctx);
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&cc.egui_ctx);
 
       let mut credentials = CredentialsForm::new()
          .with_open(true)
@@ -199,7 +199,7 @@ impl eframe::App for DemoApp {
          self.theme = new_theme;
       }
 
-      self.theme.clone().install(ui.ctx());
+      self.theme.install(ui.ctx());
 
       self.show_window(ui);
       self.show_modal(ui);

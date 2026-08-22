@@ -212,7 +212,7 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
             .expand(Some(4.0));
 
          if ui.add(label).clicked() {
-            let new_theme = Theme::new(kind);
+            let mut new_theme = Theme::new(kind);
             new_theme_opt = Some(new_theme.clone());
             new_theme.install(ui.ctx());
          }

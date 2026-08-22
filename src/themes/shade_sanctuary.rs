@@ -76,6 +76,8 @@ pub fn theme() -> Theme {
       inner_margin: INNER_MARGIN,
       outer_margin: OUTER_MARGIN,
       button_padding: vec2(10.0, 8.0),
+      #[cfg(feature = "elegance")]
+      elegance_key: None,
    }
 }
 
