@@ -552,33 +552,6 @@ impl DemoApp {
                 .selected(true)
                 .min_size(button_size);
             ui.add(btn);
-
-            let on_fill = self.theme.colors.bg;
-
-            let btn = Button::new(RichText::new("Accent fill").size(size).color(on_fill))
-                .bg_color(self.theme.colors.accent)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Success").size(size).color(on_fill))
-                .bg_color(self.theme.colors.success)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Warning").size(size).color(on_fill))
-                .bg_color(self.theme.colors.warning)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Error").size(size).color(on_fill))
-                .bg_color(self.theme.colors.error)
-                .min_size(button_size);
-            ui.add(btn);
-
-            let btn = Button::new(RichText::new("Info").size(size).color(on_fill))
-                .bg_color(self.theme.colors.info)
-                .min_size(button_size);
-            ui.add(btn);
         });
 
         ui.add_space(8.0);
@@ -828,11 +801,13 @@ impl DemoApp {
         }
 
         let frame = self.theme.window_frame;
+        let title_frame = frame.stroke(Stroke::NONE);
         let mut open = self.window_open;
         Window::new("Widgets on a Window")
             .open(&mut open)
             .resizable(true)
             .collapsible(false)
+            .title_frame(title_frame)
             .frame(frame)
             .default_size(vec2(640.0, 520.0))
             .show(ui.ctx(), |ui| {

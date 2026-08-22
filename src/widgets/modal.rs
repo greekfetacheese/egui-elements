@@ -283,7 +283,7 @@ impl<'a> Modal<'a> {
 
                 ui.set_max_width(self.max_width);
                 Frame::new()
-                    .fill(theme.colors.widget_bg)
+                    .fill(theme.colors.bg)
                     .stroke(Stroke::new(1.0, theme.colors.border))
                     .corner_radius(theme.frame1.corner_radius)
                     .show(ui, |ui| {
@@ -369,6 +369,7 @@ impl<'a> Modal<'a> {
                             let footer_fill = theme.colors.widget_bg;
                             let fill_idx = ui.painter().add(Shape::Noop);
                             let footer_rect = Frame::new()
+                                .fill(theme.colors.bg)
                                 .inner_margin(Margin::symmetric(pad as i8, pad as i8 * 3 / 4))
                                 .show(ui, |ui| {
                                     ui.horizontal(|ui| {
