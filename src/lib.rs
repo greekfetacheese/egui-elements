@@ -77,3 +77,19 @@ pub mod themes;
 pub mod utils;
 pub mod visuals;
 pub mod widgets;
+
+pub use overlay::OverlayManager;
+pub use theme::{Theme, ThemeKind};
+pub use widgets::{Button, ComboBox, Label, MultiLabel, Modal};
+
+#[cfg(feature = "secure-types")]
+pub use widgets::SecureTextEdit;
+
+#[cfg(feature = "qr-scanner")]
+pub use components::QRScanner;
+
+#[cfg(feature = "secure-types")]
+pub use components::{CredentialsForm, SecureInputField, VirtualKeyboard};
+
+#[cfg(feature = "qr-image")]
+pub use components::QrImage;

@@ -15,7 +15,10 @@ const VISIBLE_BLACK: ImageSource<'_> = include_image!("../../assets/visible-blac
 const VISIBLE_WHITE: ImageSource<'_> = include_image!("../../assets/visible-white.png");
 const INVISIBLE_BLACK: ImageSource<'_> = include_image!("../../assets/invisible-black.png");
 const INVISIBLE_WHITE: ImageSource<'_> = include_image!("../../assets/invisible-white.png");
+
+#[cfg(all(feature = "qr-scanner", target_os = "linux"))]
 const QR_CODE_BLACK: ImageSource<'_> = include_image!("../../assets/qr-code-black.png");
+#[cfg(all(feature = "qr-scanner", target_os = "linux"))]
 const QR_CODE_WHITE: ImageSource<'_> = include_image!("../../assets/qr-code-white.png");
 
 /// A secure input field that can be used to edit a text containing sensitive information.
