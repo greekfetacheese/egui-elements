@@ -7,7 +7,7 @@
 use egui::{
    Align, Button, CollapsingHeader, Color32, ComboBox, CornerRadius, DragValue, Frame, Layout,
    Margin, Order, Popup, PopupCloseBehavior, Rect, Response, RichText, ScrollArea, Sense,
-   SetOpenCommand, Shadow, Slider, Stroke, StrokeKind, TextEdit, Ui, Vec2, Window,
+   SetOpenCommand, Shadow, Slider, Stroke, StrokeKind, TextEdit, Ui, Vec2,
    color_picker::{Alpha, color_edit_button_srgba},
    ecolor::HexColor,
    vec2,
@@ -16,6 +16,7 @@ use egui::{
 use crate::theme::{Theme, ThemeColors};
 use crate::utils::{self, Hsla};
 use crate::visuals::*;
+use crate::widgets::Window;
 
 const DARK: Color32 = Color32::from_rgba_premultiplied(22, 22, 30, 255);
 
@@ -206,10 +207,12 @@ impl ThemeEditor {
       let mut open = self.open;
       let mut new_theme = None;
       let frame = Frame::window(ui.style()).fill(self.bg_color);
+      let title_frame = frame.stroke(Stroke::NONE);
 
       Window::new("Theme Editor")
          .open(&mut open)
          .resizable([true, true])
+         .title_frame(title_frame)
          .frame(frame)
          .show(ui.ctx(), |ui| {
             ui.set_min_width(self.size.0);

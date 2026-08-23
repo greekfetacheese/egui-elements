@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`) that reads visuals from an installed theme
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
@@ -17,12 +17,12 @@ There are **no crate-root re-exports**. Import from the modules:
 
 ```rust
 use egui_elements::theme::{Theme, ThemeKind};
-use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit};
+use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
 use egui_elements::utils::theme_switcher;
 use egui_elements::editor::ThemeEditor;
 ```
 
-`Button` and `ComboBox` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
+`Button`, `ComboBox`, and `Window` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
 
 ## Installation
 
@@ -78,7 +78,7 @@ fn chrome(theme: &mut Theme, editor: &mut ThemeEditor, ui: &mut egui::Ui) {
 
 ```rust
 use egui::{Sense, Ui};
-use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit};
+use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
 
 fn gallery(ui: &mut Ui, text: &mut String, modal_open: &mut bool) {
     ui.add(Button::new("Primary"));

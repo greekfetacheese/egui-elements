@@ -9,7 +9,7 @@
 //!
 //! ```
 //! use egui_elements::theme::{Theme, ThemeKind};
-//! use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit};
+//! use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
 //! use egui_elements::utils::theme_switcher;
 //! ```
 //!
@@ -39,7 +39,8 @@
 //! - [`theme`] / [`themes`] — palettes, [`ThemeKind`](crate::theme::ThemeKind), install
 //! - [`widgets`] — [`Button`](crate::widgets::Button), [`Label`](crate::widgets::Label),
 //!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
-//!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel)
+//!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
+//!   [`Window`](crate::widgets::Window)
 //! - [`components`] — feature-gated composites (`secure-types`, `qr-image`, `qr-scanner`)
 //! - [`editor`] — live [`ThemeEditor`](crate::editor::ThemeEditor)
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
@@ -65,9 +66,9 @@
 //!
 //! See the crate README for system packages required by `qr-scanner`.
 //!
-//! [`ComboBox`](crate::widgets::ComboBox) has the same name as
-//! [`egui::ComboBox`]. Import this crate's widgets after `use egui::*`, or
-//! alias one of them.
+//! [`ComboBox`](crate::widgets::ComboBox) and [`Window`](crate::widgets::Window) have
+//! the same names as [`egui::ComboBox`] and [`egui::Window`]. Import this crate's
+//! widgets after `use egui::*`, or alias one of them.
 
 pub mod components;
 pub mod editor;

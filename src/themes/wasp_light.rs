@@ -337,7 +337,7 @@ fn widgets(colors: ThemeColors) -> Widgets {
       open: WidgetVisuals {
          bg_fill: colors.widget_bg,
          // egui Window title (on top) paints this, not title_frame.fill
-         weak_bg_fill: colors.bg,
+         weak_bg_fill: colors.widget_bg,
          bg_stroke: Stroke::new(1.0, colors.border),
          ..base_visuals
       },

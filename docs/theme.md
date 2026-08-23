@@ -115,7 +115,7 @@ Labels that are interactive inherit button hover/click **fills** but stay transp
 
 `Visuals.selection`: `bg_fill = highlight`, `stroke = accent`. Never `text_muted`.
 
-egui 0.36 `Window` title (top layer) overwrites `title_frame.fill` with `widgets.open.weak_bg_fill`. Keep that slot on `bg` so a focused window title matches `window_frame`. Custom crate widgets do not read this slot.
+egui `egui::Window` title (top layer) overwrites `title_frame.fill` with `widgets.open.weak_bg_fill`. App windows should use `egui_elements::widgets::Window`, which keeps the requested title fill regardless of how many windows are open. The `open.weak_bg_fill = bg` slot remains as a fallback for any leftover stock `egui::Window`.
 
 ---
 
