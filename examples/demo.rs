@@ -8,7 +8,7 @@ use egui_elements::components::{CredentialsForm, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::widgets::{Button, ComboBox, Window, Label, Modal, SecureTextEdit};
+use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {

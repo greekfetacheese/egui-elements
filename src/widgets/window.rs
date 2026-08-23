@@ -370,9 +370,7 @@ impl<'a> Window<'a> {
       ctx: &Context,
       add_contents: impl FnOnce(&mut Ui) -> R,
    ) -> Option<InnerResponse<Option<R>>> {
-      let fill = self
-         .title_fill
-         .unwrap_or_else(|| ctx.global_style().visuals.window_fill);
+      let fill = self.title_fill.unwrap_or_else(|| ctx.global_style().visuals.window_fill);
       let _guard = PinOpenWeakFill::new(ctx, fill);
       self.inner.show(ctx, add_contents)
    }
@@ -422,14 +420,12 @@ mod tests {
          });
 
          let title_fill = Color32::from_rgb(1, 2, 3);
-         Window::new("title")
-            .title_frame(Frame::NONE.fill(title_fill))
-            .show(ctx, |ui| {
-               assert_eq!(
-                  ui.ctx().global_style().visuals.widgets.open.weak_bg_fill,
-                  title_fill
-               );
-            });
+         Window::new("title").title_frame(Frame::NONE.fill(title_fill)).show(ctx, |ui| {
+            assert_eq!(
+               ui.ctx().global_style().visuals.widgets.open.weak_bg_fill,
+               title_fill
+            );
+         });
 
          assert_eq!(
             ctx.global_style().visuals.widgets.open.weak_bg_fill,

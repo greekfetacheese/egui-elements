@@ -81,12 +81,12 @@ pub mod widgets;
 
 pub use overlay::OverlayManager;
 pub use theme::{Theme, ThemeKind};
-pub use widgets::{Button, ComboBox, Label, MultiLabel, Modal};
+pub use widgets::{Button, ComboBox, Label, Modal, MultiLabel, Window};
 
 #[cfg(feature = "secure-types")]
 pub use widgets::SecureTextEdit;
 
-#[cfg(feature = "qr-scanner")]
+#[cfg(all(feature = "qr-scanner", target_os = "linux"))]
 pub use components::QRScanner;
 
 #[cfg(feature = "secure-types")]
