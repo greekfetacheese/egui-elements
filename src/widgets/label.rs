@@ -319,7 +319,11 @@ impl Widget for Label {
       };
 
       // Allocate Space (Content Size Only)
-      let sense = self.sense.unwrap_or(Sense::hover());
+      let sense = self.sense.unwrap_or(if self.interactive {
+         Sense::hover()
+      } else {
+         Sense::empty()
+      });
       let (rect, response) = ui.allocate_exact_size(desired_size, sense);
 
       // Paint

@@ -81,7 +81,7 @@ pub mod widgets;
 
 pub use overlay::OverlayManager;
 pub use theme::{Theme, ThemeKind};
-pub use widgets::{Button, ComboBox, Label, Modal, MultiLabel, Window};
+pub use widgets::{Button, ComboBox, Frame, Label, Modal, MultiLabel, Window};
 
 #[cfg(feature = "secure-types")]
 pub use widgets::SecureTextEdit;

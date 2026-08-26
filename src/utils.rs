@@ -3,7 +3,7 @@
 use crate::theme::*;
 use crate::visuals::FrameVisuals;
 use crate::widgets::{ComboBox, Label};
-use egui::{Color32, Frame, Response, RichText, Sense, Stroke, Ui};
+use egui::{Color32, Frame, Response, RichText, Sense, Ui};
 
 /// Should work for most images that are shown on a very dark background
 pub const TINT_1: Color32 = Color32::from_rgba_premultiplied(216, 216, 216, 255);
@@ -194,15 +194,16 @@ pub fn remap_frame_visuals(
    old_highlight: Color32,
    new_highlight: Color32,
 ) {
-   remap_if_eq(&mut visuals.bg_on_hover, old_hover, new_hover);
-   remap_if_eq(&mut visuals.bg_on_click, old_click, new_click);
+   remap_if_eq(&mut visuals.bg_hover, old_hover, new_hover);
+   remap_if_eq(&mut visuals.bg_click, old_click, new_click);
+   remap_if_eq(&mut visuals.bg_selected, old_highlight, new_highlight);
    remap_if_eq(
-      &mut visuals.border_on_hover.1,
+      &mut visuals.border_hover.color,
       old_highlight,
       new_highlight,
    );
    remap_if_eq(
-      &mut visuals.border_on_click.1,
+      &mut visuals.border_click.color,
       old_highlight,
       new_highlight,
    );
@@ -251,17 +252,11 @@ pub fn frame(
    let res = frame.content_ui.scope(|ui| add_contents(ui));
 
    if res.response.interact(Sense::click()).clicked() {
-      frame.frame = frame.frame.fill(visuals.bg_on_click);
-      frame.frame = frame.frame.stroke(Stroke::new(
-         visuals.border_on_click.0,
-         visuals.border_on_click.1,
-      ));
+      frame.frame = frame.frame.fill(visuals.bg_click);
+      frame.frame = frame.frame.stroke(visuals.border_click);
    } else if res.response.hovered() {
-      frame.frame = frame.frame.fill(visuals.bg_on_hover);
-      frame.frame = frame.frame.stroke(Stroke::new(
-         visuals.border_on_hover.0,
-         visuals.border_on_hover.1,
-      ));
+      frame.frame = frame.frame.fill(visuals.bg_hover);
+      frame.frame = frame.frame.stroke(visuals.border_hover);
    }
 
    frame.end(ui);

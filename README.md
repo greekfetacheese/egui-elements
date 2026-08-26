@@ -200,8 +200,16 @@ apt install libgbm-dev libdrm-dev libgl1-mesa-dev
 
 ## Demo
 
+Capability gallery (palette, widgets, components):
+
 ```sh
 cargo run --example demo --features full
+```
+
+Product-framed placeholder (mail client UI):
+
+```sh
+cargo run --example email
 ```
 
 ## Built-in themes

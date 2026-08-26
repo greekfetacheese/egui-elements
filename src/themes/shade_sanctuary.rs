@@ -156,10 +156,20 @@ pub fn frame1(_colors: &ThemeColors) -> Frame {
 
 pub fn frame1_visuals(colors: &ThemeColors) -> FrameVisuals {
    FrameVisuals {
-      bg_on_hover: colors.hover,
-      bg_on_click: colors.widget_bg,
-      border_on_hover: (0.0, colors.highlight),
-      border_on_click: (0.0, colors.highlight),
+      bg: colors.widget_bg,
+      bg_hover: colors.hover,
+      bg_click: colors.widget_bg,
+      bg_selected: colors.highlight,
+      border: Stroke::NONE,
+      border_hover: Stroke::new(0.0, colors.highlight),
+      border_click: Stroke::new(0.0, colors.highlight),
+      corner_radius: CornerRadius::same(CORNER_RADIUS),
+      shadow: Shadow {
+         offset: (0, 0).into(),
+         blur: 2,
+         spread: 0,
+         color: colors.border,
+      },
    }
 }
 
@@ -185,12 +195,22 @@ pub fn frame2(colors: &ThemeColors) -> Frame {
 }
 
 pub fn frame2_visuals(colors: &ThemeColors) -> FrameVisuals {
-   FrameVisuals {
-      bg_on_hover: colors.hover,
-      bg_on_click: colors.bg,
-      border_on_hover: (0.0, colors.highlight),
-      border_on_click: (0.0, colors.highlight),
-   }
+    FrameVisuals {
+        bg: colors.bg,
+        bg_hover: colors.hover,
+        bg_click: colors.bg,
+        bg_selected: colors.highlight,
+        border: Stroke::NONE,
+        border_hover: Stroke::new(0.0, colors.highlight),
+        border_click: Stroke::new(0.0, colors.highlight),
+        corner_radius: CornerRadius::same(CORNER_RADIUS),
+        shadow: Shadow {
+            offset: (0, 0).into(),
+            blur: 2,
+            spread: 0,
+            color: colors.border,
+        },
+    }
 }
 
 pub fn button_visuals() -> ButtonVisuals {

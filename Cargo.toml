@@ -40,3 +40,6 @@ egui_extras = { version = "0.36", features = ["image"] }
 [[example]]
 name = "demo"
 required-features = ["full"]
+
+[[example]]
+name = "email"

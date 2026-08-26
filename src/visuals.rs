@@ -5,7 +5,10 @@
 //! written by [`Theme::install`](crate::theme::Theme::install) → stock
 //! [`egui::Style`].
 
-use egui::{Color32, CornerRadius, Response, Shadow, Stroke};
+use egui::{
+   Color32, CornerRadius, Painter, Rect, Response, Shadow, Shape, Stroke, StrokeKind,
+   epaint::RectShape,
+};
 
 /// Alias: labels use the same visuals as buttons.
 pub type LabelVisuals = ButtonVisuals;
@@ -182,27 +185,128 @@ impl ComboBoxVisuals {
    }
 }
 
-/// Hover / click overrides used by [`crate::utils::frame`].
+/// Visuals for Frame
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameVisuals {
-   /// Fill while hovered.
-   pub bg_on_hover: Color32,
-   /// Fill while the pointer is down.
-   pub bg_on_click: Color32,
-   /// `(width, color)` border while hovered.
-   pub border_on_hover: (f32, Color32),
-   /// `(width, color)` border while the pointer is down.
-   pub border_on_click: (f32, Color32),
+   pub bg: Color32,
+   pub bg_hover: Color32,
+   pub bg_click: Color32,
+   /// Fill when [`crate::widgets::Frame::selected`] is set.
+   pub bg_selected: Color32,
+   pub border: Stroke,
+   pub border_hover: Stroke,
+   pub border_click: Stroke,
+   pub corner_radius: CornerRadius,
+   pub shadow: Shadow,
 }
 
 impl PartialEq for FrameVisuals {
    fn eq(&self, other: &Self) -> bool {
-      self.bg_on_hover == other.bg_on_hover
-         && self.bg_on_click == other.bg_on_click
-         && self.border_on_hover == other.border_on_hover
-         && self.border_on_click == other.border_on_click
+      self.bg == other.bg
+         && self.bg_hover == other.bg_hover
+         && self.bg_click == other.bg_click
+         && self.bg_selected == other.bg_selected
+         && self.border == other.border
+         && self.border_hover == other.border_hover
+         && self.border_click == other.border_click
+         && self.corner_radius == other.corner_radius
+         && self.shadow == other.shadow
    }
 }
 
 impl Eq for FrameVisuals {}
+
+impl FrameVisuals {
+   pub fn bg_from_res(&self, res: &Response) -> Color32 {
+      if res.is_pointer_button_down_on() || res.has_focus() || res.clicked() {
+         self.bg_click
+      } else if res.contains_pointer() || res.hovered() || res.highlighted() {
+         self.bg_hover
+      } else {
+         self.bg
+      }
+   }
+
+   pub fn border_from_res(&self, res: &Response) -> Stroke {
+      if res.is_pointer_button_down_on() || res.has_focus() || res.clicked() {
+         self.border_click
+      } else if res.contains_pointer() || res.hovered() || res.highlighted() {
+         self.border_hover
+      } else {
+         self.border
+      }
+   }
+
+   /// Shadow + fill + inside stroke on an already allocated widget rect.
+   pub fn paint_at(&self, painter: &Painter, rect: Rect, fill: Color32, stroke: Stroke) {
+      painter.add(paint_shape(
+         rect,
+         fill,
+         stroke,
+         self.corner_radius,
+         self.shadow,
+      ));
+   }
+}
+
+pub(crate) fn paint_shape(
+   rect: Rect,
+   fill: Color32,
+   stroke: Stroke,
+   corner_radius: CornerRadius,
+   shadow: Shadow,
+) -> Shape {
+   if rect.width() <= 0.0 || rect.height() <= 0.0 {
+      return Shape::Noop;
+   }
+
+   let has_fill = fill != Color32::TRANSPARENT;
+
+   let has_shadow = shadow != Shadow::NONE && shadow.color != Color32::TRANSPARENT;
+   if !has_fill && stroke.is_empty() && !has_shadow {
+      return Shape::Noop;
+   }
+
+   let mut shapes = Vec::new();
+
+   if has_shadow {
+      shapes.push(Shape::from(shadow.as_shape(rect, corner_radius)));
+   }
+
+   if has_fill || !stroke.is_empty() {
+      shapes.push(Shape::Rect(RectShape::new(
+         rect,
+         corner_radius,
+         fill,
+         stroke,
+         StrokeKind::Inside,
+      )));
+   }
+
+   match shapes.len() {
+      0 => Shape::Noop,
+      1 => shapes.remove(0),
+      _ => Shape::Vec(shapes),
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn paint_shape_draws_fill_without_stroke() {
+      let shape = paint_shape(
+         Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0)),
+         Color32::RED,
+         Stroke::NONE,
+         CornerRadius::ZERO,
+         Shadow::NONE,
+      );
+      match shape {
+         Shape::Rect(rect) => assert_eq!(rect.fill, Color32::RED),
+         other => panic!("expected filled rect, got {other:?}"),
+      }
+   }
+}

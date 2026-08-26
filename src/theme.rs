@@ -217,6 +217,16 @@ impl Theme {
       }
    }
 
+   /// Frame 1 visuals from [`ThemeVisuals`].
+   pub fn frame1_visuals(&self) -> FrameVisuals {
+      self.visuals.frame1_visuals
+   }
+
+   /// Frame 2 visuals from [`ThemeVisuals`].
+   pub fn frame2_visuals(&self) -> FrameVisuals {
+      self.visuals.frame2_visuals
+   }
+
    /// Button visuals from [`ThemeVisuals`].
    pub fn button_visuals(&self) -> ButtonVisuals {
       self.visuals.button_visuals
