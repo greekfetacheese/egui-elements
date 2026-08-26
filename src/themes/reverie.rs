@@ -175,7 +175,6 @@ pub fn frame2(colors: &ThemeColors) -> Frame {
    Frame {
       corner_radius: CornerRadius::same(CORNER_RADIUS),
       inner_margin: Margin::same(INNER_MARGIN),
-      outer_margin: Margin::same(OUTER_MARGIN),
       fill: colors.bg,
       stroke: Stroke::NONE,
       shadow: shadow,

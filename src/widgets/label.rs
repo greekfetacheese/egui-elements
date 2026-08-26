@@ -53,7 +53,7 @@ impl Label {
          selectable: None,
          text_first: true,
          selected: false,
-         interactive: true,
+         interactive: false,
          fill_width: false,
       }
    }
