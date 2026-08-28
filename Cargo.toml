@@ -1,7 +1,7 @@
 [package]
 name = "egui-elements"
 authors = ["Michalis Molfetas <greekfetacheese@proton.me>"]
-version = "1.0.41"
+version = "1.0.50"
 edition = "2024"
 description = "Themes, widgets, and components for egui."
 license = "MIT"
@@ -23,19 +23,21 @@ rqrr-zeroize = { version = "0.10", optional = true }
 qrcodegen-no-heap = {version = "1", optional = true}
 image = {version = "0.25", optional = true}
 egui-elegance = {version = "0.16", optional = true}
+egui-lucide = { version = "0.1", optional = true }
 
 
 [features]
 serde = ["dep:serde", "egui/serde"]
-qr-scanner = ["dep:secure-types", "dep:xcap", "dep:enigo", "dep:rqrr-zeroize"]
-secure-types = ["dep:secure-types"]
+lucide = ["dep:egui-lucide"]
+qr-scanner = ["dep:secure-types", "dep:xcap", "dep:enigo", "dep:rqrr-zeroize", "lucide"]
+secure-types = ["dep:secure-types", "lucide"]
 qr-image = ["dep:qrcodegen-no-heap", "dep:image"]
 elegance = ["dep:egui-elegance"]
-full = ["serde", "qr-scanner", "secure-types", "qr-image", "elegance"]
+full = ["serde", "qr-scanner", "secure-types", "qr-image", "elegance", "lucide"]
 
 [dev-dependencies]
 eframe = "0.36"
-egui_extras = { version = "0.36", features = ["image"] }
+egui_extras = { version = "0.36", features = ["image", "svg"] }
 
 [[example]]
 name = "demo"

@@ -52,6 +52,7 @@
 //! | Feature | What it enables |
 //! |---------|-----------------|
 //! | `serde` | `Serialize` / `Deserialize` on theme types; `egui/serde` |
+//! | `lucide` | [`egui-lucide`](https://docs.rs/egui-lucide) SVG icons. Also enabled by `secure-types` and `qr-scanner`. |
 //! | `secure-types` | [`SecureString`](https://docs.rs/secure-types) buffers, credentials form, virtual keyboard |
 //! | `qr-image` | Encode a string as a QR [`Image`](egui::Image) |
 //! | `qr-scanner` | Linux screen-capture QR scanner (`xcap` + `rqrr-zeroize`) |
@@ -85,6 +86,9 @@ pub use widgets::{Button, ComboBox, Frame, Label, Modal, MultiLabel, Window};
 
 #[cfg(feature = "secure-types")]
 pub use widgets::SecureTextEdit;
+
+#[cfg(any(feature = "secure-types", feature = "lucide"))]
+pub use egui_lucide;
 
 #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
 pub use components::QRScanner;

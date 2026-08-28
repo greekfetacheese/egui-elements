@@ -1,27 +1,23 @@
 use crate::theme::Theme;
-use crate::utils::TINT_1;
 use crate::widgets::{
    Button,
    secure_text_edit::{SecureTextEdit, SecureTextEditOutput},
 };
 use egui::*;
+use egui_lucide::Lucide;
 
 #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
 use super::QRScanner;
 
 use secure_types::SecureString;
 
-const VISIBLE_BLACK: ImageSource<'_> = include_image!("../../assets/visible-black.png");
-const VISIBLE_WHITE: ImageSource<'_> = include_image!("../../assets/visible-white.png");
-const INVISIBLE_BLACK: ImageSource<'_> = include_image!("../../assets/invisible-black.png");
-const INVISIBLE_WHITE: ImageSource<'_> = include_image!("../../assets/invisible-white.png");
-
-#[cfg(all(feature = "qr-scanner", target_os = "linux"))]
-const QR_CODE_BLACK: ImageSource<'_> = include_image!("../../assets/qr-code-black.png");
-#[cfg(all(feature = "qr-scanner", target_os = "linux"))]
-const QR_CODE_WHITE: ImageSource<'_> = include_image!("../../assets/qr-code-white.png");
-
 /// A secure input field that can be used to edit a text containing sensitive information.
+///
+/// Show/hide uses Lucide `Eye` / `EyeOff`; the QR button (Linux + `qr-scanner`)
+/// uses `ScanQrCode`. Both are colored with [`crate::theme::ThemeColors::text`].
+///
+/// The host app must register egui's SVG loader once:
+/// `egui_extras::install_image_loaders(ctx)` with the `egui_extras` `svg` feature.
 #[derive(Clone)]
 pub struct SecureInputField {
    open: bool,
@@ -83,7 +79,9 @@ impl SecureInputField {
       self.text.erase();
    }
 
-   /// Builder: icon size for the show/hide (and QR) buttons.
+   /// Builder: Lucide icon size for the show/hide (and QR) buttons.
+   ///
+   /// Display size is `size.x` (icons are square).
    pub fn icon_size(mut self, size: Vec2) -> Self {
       self.icon_size = size;
       self
@@ -193,45 +191,19 @@ impl SecureInputField {
             |ui| {
                let output = text_edit.show(ui);
 
-               let img_source = if hidden {
-                  match theme.dark {
-                     true => INVISIBLE_WHITE,
-                     false => INVISIBLE_BLACK,
-                  }
-               } else {
-                  match theme.dark {
-                     true => VISIBLE_WHITE,
-                     false => VISIBLE_BLACK,
-                  }
-               };
-
-               let img = if theme.image_tint_recommended {
-                  Image::new(img_source).tint(TINT_1).fit_to_exact_size(img_size)
-               } else {
-                  Image::new(img_source).fit_to_exact_size(img_size)
-               };
-
-               let button = Button::image(img);
-               if ui.add(button).clicked() {
+               let text_color = theme.colors.text;
+               let icon = if hidden { Lucide::EyeOff } else { Lucide::Eye };
+               let img = icon.size(img_size.x).color(text_color).image();
+               if ui.add(Button::image(img)).clicked() {
                   hidden = !hidden;
                }
 
                #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
                {
                   if self.qr_enabled {
-                     let img_source = match theme.dark {
-                        true => QR_CODE_WHITE,
-                        false => QR_CODE_BLACK,
-                     };
-
-                     let img = if theme.image_tint_recommended {
-                        Image::new(img_source).tint(TINT_1).fit_to_exact_size(img_size)
-                     } else {
-                        Image::new(img_source).fit_to_exact_size(img_size)
-                     };
-
-                     let button = Button::image(img);
-                     if ui.add(button).clicked() {
+                     let icon = Lucide::ScanQrCode;
+                     let img = icon.size(img_size.x).color(text_color).image();
+                     if ui.add(Button::image(img)).clicked() {
                         self.qr_scanner.open(ui.ctx().clone());
                      }
                   }

@@ -111,6 +111,17 @@ Give each `ComboBox` / `SecureTextEdit` a unique `id_salt` if you repeat the sam
 
 ### Credentials form (`secure-types`)
 
+Show/hide (and the QR-scan button) use [Lucide](https://lucide.dev) SVG icons
+via [`egui-lucide`](https://crates.io/crates/egui-lucide), colored with
+`theme.colors.text`. Register egui's SVG loader once at startup:
+
+```rust
+egui_extras::install_image_loaders(&ctx);
+```
+
+`egui_extras` needs the `svg` feature. The `lucide` feature is enabled
+automatically by `secure-types` and `qr-scanner`.
+
 ```rust
 use egui_elements::components::CredentialsForm;
 
@@ -162,9 +173,10 @@ The scanner captures the monitor under the cursor via [`xcap`](https://crates.io
 | Feature | Default | What it enables |
 |---------|:-------:|-----------------|
 | `serde` | | `Serialize` / `Deserialize` on theme types, plus `egui/serde` |
-| `secure-types` | | [`secure-types`](https://crates.io/crates/secure-types) (`SecureString`) buffers; `SecureInputField`, `CredentialsForm`, `VirtualKeyboard` |
+| `lucide` | | [`egui-lucide`](https://crates.io/crates/egui-lucide) SVG icons (`Eye` / `EyeOff` / `ScanQrCode`). Also enabled by `secure-types` and `qr-scanner`. Host apps must call `egui_extras::install_image_loaders` with the `svg` feature. |
+| `secure-types` | | [`secure-types`](https://crates.io/crates/secure-types) (`SecureString`) buffers; `SecureInputField`, `CredentialsForm`, `VirtualKeyboard`. Enables `lucide`. |
 | `qr-image` | | Encode a string as a PNG QR `egui::Image` (`qrcodegen-no-heap` + `image`) |
-| `qr-scanner` | | Linux screen-capture QR scanner (`xcap` + `enigo` + `rqrr-zeroize`). Also enables `secure-types`. The `QRScanner` type is exported only on Linux. |
+| `qr-scanner` | | Linux screen-capture QR scanner (`xcap` + `enigo` + `rqrr-zeroize`). Also enables `secure-types` (the dependency) and `lucide`. The `QRScanner` type is exported only on Linux. |
 | `elegance` | | Convert the current theme into [`egui-elegance`](https://crates.io/crates/egui-elegance) so elegance widgets match the theme |
 | `full` | | All of the above |
 
@@ -228,4 +240,4 @@ Palette slot roles (`bg` vs `widget_bg`, `hover` vs `highlight`, …) are docume
 
 ## License
 
-MIT
+MIT. Icons from the `lucide` feature are [Lucide](https://lucide.dev) (ISC).
