@@ -575,6 +575,7 @@ impl DemoApp {
                RichText::new("Label (interactive)").size(size).color(text_color),
                None,
             )
+            .interactive(true)
             .expand(Some(6.0)),
          );
          ui.add(

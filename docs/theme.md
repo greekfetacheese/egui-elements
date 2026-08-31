@@ -296,6 +296,8 @@ Based on [tokyo-night-light-color-theme.json](https://github.com/tokyo-night/tok
 
 Cool paper canvas. Elevation by shadow. Teal focus. Iris links. Wine / amber / pine semantics. Same jobs as Tokyo Night.
 
+Official terminal ansi / `descriptionForeground` are too gray on storm (status glyphs look washed). Ink is darkened vs `#343b58`; chromatics keep AA-safe luminance but pick chroma so they read as status, not comments.
+
 ### Named paints
 
 | Const | RGB | Hex | Maps to |
@@ -307,23 +309,24 @@ Cool paper canvas. Elevation by shadow. Teal focus. Iris links. Wine / amber / p
 | `MIST` | 193, 194, 199 | `#c1c2c7` | `border`, widget shadow |
 | `FADED_MIST` | 193, 194, 199, 118 | | Native window shadow only |
 | `DUSK` | 122, 133, 168 | `#7a85a8` | Hover **border** only (not a `ThemeColors` slot) |
-| `MUTED` | 74, 82, 114 | `#4a5272` | `text_muted` (official placeholder; `#707280` fails AA) |
-| `INK` | 52, 59, 88 | `#343b58` | `text` |
-| `TEAL` | 22, 103, 117 | `#166775` | `accent` (official added/info teal; `#006c86` is 4.23 on storm) |
-| `WINE` | 140, 67, 81 | `#8c4351` | `error` |
-| `AMBER` | 129, 85, 19 | `#815513` | `warning` (`#8f5e15` darkened 10%) |
-| `PINE` | 51, 99, 92 | `#33635c` | `success` |
-| `IRIS` | 90, 62, 142 | `#5a3e8e` | `info` |
+| `MUTED` | 61, 69, 102 | `#3d4566` | `text_muted` (official placeholder `#707280` fails AA) |
+| `INK` | 42, 47, 74 | `#2a2f4a` | `text` (darker than official `#343b58`) |
+| `TEAL` | 10, 90, 110 | `#0a5a6e` | `accent` (official `#166775` / `#006c86` read as gray-teal) |
+| `WINE` | 155, 32, 54 | `#9b2036` | `error` (crimson; official `#8c4351` is dusty rose) |
+| `AMBER` | 138, 61, 0 | `#8a3d00` | `warning` (burnt orange; official `#8f5e15` fails AA and looks muddy) |
+| `PINE` | 13, 92, 64 | `#0d5c40` | `success` (forest; official `#33635c` is gray-green) |
+| `IRIS` | 85, 32, 168 | `#5520a8` | `info` (violet; official `#5a3e8e` is gray-purple) |
 
 ### Contrast (approx.)
 
 | Pair | Ratio |
 |------|-------|
-| `text` on `bg` / `widget_bg` / `hover` | 7.7 / 8.9 / 6.8 |
-| `text` on `highlight` | 5.1 |
-| `text_muted` on `bg` / `widget_bg` | 5.4 / 6.2 |
-| `bg` on accent / error / warning / success / info | 4.6 / 4.9 / 4.6 / 4.8 / 5.9 |
-| Chromatics as glyphs on `bg` | all ≥ 4.5 (`accent` 4.56, `warning` 4.55) |
+| `text` on `bg` / `widget_bg` / `hover` | 9.2 / 10.6 / 8.1 |
+| `text` on `highlight` | 6.1 |
+| `text_muted` on `bg` / `widget_bg` | 6.6 / 7.6 |
+| `bg` on accent / error / warning / success / info | 5.5 / 5.6 / 5.4 / 5.6 / 6.8 |
+| Chromatics as glyphs on `bg` | all ≥ 4.5 (`warning` 5.37 lowest) |
+| Chromatics as glyphs on `hover` | all ≥ 4.5 (`warning` 4.72 lowest) |
 | `bg` vs `widget_bg` | 1.15 |
 | `highlight` vs `hover` | 1.33 |
 

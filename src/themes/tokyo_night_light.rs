@@ -10,9 +10,10 @@ use egui::{
 };
 
 // Color Palette — Tokyo Night Light. Cool paper canvas, ink text,
-// teal focus, iris links. Official descriptionForeground / ansiYellow
-// miss AA on storm, so muted uses placeholder ink and amber is
-// darkened 10%. https://github.com/tokyo-night/tokyo-night-vscode-theme
+// teal focus, iris links. Official terminal ansi / descriptionForeground
+// are too gray on storm (glyphs look washed), so ink is darkened and
+// chromatics pick chroma at AA-safe luminance.
+// https://github.com/tokyo-night/tokyo-night-vscode-theme
 
 /// sideBar / titleBar / panel / statusBar
 const STORM: Color32 = Color32::from_rgba_premultiplied(214, 216, 223, 255);
@@ -20,21 +21,22 @@ const STORM: Color32 = Color32::from_rgba_premultiplied(214, 216, 223, 255);
 const PAPER: Color32 = Color32::from_rgba_premultiplied(230, 231, 237, 255);
 /// Hover lift — gray step, no chroma. Darker than storm, not selection.
 const HAZE: Color32 = Color32::from_rgba_premultiplied(200, 203, 214, 255);
-/// editor.foreground / terminal.foreground
-const INK: Color32 = Color32::from_rgba_premultiplied(52, 59, 88, 255);
+/// Darker navy than official editor.foreground (#343b58) so body
+/// type holds against storm / paper.
+const INK: Color32 = Color32::from_rgba_premultiplied(42, 47, 74, 255);
 /// input.placeholderForeground. Official #707280 fails AA on storm / paper.
-const MUTED: Color32 = Color32::from_rgba_premultiplied(74, 82, 114, 255);
+const MUTED: Color32 = Color32::from_rgba_premultiplied(61, 69, 102, 255);
 /// gitDecoration.addedResourceForeground / debugConsole.infoForeground.
-/// Official terminal cyan #006c86 is 4.23:1 on storm.
-const TEAL: Color32 = Color32::from_rgba_premultiplied(22, 103, 117, 255);
-/// charts.purple / variable.declaration
-const IRIS: Color32 = Color32::from_rgba_premultiplied(90, 62, 142, 255);
-/// terminal.ansiYellow darkened 10% so glyphs clear AA on storm.
-const AMBER: Color32 = Color32::from_rgba_premultiplied(129, 85, 19, 255);
-/// terminal.ansiRed
-const WINE: Color32 = Color32::from_rgba_premultiplied(140, 67, 81, 255);
-/// terminal.ansiGreen
-const PINE: Color32 = Color32::from_rgba_premultiplied(51, 99, 92, 255);
+/// Official #166775 / #006c86 sit on the AA floor and read as gray-teal.
+const TEAL: Color32 = Color32::from_rgba_premultiplied(10, 90, 110, 255);
+/// charts.purple, chroma-raised so links / info read as violet not gray.
+const IRIS: Color32 = Color32::from_rgba_premultiplied(85, 32, 168, 255);
+/// terminal.ansiYellow family — burnt orange, not muddy brown.
+const AMBER: Color32 = Color32::from_rgba_premultiplied(138, 61, 0, 255);
+/// terminal.ansiRed family — crimson, not dusty rose.
+const WINE: Color32 = Color32::from_rgba_premultiplied(155, 32, 54, 255);
+/// terminal.ansiGreen family — forest, distinct from teal accent.
+const PINE: Color32 = Color32::from_rgba_premultiplied(13, 92, 64, 255);
 /// input.border / sideBar.border
 const MIST: Color32 = Color32::from_rgba_premultiplied(193, 194, 199, 255);
 const FADED_MIST: Color32 = Color32::from_rgba_premultiplied(193, 194, 199, 118);
