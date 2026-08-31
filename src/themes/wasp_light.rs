@@ -12,6 +12,8 @@ use egui::{
 // Color Palette — Wasp (Obsidian, light). Ink on cream paper,
 // rust focus, sage links. Honey gold fails AA as a glyph on cream,
 // so focus uses --text-accent and gold stays hover chrome / selection.
+// Official sage / leaf sit on the AA floor and read washed on cream,
+// so success / info / warning pick chroma at AA-safe luminance.
 // https://github.com/santiyounger/Wasp-Obsidian-Theme
 
 /// --color-base-10 / --background-primary
@@ -26,14 +28,14 @@ const INK: Color32 = Color32::from_rgba_premultiplied(44, 36, 25, 255);
 const MUTED: Color32 = Color32::from_rgba_premultiplied(92, 80, 68, 255);
 /// --text-accent. Focus / primary action (gold fails AA on cream).
 const RUST: Color32 = Color32::from_rgba_premultiplied(155, 58, 26, 255);
-/// --inline-code. Links / info — cooler than rust.
-const SAGE: Color32 = Color32::from_rgba_premultiplied(61, 107, 92, 255);
-/// --button-hover-bg-color. Caution — darkened honey that clears AA.
-const HONEY: Color32 = Color32::from_rgba_premultiplied(168, 92, 24, 255);
+/// --inline-code family. Links / info — cooler teal-sage, not gray-green.
+const SAGE: Color32 = Color32::from_rgba_premultiplied(24, 88, 72, 255);
+/// Caution — burnt honey; official #a85c18 still sits on the AA floor.
+const HONEY: Color32 = Color32::from_rgba_premultiplied(156, 80, 0, 255);
 /// Sting red — Wasp light has no error token.
 const STING: Color32 = Color32::from_rgba_premultiplied(160, 40, 30, 255);
-/// Leaf olive, distinct from sage.
-const PINE: Color32 = Color32::from_rgba_premultiplied(56, 118, 64, 255);
+/// Leaf green, distinct from sage — official #387640 reads washed on cream.
+const PINE: Color32 = Color32::from_rgba_premultiplied(22, 90, 40, 255);
 /// --color-base-30. Structural stroke / shadow.
 const LINEN: Color32 = Color32::from_rgba_premultiplied(201, 184, 168, 255);
 const FADED_LINEN: Color32 = Color32::from_rgba_premultiplied(176, 160, 144, 118);
