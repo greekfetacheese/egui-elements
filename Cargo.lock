@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "egui-elements"
-version = "1.0.50"
+version = "1.0.60"
 dependencies = [
  "eframe",
  "egui",
