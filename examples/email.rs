@@ -453,12 +453,12 @@ impl MailApp {
       let mut visuals = self.theme.frame2_visuals();
       visuals.bg = self.theme.colors.widget_bg;
       visuals.bg_click = self.theme.colors.widget_bg;
-      
+
       let folder_frame = Frame2::from_egui(self.theme.frame2.outer_margin(Margin::ZERO))
          .interactive(true)
          .fill_width(true)
-         .square_corners()
-         .visuals(visuals);
+         .visuals(visuals)
+         .corner_radius(0);
 
       let mut clicked = None;
       for folder in Folder::ALL {
@@ -471,8 +471,11 @@ impl MailApp {
             ui.horizontal(|ui| {
                ui.spacing_mut().item_spacing.x = 8.0;
                ui.add(
-                  Label::new(RichText::new(name).size(size).color(text_color), None)
-                     .interactive(false),
+                  Label::new(
+                     RichText::new(name).size(size).color(text_color),
+                     None,
+                  )
+                  .interactive(false),
                );
                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                   if unread > 0 {

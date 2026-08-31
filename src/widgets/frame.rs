@@ -30,6 +30,9 @@ pub struct Frame {
    pub selected: bool,
    /// Stretch the frame to the available width (useful for sidebar rows).
    pub fill_width: bool,
+   /// Set by [`Self::corner_radius`]. Wins over a
+   /// later [`Self::visuals`], which would otherwise restore the theme radius.
+   corner_radius_override: Option<CornerRadius>,
 }
 
 impl Default for Frame {
@@ -57,6 +60,7 @@ impl Frame {
       interactive: false,
       selected: false,
       fill_width: false,
+      corner_radius_override: None,
    };
 
    pub const fn new() -> Self {
@@ -85,6 +89,7 @@ impl Frame {
          interactive: false,
          selected: false,
          fill_width: false,
+         corner_radius_override: None,
       }
    }
 
@@ -134,14 +139,9 @@ impl Frame {
 
    #[inline]
    pub fn corner_radius(mut self, corner_radius: impl Into<CornerRadius>) -> Self {
-      self.visuals.corner_radius = corner_radius.into();
-      self
-   }
-
-   /// Make the frame square corners.
-   #[inline]
-   pub fn square_corners(mut self) -> Self {
-      self.visuals.corner_radius = CornerRadius::same(0);
+      let corner_radius = corner_radius.into();
+      self.visuals.corner_radius = corner_radius;
+      self.corner_radius_override = Some(corner_radius);
       self
    }
 
@@ -152,9 +152,14 @@ impl Frame {
    }
 
    /// Replace fill, stroke, radius, and shadow. Margins and sense are kept.
+   ///
+   /// [`Self::corner_radius`] win if already set
    #[inline]
    pub fn visuals(mut self, visuals: FrameVisuals) -> Self {
       self.visuals = visuals;
+      if let Some(corner_radius) = self.corner_radius_override {
+         self.visuals.corner_radius = corner_radius;
+      }
       self
    }
 
@@ -319,7 +324,10 @@ impl Prepared {
          return;
       }
       let (fill, stroke) = if self.frame.selected {
-         (self.frame.visuals.bg_selected, self.frame.visuals.border)
+         (
+            self.frame.visuals.bg_selected,
+            self.frame.visuals.border,
+         )
       } else if self.frame.interactive {
          (
             self.frame.visuals.bg_from_res(response),
@@ -375,5 +383,43 @@ mod tests {
       assert!(!frame.interactive(true).interactive(false).interactive);
       assert!(frame.selected(true).selected);
       assert!(frame.fill_width(true).fill_width);
+   }
+
+   fn theme_visuals() -> FrameVisuals {
+      FrameVisuals {
+         bg: Color32::RED,
+         bg_hover: Color32::BLUE,
+         bg_click: Color32::RED,
+         bg_selected: Color32::GREEN,
+         border: Stroke::NONE,
+         border_hover: Stroke::NONE,
+         border_click: Stroke::NONE,
+         corner_radius: CornerRadius::same(6),
+         shadow: Shadow::NONE,
+      }
+   }
+
+   #[test]
+   fn zero_radius_survives_later_visuals() {
+      let frame = Frame::new().corner_radius(0).visuals(theme_visuals());
+      assert_eq!(frame.visuals.corner_radius, CornerRadius::ZERO);
+   }
+
+   #[test]
+   fn corner_radius_zero_survives_later_visuals() {
+      let frame = Frame::new().corner_radius(0).visuals(theme_visuals());
+      assert_eq!(frame.visuals.corner_radius, CornerRadius::ZERO);
+   }
+
+   #[test]
+   fn visuals_then_zero_corner_radius() {
+      let frame = Frame::new().visuals(theme_visuals()).corner_radius(0);
+      assert_eq!(frame.visuals.corner_radius, CornerRadius::ZERO);
+   }
+
+   #[test]
+   fn visuals_without_override_keeps_theme_radius() {
+      let frame = Frame::new().visuals(theme_visuals());
+      assert_eq!(frame.visuals.corner_radius, CornerRadius::same(6));
    }
 }
