@@ -710,7 +710,7 @@ impl DemoApp {
       self.heading(ui, "Components");
       self.muted(
          ui,
-         "CredentialsForm, SecureInputField, VirtualKeyboard, QrImage, and QR scanner (Linux).",
+         "CredentialsForm, SecureInputField, VirtualKeyboard, QrImage, and QR scanner (Linux/Windows).",
       );
       ui.add_space(8.0);
 
@@ -763,7 +763,7 @@ impl DemoApp {
                   self.subheading(ui, "Secure input + QR");
                   self.muted(
                      ui,
-                     "Toggle visibility, QR scan button available only on Linux.",
+                     "Toggle visibility, QR scan button available on Linux and Windows.",
                   );
 
                   let output = self.secure_field.show(ui);

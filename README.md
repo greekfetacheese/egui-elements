@@ -151,7 +151,7 @@ if !qr.has_error() {
 qr.clear(ui.ctx());
 ```
 
-### QR scanner (`qr-scanner`, Linux only)
+### QR scanner (`qr-scanner`, Linux and Windows)
 
 ```rust
 use egui_elements::components::QRScanner;
@@ -166,7 +166,13 @@ if let Some(payload) = scanner.get_result() {
 }
 ```
 
-The scanner captures the monitor under the cursor via [`xcap`](https://crates.io/crates/xcap) and decodes with [`rqrr-zeroize`](https://crates.io/crates/rqrr-zeroize) (a fork of `rqrr` that wipes the prepared image buffer on drop). Prefer X11; on Wayland a screenshot temp file can exist for a brief moment.
+The scanner captures the monitor under the cursor via [`xcap`](https://crates.io/crates/xcap) and decodes with [`rqrr-zeroize`](https://crates.io/crates/rqrr-zeroize) (a fork of `rqrr` that wipes the prepared image buffer on drop). Exported on Linux and Windows, not macOS.
+
+**Where the pixels go:**
+
+- **Linux X11** — in-memory (XCB). Prefer this for sensitive codes.
+- **Linux Wayland** — `xcap` asks GNOME Shell or the XDG desktop portal, which writes a PNG under the temp dir and then deletes it. That file exists for a brief moment.
+- **Windows** — in-memory GDI (`BitBlt` / `GetDIBits`). No screenshot temp file. (This crate does not enable xcap’s optional `wgc` feature; that path is also in-memory.)
 
 ## Features
 
@@ -176,7 +182,7 @@ The scanner captures the monitor under the cursor via [`xcap`](https://crates.io
 | `lucide` | | [`egui-lucide`](https://crates.io/crates/egui-lucide) SVG icons (`Eye` / `EyeOff` / `ScanQrCode`). Also enabled by `secure-types` and `qr-scanner`. Host apps must call `egui_extras::install_image_loaders` with the `svg` feature. |
 | `secure-types` | | [`secure-types`](https://crates.io/crates/secure-types) (`SecureString`) buffers; `SecureInputField`, `CredentialsForm`, `VirtualKeyboard`. Enables `lucide`. |
 | `qr-image` | | Encode a string as a PNG QR `egui::Image` (`qrcodegen-no-heap` + `image`) |
-| `qr-scanner` | | Linux screen-capture QR scanner (`xcap` + `enigo` + `rqrr-zeroize`). Also enables `secure-types` (the dependency) and `lucide`. The `QRScanner` type is exported only on Linux. |
+| `qr-scanner` | | Linux/Windows screen-capture QR scanner (`xcap` + `enigo` + `rqrr-zeroize`). Also enables `secure-types` (the dependency) and `lucide`. The `QRScanner` type is exported on Linux and Windows. |
 | `elegance` | | Convert the current theme into [`egui-elegance`](https://crates.io/crates/egui-elegance) so elegance widgets match the theme |
 | `full` | | All of the above |
 

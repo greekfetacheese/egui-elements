@@ -6,14 +6,14 @@ use crate::widgets::{
 use egui::*;
 use egui_lucide::Lucide;
 
-#[cfg(all(feature = "qr-scanner", target_os = "linux"))]
+#[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
 use super::QRScanner;
 
 use secure_types::SecureString;
 
 /// A secure input field that can be used to edit a text containing sensitive information.
 ///
-/// Show/hide uses Lucide `Eye` / `EyeOff`; the QR button (Linux + `qr-scanner`)
+/// Show/hide uses Lucide `Eye` / `EyeOff`; the QR button (Linux/Windows + `qr-scanner`)
 /// uses `ScanQrCode`. Both are colored with [`crate::theme::ThemeColors::text`].
 ///
 /// The host app must register egui's SVG loader once:
@@ -27,7 +27,7 @@ pub struct SecureInputField {
    icon_size: Vec2,
    min_size: Vec2,
    inner_margin: Option<Margin>,
-   #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
+   #[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
    qr_scanner: QRScanner,
    qr_enabled: bool,
 }
@@ -53,7 +53,7 @@ impl SecureInputField {
          icon_size: vec2(20.0, 20.0),
          min_size: vec2(300.0, 20.0),
          inner_margin: None,
-         #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
+         #[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
          qr_scanner: QRScanner::new(),
          qr_enabled: true,
       }
@@ -99,7 +99,7 @@ impl SecureInputField {
       self
    }
 
-   /// Builder: show the QR-scan button (Linux + `qr-scanner` only).
+   /// Builder: show the QR-scan button (Linux/Windows + `qr-scanner` only).
    pub fn qr_enabled(mut self, enabled: bool) -> Self {
       self.qr_enabled = enabled;
       self
@@ -198,7 +198,7 @@ impl SecureInputField {
                   hidden = !hidden;
                }
 
-               #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
+               #[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
                {
                   if self.qr_enabled {
                      let icon = Lucide::ScanQrCode;
@@ -214,12 +214,11 @@ impl SecureInputField {
          response
       });
 
-      #[cfg(all(feature = "qr-scanner", target_os = "linux"))]
+      #[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
       {
          if self.qr_enabled {
             self.qr_scanner.show(ui.ctx());
-            let res = self.qr_scanner.get_result();
-            if let Some(res) = res {
+            if let Some(res) = self.qr_scanner.take_result() {
                self.qr_scanner.reset();
                self.set_text(res);
             }

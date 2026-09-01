@@ -3,7 +3,7 @@
 //! This crate is **not** a drop-in replacement for stock egui widgets. It
 //! ships a themed widget set, a palette of built-in looks, a live theme
 //! editor, and a few higher-level components (credentials form, QR image,
-//! Linux QR scanner).
+//! Linux/Windows QR scanner).
 //!
 //! There are no crate-root re-exports. Import from the modules:
 //!
@@ -55,7 +55,7 @@
 //! | `lucide` | [`egui-lucide`](https://docs.rs/egui-lucide) SVG icons. Also enabled by `secure-types` and `qr-scanner`. |
 //! | `secure-types` | [`SecureString`](https://docs.rs/secure-types) buffers, credentials form, virtual keyboard |
 //! | `qr-image` | Encode a string as a QR [`Image`](egui::Image) |
-//! | `qr-scanner` | Linux screen-capture QR scanner (`xcap` + `rqrr-zeroize`) |
+//! | `qr-scanner` | Linux/Windows screen-capture QR scanner (`xcap` + `rqrr-zeroize`) |
 //! | `elegance` | Push the current palette into [`egui-elegance`](https://docs.rs/egui-elegance) |
 //! | `full` | All of the above |
 //!
@@ -90,7 +90,7 @@ pub use widgets::SecureTextEdit;
 #[cfg(any(feature = "secure-types", feature = "lucide"))]
 pub use egui_lucide;
 
-#[cfg(all(feature = "qr-scanner", target_os = "linux"))]
+#[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
 pub use components::QRScanner;
 
 #[cfg(feature = "secure-types")]
