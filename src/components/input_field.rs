@@ -88,9 +88,14 @@ impl SecureInputField {
    }
 
    /// Builder: minimum allocated size of the text field.
-   pub fn min_size(mut self, size: Vec2) -> Self {
+   pub fn with_min_size(mut self, size: Vec2) -> Self {
       self.min_size = size;
       self
+   }
+
+   /// Return the minimum allocated size of the text field.
+   pub fn min_size(&self) -> Vec2 {
+      self.min_size
    }
 
    /// Builder: inner margin around the text.

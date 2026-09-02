@@ -123,6 +123,61 @@ impl CredentialsForm {
       self.virtual_keyboard.close();
    }
 
+   /// Builder: minimum size of each virtual-keyboard key.
+   pub fn with_virtual_keyboard_key_size(mut self, size: Vec2) -> Self {
+      self.virtual_keyboard.set_key_size(size);
+      self
+   }
+
+   /// Minimum size of each virtual-keyboard key.
+   pub fn set_virtual_keyboard_key_size(&mut self, size: Vec2) {
+      self.virtual_keyboard.set_key_size(size);
+   }
+
+   /// Builder: inner padding of each virtual-keyboard key.
+   pub fn with_virtual_keyboard_button_padding(mut self, padding: Vec2) -> Self {
+      self.virtual_keyboard.set_button_padding(padding);
+      self
+   }
+
+   /// Inner padding of each virtual-keyboard key.
+   pub fn set_virtual_keyboard_button_padding(&mut self, padding: Vec2) {
+      self.virtual_keyboard.set_button_padding(padding);
+   }
+
+   /// Text size for each virtual-keyboard key.
+   pub fn with_virtual_keyboard_text_size(mut self, size: f32) -> Self {
+      self.virtual_keyboard.set_text_size(size);
+      self
+   }
+
+   /// Text size for each virtual-keyboard key.
+   pub fn set_virtual_keyboard_text_size(&mut self, size: f32) {
+      self.virtual_keyboard.set_text_size(size);
+   }
+
+   /// Spacing between each virtual-keyboard key.
+   pub fn with_virtual_keyboard_spacing(mut self, spacing: Vec2) -> Self {
+      self.virtual_keyboard.set_spacing(spacing);
+      self
+   }
+
+   /// Spacing between each virtual-keyboard key.
+   pub fn set_virtual_keyboard_spacing(&mut self, spacing: Vec2) {
+      self.virtual_keyboard.set_spacing(spacing);
+   }
+
+   /// Maximum size of the virtual keyboard.
+   pub fn with_virtual_keyboard_max_ui_size(mut self, size: Vec2) -> Self {
+      self.virtual_keyboard.set_max_ui_size(size);
+      self
+   }
+
+   /// Maximum size of the virtual keyboard.
+   pub fn set_virtual_keyboard_max_ui_size(&mut self, size: Vec2) {
+      self.virtual_keyboard.set_max_ui_size(size);
+   }
+
    /// Set whether to enable the confirm password field.
    pub fn set_confirm_password(&mut self, confirm_password: bool) {
       self.confrim_password = confirm_password;
@@ -181,15 +236,20 @@ impl CredentialsForm {
       let password = self.password.clone();
       let confirm_password = self.confirm_password.clone();
 
-      let username = username.min_size(size);
-      let password = password.min_size(size);
-      let confirm_password = confirm_password.min_size(size);
+      let username = username.with_min_size(size);
+      let password = password.with_min_size(size);
+      let confirm_password = confirm_password.with_min_size(size);
 
       self.username = username;
       self.password = password;
       self.confirm_password = confirm_password;
 
       self
+   }
+
+   /// Return the minimum allocated size of the form.
+   pub fn min_size(&self) -> Vec2 {
+      self.username.min_size().max(self.password.min_size())
    }
 
    /// Paint the form (and the virtual keyboard, if enabled).

@@ -99,6 +99,11 @@ struct DemoApp {
    modal_open: bool,
    confirm_password: bool,
    virtual_keyboard: bool,
+   vk_key_width: f32,
+   vk_key_height: f32,
+   vk_text_size: f32,
+   vk_button_padding_x: f32,
+   vk_button_padding_y: f32,
    check: bool,
    slider: f32,
    items: Items,
@@ -133,6 +138,11 @@ impl DemoApp {
          modal_open: false,
          confirm_password: true,
          virtual_keyboard: true,
+         vk_key_width: 30.0,
+         vk_key_height: 30.0,
+         vk_text_size: 16.0,
+         vk_button_padding_x: 4.0,
+         vk_button_padding_y: 4.0,
          check: true,
          slider: 42.0,
          items: Items::default(),
@@ -206,7 +216,7 @@ impl eframe::App for DemoApp {
 
       let bg = self.theme.colors.bg;
       CentralPanel::default()
-         .frame(Frame::new().fill(bg).inner_margin(Margin::same(16)))
+         .frame(Frame::new().fill(bg).inner_margin(Margin::same(10)))
          .show(ui, |ui| {
             ScrollArea::vertical()
                .id_salt("main_scroll_area")
@@ -717,33 +727,60 @@ impl DemoApp {
       let frame1 = self.theme.frame1;
       let form_width = 640.0;
 
-      ui.horizontal(|ui| {
-         ui.add_space(((ui.available_width() - form_width) * 0.5).max(0.0));
-         ui.vertical(|ui| {
+      ui.vertical_centered(|ui| {
+         frame1.show(ui, |ui| {
             ui.set_width(form_width);
-            frame1.show(ui, |ui| {
-               ui.set_width(ui.available_width());
-               ui.vertical_centered(|ui| {
-                  ui.spacing_mut().item_spacing.y = 14.0;
-                  ui.spacing_mut().button_padding = vec2(4.0, 4.0);
 
-                  self.subheading(ui, "Credentials form");
+            ui.vertical_centered(|ui| {
+               ui.spacing_mut().item_spacing.y = 14.0;
+               ui.spacing_mut().button_padding = vec2(4.0, 4.0);
+
+               self.subheading(ui, "Credentials form");
+               ui.horizontal(|ui| {
+                  ui.spacing_mut().item_spacing.x = 16.0;
+                  if ui.checkbox(&mut self.confirm_password, "Confirm password").changed() {
+                     self.credentials.set_confirm_password(self.confirm_password);
+                  }
+                  if ui.checkbox(&mut self.virtual_keyboard, "Virtual keyboard").changed() {
+                     if self.virtual_keyboard {
+                        self.credentials.enable_virtual_keyboard();
+                     } else {
+                        self.credentials.disable_virtual_keyboard();
+                     }
+                  }
+               });
+
+               if self.virtual_keyboard {
                   ui.horizontal(|ui| {
                      ui.spacing_mut().item_spacing.x = 16.0;
-                     if ui.checkbox(&mut self.confirm_password, "Confirm password").changed() {
-                        self.credentials.set_confirm_password(self.confirm_password);
-                     }
-                     if ui.checkbox(&mut self.virtual_keyboard, "Virtual keyboard").changed() {
-                        if self.virtual_keyboard {
-                           self.credentials.enable_virtual_keyboard();
-                        } else {
-                           self.credentials.disable_virtual_keyboard();
-                        }
-                     }
+                     ui.add(Slider::new(&mut self.vk_key_width, 16.0..=72.0).text("Key width"));
+                     ui.add(Slider::new(&mut self.vk_key_height, 16.0..=72.0).text("Key height"));
+                     ui.add(Slider::new(&mut self.vk_text_size, 8.0..=32.0).text("Text size"));
                   });
-                  ui.add_space(8.0);
-                  self.credentials.show(ui);
-               });
+                  ui.horizontal(|ui| {
+                     ui.spacing_mut().item_spacing.x = 16.0;
+                     ui.add(
+                        Slider::new(&mut self.vk_button_padding_x, 0.0..=16.0)
+                           .text("Button padding X"),
+                     );
+                     ui.add(
+                        Slider::new(&mut self.vk_button_padding_y, 0.0..=16.0)
+                           .text("Button padding Y"),
+                     );
+                  });
+                  self
+                     .credentials
+                     .set_virtual_keyboard_key_size(vec2(self.vk_key_width, self.vk_key_height));
+                  self.credentials.set_virtual_keyboard_button_padding(vec2(
+                     self.vk_button_padding_x,
+                     self.vk_button_padding_y,
+                  ));
+                  self.credentials.set_virtual_keyboard_text_size(self.vk_text_size);
+               }
+
+               ui.add_space(8.0);
+
+               self.credentials.show(ui);
             });
          });
       });
