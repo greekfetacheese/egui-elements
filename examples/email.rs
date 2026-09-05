@@ -290,12 +290,13 @@ impl eframe::App for MailApp {
    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
       self.theme.overlay_manager.paint_overlay(ui.ctx(), true);
 
+      let space = self.theme.spacing;
+
       Panel::top("header")
          .frame(
             Frame::new()
                .fill(self.theme.colors.bg)
-               .inner_margin(Margin::symmetric(16, 12))
-               .stroke(Stroke::new(1.0, self.theme.colors.border)),
+               .inner_margin(space.margin_xy(space.lg, space.md)),
          )
          .show(ui, |ui| self.header(ui));
 
@@ -312,8 +313,7 @@ impl eframe::App for MailApp {
          .frame(
             Frame::new()
                .fill(self.theme.colors.bg)
-               .inner_margin(Margin::symmetric(16, 8))
-               .stroke(Stroke::new(1.0, self.theme.colors.border)),
+               .inner_margin(space.margin_xy(space.lg, space.sm)),
          )
          .show(ui, |ui| self.toolbar(ui));
 
@@ -324,8 +324,8 @@ impl eframe::App for MailApp {
          .frame(
             Frame::new()
                .fill(self.theme.colors.widget_bg)
-               .inner_margin(Margin::symmetric(2, 12))
-               .stroke(Stroke::new(1.0, self.theme.colors.border)),
+               .inner_margin(space.margin_xy(space.xs, space.md))
+               .stroke(Stroke::new(0.1, self.theme.colors.border)),
          )
          .show(ui, |ui| self.folders(ui));
 
@@ -336,20 +336,21 @@ impl eframe::App for MailApp {
          .frame(
             Frame::new()
                .fill(self.theme.colors.bg)
-               .inner_margin(Margin::symmetric(12, 12))
-               .stroke(Stroke::new(1.0, self.theme.colors.border)),
+               .inner_margin(space.margin(space.md))
+               .stroke(Stroke::new(0.1, self.theme.colors.border)),
          )
          .show(ui, |ui| self.thread_list(ui));
 
       let bg = self.theme.colors.bg;
       CentralPanel::default()
-         .frame(Frame::new().fill(bg).inner_margin(Margin::same(16)))
+         .frame(Frame::new().fill(bg).inner_margin(space.margin(space.lg)))
          .show(ui, |ui| self.reading_pane(ui));
    }
 }
 
 impl MailApp {
    fn header(&mut self, ui: &mut Ui) {
+      let space = self.theme.spacing;
       ui.horizontal(|ui| {
          ui.spacing_mut().button_padding = self.theme.button_padding;
 
@@ -359,7 +360,7 @@ impl MailApp {
                .color(self.theme.colors.accent)
                .strong(),
          );
-         ui.add_space(10.0);
+         ui.add_space(space.md);
          self.muted(ui, "Mail client placeholder");
 
          ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -373,7 +374,7 @@ impl MailApp {
                self.editor.open = !self.editor.open;
             }
 
-            ui.add_space(12.0);
+            ui.add_space(space.md);
 
             if let Some(new_theme) = utils::theme_switcher(&self.theme, ui) {
                self.theme = new_theme;
@@ -386,16 +387,13 @@ impl MailApp {
       let text_color = self.theme.colors.text;
       let muted = self.theme.colors.text_muted;
       let size = self.theme.typography.normal;
-      let on_accent = self.theme.colors.bg;
-      let accent = self.theme.colors.accent;
+      let space = self.theme.spacing;
 
       ui.horizontal(|ui| {
          ui.spacing_mut().button_padding = self.theme.button_padding;
-         ui.spacing_mut().item_spacing.x = 12.0;
+         ui.spacing_mut().item_spacing.x = space.md;
 
-         let compose = Button::new(RichText::new("Compose").size(size).color(on_accent))
-            .bg_color(accent)
-            .min_size(vec2(108.0, 28.0));
+         let compose = Button::new(RichText::new("Compose").size(size)).min_size(vec2(108.0, 28.0));
          if ui.add(compose).clicked() {
             self.compose_open = true;
          }
@@ -404,7 +402,7 @@ impl MailApp {
             SecureTextEdit::singleline(&mut self.search)
                .id_salt("mail_search")
                .hint_text(RichText::new("Search mail").color(muted))
-               .margin(Margin::same(8))
+               .margin(space.margin(space.sm))
                .desired_width(260.0)
                .font(FontId::proportional(size)),
          );
@@ -417,13 +415,13 @@ impl MailApp {
             ComboBox::new("mail_account", selected).width(160.0).label("Account").show_ui(
                ui,
                |ui| {
-                  ui.spacing_mut().item_spacing.y = 12.0;
+                  ui.spacing_mut().item_spacing.y = space.md;
                   for account in self.accounts.clone() {
                      let label = Label::new(
                         RichText::new(&account).size(size).color(text_color),
                         None,
                      )
-                     .expand(Some(4.0))
+                     .expand(Some(space.xs))
                      .selected(self.account == account)
                      .sense(Sense::click())
                      .fill_width(true);
@@ -444,15 +442,18 @@ impl MailApp {
       let small = self.theme.typography.small;
       let info = self.theme.colors.info;
 
-      ui.spacing_mut().item_spacing.y = 4.0;
+      let space = self.theme.spacing;
+
+      ui.spacing_mut().item_spacing.y = space.xs;
       ui.label(RichText::new("Folders").size(self.theme.typography.small).color(muted));
-      ui.add_space(4.0);
+      ui.add_space(space.xs);
 
       // Idle fill matches the sidebar so rows only light up on hover / selected.
       // Name + unread count share that fill.
       let mut visuals = self.theme.frame2_visuals();
-      visuals.bg = self.theme.colors.widget_bg;
-      visuals.bg_click = self.theme.colors.widget_bg;
+      visuals.bg = self.theme.frame1.fill;
+      visuals.border = Stroke::NONE;
+      visuals.shadow = Shadow::NONE;
 
       let folder_frame = Frame2::from_egui(self.theme.frame2.outer_margin(Margin::ZERO))
          .interactive(true)
@@ -469,7 +470,7 @@ impl MailApp {
          let res = folder_frame.selected(selected).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-               ui.spacing_mut().item_spacing.x = 8.0;
+               ui.spacing_mut().item_spacing.x = space.sm;
                ui.add(
                   Label::new(
                      RichText::new(name).size(size).color(text_color),
@@ -502,23 +503,6 @@ impl MailApp {
             self.selected_id = first.id;
          }
       }
-
-      ui.add_space(16.0);
-      ui.label(RichText::new("Labels").size(small).color(muted));
-      ui.add_space(4.0);
-
-      let tags = [
-         ("Design", self.theme.colors.accent),
-         ("Finance", self.theme.colors.success),
-         ("Alerts", self.theme.colors.warning),
-      ];
-      for (name, color) in tags {
-         ui.add(
-            Label::new(RichText::new(name).size(size).color(color), None)
-               .interactive(false)
-               .expand(Some(2.0)),
-         );
-      }
    }
 
    fn thread_list(&mut self, ui: &mut Ui) {
@@ -527,6 +511,7 @@ impl MailApp {
       let size = self.theme.typography.normal;
       let small = self.theme.typography.small;
       let heading = self.theme.typography.large;
+      let space = self.theme.spacing;
       let messages = self.visible_messages();
       let selected_id = self.selected_id;
 
@@ -536,7 +521,7 @@ impl MailApp {
             ui.label(RichText::new(format!("{} threads", messages.len())).size(small).color(muted));
          });
       });
-      ui.add_space(8.0);
+      ui.add_space(space.sm);
 
       let visuals = self.theme.frame2_visuals();
       let frame2 = Frame2::from_egui(self.theme.frame2.outer_margin(Margin::ZERO))
@@ -548,11 +533,11 @@ impl MailApp {
          .id_salt("thread_scroll")
          .auto_shrink([false, false])
          .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 8.0;
+            ui.spacing_mut().item_spacing.y = space.sm;
             let mut clicked = None;
 
             if messages.is_empty() {
-               ui.add_space(24.0);
+               ui.add_space(space.xl);
                ui.label(RichText::new("No messages in this folder.").size(size).color(muted));
                return;
             }
@@ -570,7 +555,7 @@ impl MailApp {
                let res = frame2.selected(selected).show(ui, |ui| {
                   ui.vertical(|ui| {
                      ui.set_width(ui.available_width());
-                     ui.spacing_mut().item_spacing.y = 4.0;
+                     ui.spacing_mut().item_spacing.y = space.xs;
                      ui.horizontal(|ui| {
                         let from_text = if unread {
                            RichText::new(from).size(size).color(text_color).strong()
@@ -628,14 +613,10 @@ impl MailApp {
       let size = self.theme.typography.normal;
       let small = self.theme.typography.small;
       let heading = self.theme.typography.heading;
-      let on_fill = self.theme.colors.bg;
-      let error = self.theme.colors.error;
-      let info = self.theme.colors.info;
-      let success = self.theme.colors.success;
-      let warning = self.theme.colors.warning;
+      let space = self.theme.spacing;
 
       ui.spacing_mut().button_padding = self.theme.button_padding;
-      ui.spacing_mut().item_spacing.y = 10.0;
+      ui.spacing_mut().item_spacing.y = space.md;
 
       ui.label(RichText::new(message.subject).size(heading).color(text_color).strong());
 
@@ -657,11 +638,11 @@ impl MailApp {
             )
             .interactive(false),
          ])
-         .inter_spacing(12.0),
+         .inter_spacing(space.md),
       );
 
       ui.horizontal(|ui| {
-         ui.spacing_mut().item_spacing.x = 8.0;
+         ui.spacing_mut().item_spacing.x = space.sm;
          ui.add(
             Button::new(RichText::new("Reply").size(size).color(text_color))
                .min_size(vec2(88.0, 28.0)),
@@ -675,30 +656,22 @@ impl MailApp {
                .min_size(vec2(96.0, 28.0)),
          );
          ui.add(
-            Button::new(RichText::new("Archive").size(size).color(on_fill))
-               .bg_color(success)
+            Button::new(RichText::new("Archive").size(size).color(text_color))
                .min_size(vec2(88.0, 28.0)),
          );
          ui.add(
-            Button::new(RichText::new("Star").size(size).color(on_fill))
-               .bg_color(warning)
+            Button::new(RichText::new("Star").size(size).color(text_color))
                .min_size(vec2(72.0, 28.0)),
          );
          if ui
             .add(
-               Button::new(RichText::new("Delete").size(size).color(on_fill))
-                  .bg_color(error)
+               Button::new(RichText::new("Delete").size(size).color(text_color))
                   .min_size(vec2(88.0, 28.0)),
             )
             .clicked()
          {
             self.delete_open = true;
          }
-         ui.add(
-            Button::new(RichText::new("Info").size(size).color(on_fill))
-               .bg_color(info)
-               .small(),
-         );
       });
 
       ui.separator();
@@ -711,7 +684,7 @@ impl MailApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                ui.set_width(ui.available_width());
-               ui.spacing_mut().item_spacing.y = 10.0;
+               ui.spacing_mut().item_spacing.y = space.md;
                for para in message.body.split("\n\n") {
                   ui.add(
                      Label::new(
@@ -723,7 +696,7 @@ impl MailApp {
                   );
                }
 
-               ui.add_space(12.0);
+               ui.add_space(space.md);
                let quote = self.theme.frame2.outer_margin(Margin::ZERO);
                quote.show(ui, |ui| {
                   ui.set_width(ui.available_width());
@@ -733,7 +706,7 @@ impl MailApp {
                         .color(muted)
                         .italics(),
                   );
-                  ui.add_space(4.0);
+                  ui.add_space(space.xs);
                   ui.add(
                      Label::new(
                         RichText::new(message.preview).size(small).color(muted),
@@ -756,6 +729,7 @@ impl MailApp {
       let text_color = self.theme.colors.text;
       let on_accent = self.theme.colors.bg;
       let accent = self.theme.colors.accent;
+      let space = self.theme.spacing;
 
       Modal::new("compose_modal", &mut open)
          .heading("New message")
@@ -775,13 +749,13 @@ impl MailApp {
             }
          })
          .show(ui.ctx(), |ui| {
-            ui.spacing_mut().item_spacing.y = 10.0;
+            ui.spacing_mut().item_spacing.y = space.md;
             ui.label(RichText::new("To").size(size).color(text_color));
             ui.add(
                SecureTextEdit::singleline(&mut self.compose_to)
                   .id_salt("compose_to")
                   .hint_text(RichText::new("name@example.com").color(muted))
-                  .margin(Margin::same(8))
+                  .margin(space.margin(space.sm))
                   .desired_width(f32::INFINITY)
                   .font(FontId::proportional(size)),
             );
@@ -790,7 +764,7 @@ impl MailApp {
                SecureTextEdit::singleline(&mut self.compose_subject)
                   .id_salt("compose_subject")
                   .hint_text(RichText::new("Subject").color(muted))
-                  .margin(Margin::same(8))
+                  .margin(space.margin(space.sm))
                   .desired_width(f32::INFINITY)
                   .font(FontId::proportional(size)),
             );
@@ -799,7 +773,7 @@ impl MailApp {
                SecureTextEdit::multiline(&mut self.compose_body)
                   .id_salt("compose_body")
                   .hint_text(RichText::new("Write something…").color(muted))
-                  .margin(Margin::same(8))
+                  .margin(space.margin(space.sm))
                   .desired_width(f32::INFINITY)
                   .desired_rows(8)
                   .font(FontId::proportional(size)),
@@ -825,6 +799,7 @@ impl MailApp {
       let size = self.theme.typography.normal;
       let text_color = self.theme.colors.text;
       let muted = self.theme.colors.text_muted;
+      let space = self.theme.spacing;
 
       Modal::new("delete_modal", &mut open)
          .heading("Delete message")
@@ -850,7 +825,7 @@ impl MailApp {
                   .size(size)
                   .color(text_color),
             );
-            ui.add_space(6.0);
+            ui.add_space(space.sm);
             ui.label(
                RichText::new("Use it to check the alert modal, error fill, and footer actions.")
                   .size(self.theme.typography.small)

@@ -176,7 +176,15 @@ Hyperlinks use `info`, not `accent`. Focus rings and text-edit open borders use 
 
 Corner radius: theme default `6` for frames, combo, text edit. Buttons may be tighter (`3`) so they read as controls, not panels. That is a geometry token, not a color issue.
 
-Inner margin `10`, outer margin `5`, button padding `(10, 8)` are the Tokyo Night defaults; a new theme may change them but should keep one inner / one outer / one button padding rather than per-widget magic numbers.
+Inner margin `10`, outer margin `5`, button padding `(10, 8)` are widget chrome. Layout rhythm is [`ThemeSpacing`](../src/theme.rs) (`xs` 4 / `sm` 8 / `md` 12 / `lg` 16 / `xl` 24). A new theme may change the numbers but should keep **one scale** — do not invent `7` / `10` / `18` in app layout. `Theme::install` writes `md` into `Style.spacing.item_spacing` and `button_padding` / `window_margin` from the chrome fields.
+
+| Token | Default | Job |
+|-------|---------|-----|
+| `xs` | 4 | Tight meta, icon+label, stacked lines in a row |
+| `sm` | 8 | Dense lists, compact control padding |
+| `md` | 12 | Default item spacing, related group |
+| `lg` | 16 | Section padding (header, pane inner) |
+| `xl` | 24 | Between groups |
 
 ---
 
@@ -285,6 +293,7 @@ Cool night canvas. Elevation by shadow. Cyan focus. Purple links. Salmon / camel
 
 - Corner radius: 6 (frames, combo, text edit), 3 (buttons)
 - Inner margin 10, outer 5, button padding (10, 8)
+- Spacing scale: xs 4, sm 8, md 12, lg 16, xl 24
 - Animation 0.3s
 - `image_tint_recommended`: true (very dark canvas)
 
@@ -334,6 +343,7 @@ Official terminal ansi / `descriptionForeground` are too gray on storm (status g
 
 - Corner radius: 6 (frames, combo, text edit), 3 (buttons)
 - Inner margin 10, outer 5, button padding (10, 8)
+- Spacing scale: xs 4, sm 8, md 12, lg 16, xl 24
 - Animation 0.3s
 - `image_tint_recommended`: false
 

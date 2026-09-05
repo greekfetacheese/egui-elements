@@ -1,7 +1,7 @@
 //! Wasp (dark). Source: <https://github.com/santiyounger/Wasp-Obsidian-Theme>.
 
 use crate::overlay::OverlayManager;
-use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVisuals, Typography};
+use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeSpacing, ThemeVisuals, Typography};
 use crate::visuals::*;
 use egui::{
    Color32, CornerRadius, Frame, Margin, Shadow, Spacing, Stroke, Style, Visuals,
@@ -67,6 +67,7 @@ pub fn theme() -> Theme {
       kind: ThemeKind::Wasp,
       colors: colors(),
       typography: typography(),
+      spacing: ThemeSpacing::default(),
       window_frame: window_frame(&colors()),
       frame1: frame1(&colors()),
       frame2: frame2(&colors()),

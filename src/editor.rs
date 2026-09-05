@@ -217,7 +217,7 @@ impl ThemeEditor {
          .show(ui.ctx(), |ui| {
             ui.set_min_width(self.size.0);
             ui.set_min_height(self.size.1);
-            ui.spacing_mut().button_padding = vec2(10.0, 8.0);
+            ui.spacing_mut().button_padding = theme.button_padding;
 
             new_theme = utils::theme_switcher(theme, ui);
 
@@ -344,6 +344,23 @@ impl ThemeEditor {
 
             ui.label("Heading");
             ui.add(Slider::new(&mut theme.typography.heading, 0.0..=100.0).text("Size"));
+         });
+
+         CollapsingHeader::new("Spacing").show(ui, |ui| {
+            ui.label("XS — tight meta / icon+label");
+            ui.add(Slider::new(&mut theme.spacing.xs, 0.0..=48.0).text("px"));
+
+            ui.label("SM — dense lists");
+            ui.add(Slider::new(&mut theme.spacing.sm, 0.0..=48.0).text("px"));
+
+            ui.label("MD — item spacing / related group");
+            ui.add(Slider::new(&mut theme.spacing.md, 0.0..=48.0).text("px"));
+
+            ui.label("LG — section padding");
+            ui.add(Slider::new(&mut theme.spacing.lg, 0.0..=48.0).text("px"));
+
+            ui.label("XL — between groups");
+            ui.add(Slider::new(&mut theme.spacing.xl, 0.0..=48.0).text("px"));
          });
 
          /*

@@ -13,7 +13,7 @@ use crate::themes::{
 };
 use crate::utils::*;
 use crate::visuals::*;
-use egui::{Color32, Context, Frame, Id, Style, Vec2};
+use egui::{Color32, Context, Frame, Id, Margin, Style, Vec2, vec2};
 
 #[cfg(feature = "elegance")]
 use elegance::{Palette, Theme as EleganceTheme, Typography as EleganceTypography};
@@ -145,6 +145,14 @@ pub struct Theme {
    pub visuals: ThemeVisuals,
    /// Font sizes used by this crate's widgets and the demo.
    pub typography: Typography,
+   
+   /// Layout rhythm (gaps between siblings and groups).
+   ///
+   /// Widget chrome padding stays on [`Theme::inner_margin`] /
+   /// [`Theme::button_padding`]. Apps should pick a step from this scale
+   /// instead of one-off `4.0` / `12.0` / `16.0` literals.
+   #[cfg_attr(feature = "serde", serde(default))]
+   pub spacing: ThemeSpacing,
 
    /// Used for [Frame] not native windows
    pub window_frame: Frame,
@@ -179,6 +187,7 @@ impl PartialEq for Theme {
          && self.kind == other.kind
          && self.colors == other.colors
          && self.typography == other.typography
+         && self.spacing == other.spacing
          && self.window_frame == other.window_frame
          && self.frame1 == other.frame1
          && self.frame2 == other.frame2
@@ -300,7 +309,8 @@ impl Theme {
       let label_visuals = self.label_visuals();
       let combo_box_visuals = self.combo_box_visuals();
       let text_edit_visuals = self.text_edit_visuals();
-      let style = self.style();
+      let mut style = self.style();
+      self.apply_spacing(&mut style);
       let theme = self.clone();
 
       ctx.set_global_style(style);
@@ -381,6 +391,18 @@ impl Theme {
          d.get_temp::<Theme>(Self::storage_id())
             .unwrap_or_else(|| Theme::new(ThemeKind::TokyoNight))
       })
+   }
+
+   /// Push [`Theme::spacing`] and button/window padding onto `style`.
+   ///
+   /// Called from [`Theme::install`]. `style()` from a `ThemeKind` only
+   /// sets colors; layout tokens live on `Theme` so the editor can change
+   /// them without rebuilding the palette.
+   fn apply_spacing(&self, style: &mut Style) {
+      let s = &self.spacing;
+      style.spacing.item_spacing = vec2(s.md, s.md);
+      style.spacing.button_padding = self.button_padding;
+      style.spacing.window_margin = Margin::same(self.inner_margin);
    }
 
    /// Keep derived frame colors in sync with a palette change.
@@ -506,6 +528,56 @@ pub struct ThemeColors {
    ///
    /// Can be used for hyperlinks or to highlight something important
    pub info: Color32,
+}
+
+/// Layout rhythm in points. Jobs, not one-off gaps.
+///
+/// | Token | Default | Job |
+/// |-------|---------|-----|
+/// | `xs` | 4 | Tight meta, icon+label, stacked lines in a row |
+/// | `sm` | 8 | Dense lists, control padding y, related captions |
+/// | `md` | 12 | Default [`egui::Spacing::item_spacing`], related group |
+/// | `lg` | 16 | Section padding (header, pane inner) |
+/// | `xl` | 24 | Between groups (heading → gallery) |
+///
+/// Widget chrome (`inner_margin`, `button_padding`) is separate.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ThemeSpacing {
+   /// Tight: stacked meta, icon+label.
+   pub xs: f32,
+   /// Dense lists and compact control padding.
+   pub sm: f32,
+   /// Default item spacing / related group.
+   pub md: f32,
+   /// Section padding.
+   pub lg: f32,
+   /// Space between groups.
+   pub xl: f32,
+}
+
+impl Default for ThemeSpacing {
+   fn default() -> Self {
+      Self {
+         xs: 4.0,
+         sm: 8.0,
+         md: 12.0,
+         lg: 16.0,
+         xl: 24.0,
+      }
+   }
+}
+
+impl ThemeSpacing {
+   /// Uniform margin from one step (e.g. `space.margin(space.lg)`).
+   pub fn margin(self, size: f32) -> Margin {
+      Margin::same(size as i8)
+   }
+
+   /// Independent x/y margin (e.g. header `lg` × `md`).
+   pub fn margin_xy(self, x: f32, y: f32) -> Margin {
+      Margin::symmetric(x as i8, y as i8)
+   }
 }
 
 /// Font sizes in points.
