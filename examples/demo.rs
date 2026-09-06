@@ -6,9 +6,9 @@
 use eframe::egui::*;
 use egui_elements::components::{CredentialsForm, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
+use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::egui_lucide::Lucide;
 use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
 
 fn main() -> eframe::Result {
@@ -873,11 +873,9 @@ impl DemoApp {
       let mut close = false;
 
       let theme = Theme::current(ui.ctx());
+      let frame = theme.window_frame.fill(theme.frame1.fill);
       let title = RichText::new("Verify Credentials").size(theme.typography.heading);
-      let icon = Lucide::ShieldCheck
-         .size(28.0)
-         .color(theme.colors.accent)
-         .image();
+      let icon = Lucide::ShieldCheck.size(28.0).color(theme.colors.accent).image();
 
       Modal::new("demo_modal", &mut open)
          .heading(title)
@@ -885,12 +883,7 @@ impl DemoApp {
          .center_header_icon(false)
          .header_separator(false)
          .header_icon(icon)
-         .footer(|ui| {
-            let done = Button::new("Done").min_size(vec2(88.0, 32.0));
-            if ui.add(done).clicked() {
-               close = true;
-            }
-         })
+         .frame(frame)
          .show(ui.ctx(), |ui| {
             ui.vertical_centered(|ui| {
                ui.set_min_size(vec2(550.0, 350.0));

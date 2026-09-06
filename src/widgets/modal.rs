@@ -41,6 +41,7 @@ pub struct Modal<'a> {
    heading: Option<WidgetText>,
    subtitle: Option<WidgetText>,
    header_icon: Option<Image<'a>>,
+   frame: Option<Frame>,
    center_header_icon: bool,
    backdrop_order: Order,
    content_order: Order,
@@ -73,6 +74,7 @@ impl<'a> std::fmt::Debug for Modal<'a> {
             "header_icon",
             &self.header_icon.as_ref().map(|_| "<image>"),
          )
+         .field("frame", &self.frame)
          .field("center_header_icon", &self.center_header_icon)
          .field("backdrop_order", &self.backdrop_order)
          .field("content_order", &self.content_order)
@@ -105,6 +107,7 @@ impl<'a> Modal<'a> {
          heading: None,
          subtitle: None,
          header_icon: None,
+         frame: None,
          center_header_icon: false,
          backdrop_order: Order::Middle,
          content_order: Order::Foreground,
@@ -143,6 +146,14 @@ impl<'a> Modal<'a> {
    /// ```
    pub fn header_icon(mut self, icon: impl Into<Image<'a>>) -> Self {
       self.header_icon = Some(icon.into());
+      self
+   }
+
+   /// Override the [Frame] used for the modal's card.
+   ///
+   /// By default it creates a frame from the theme's [Theme::current].
+   pub fn frame(mut self, frame: Frame) -> Self {
+      self.frame = Some(frame);
       self
    }
 
@@ -324,233 +335,229 @@ impl<'a> Modal<'a> {
       // measures true content width; Area re-anchors on the next pass.
       area = area.default_width(self.max_width.unwrap_or(0.0));
       let result = area.show(ctx, |ui| {
-            // Upgrade this Ui's accesskit role from `GenericContainer`
-            // (set automatically by `Ui::new`) to a dialog role, so
-            // screen readers announce the modal correctly and
-            // platforms that support dialog focus tracking (AT-SPI)
-            // treat it as a window-like surface.
-            let role = if alert {
-               accesskit::Role::AlertDialog
-            } else {
-               accesskit::Role::Dialog
-            };
-            let heading_for_label = heading_text.clone();
-            ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
-               node.set_role(role);
-               if let Some(label) = heading_for_label {
-                  node.set_label(label);
-               }
-            });
-
-            if let Some(max_width) = self.max_width {
-               ui.set_max_width(max_width);
+         // Upgrade this Ui's accesskit role from `GenericContainer`
+         // (set automatically by `Ui::new`) to a dialog role, so
+         // screen readers announce the modal correctly and
+         // platforms that support dialog focus tracking (AT-SPI)
+         // treat it as a window-like surface.
+         let role = if alert {
+            accesskit::Role::AlertDialog
+         } else {
+            accesskit::Role::Dialog
+         };
+         let heading_for_label = heading_text.clone();
+         ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_role(role);
+            if let Some(label) = heading_for_label {
+               node.set_label(label);
             }
-            let card = Frame::new()
+         });
+
+         if let Some(max_width) = self.max_width {
+            ui.set_max_width(max_width);
+         }
+
+         let frame = self.frame.unwrap_or_else(|| {
+            Frame::new()
                .fill(theme.colors.bg)
                .stroke(Stroke::new(1.0, theme.colors.border))
                .corner_radius(theme.frame1.corner_radius)
-               .show(ui, |ui| {
-                  let pad = theme.frame1.inner_margin.left;
-                  let has_heading = self.heading.is_some();
-                  let has_icon = self.header_icon.is_some();
-                  if has_heading || has_icon {
-                     // Header band — same horizontal padding as body,
-                     // tighter bottom so the optional separator + body
-                     // continue to read as one block.
-                     Frame::new()
-                        .inner_margin(Margin {
-                           left: pad as i8,
-                           right: pad as i8,
-                           top: pad as i8,
-                           bottom: 0,
-                        })
-                        .show(ui, |ui| {
-                           let needs_full_width =
-                              self.center_header || self.center_header_icon;
-                           if needs_full_width {
-                              ui.set_min_width(ui.available_width());
-                           }
+         });
 
-                           let stacked_icon = has_icon
-                              && (self.center_header_icon || self.center_header);
-                           if stacked_icon {
-                              if let Some(icon) = self.header_icon.clone() {
-                                 if self.center_header_icon {
-                                    ui.vertical_centered(|ui| {
-                                       ui.add(icon);
-                                    });
-                                 } else {
-                                    ui.add(icon);
-                                 }
-                              }
-                           }
+         let card = frame.show(ui, |ui| {
+            let pad = theme.frame1.inner_margin.left;
+            let has_heading = self.heading.is_some();
+            let has_icon = self.header_icon.is_some();
+            if has_heading || has_icon {
+               // Header band — same horizontal padding as body,
+               // tighter bottom so the optional separator + body
+               // continue to read as one block.
+               Frame::new()
+                  .inner_margin(Margin {
+                     left: pad as i8,
+                     right: pad as i8,
+                     top: pad as i8,
+                     bottom: 0,
+                  })
+                  .show(ui, |ui| {
+                     let needs_full_width = self.center_header || self.center_header_icon;
+                     if needs_full_width {
+                        ui.set_min_width(ui.available_width());
+                     }
 
-                           if self.center_header {
+                     let stacked_icon = has_icon && (self.center_header_icon || self.center_header);
+                     if stacked_icon {
+                        if let Some(icon) = self.header_icon.clone() {
+                           if self.center_header_icon {
                               ui.vertical_centered(|ui| {
-                                 if let Some(h) = &self.heading {
-                                    ui.add(
-                                       egui::Label::new(h.clone()).halign(Align::Center),
-                                    );
-                                 }
-                                 if let Some(sub) = &self.subtitle {
-                                    ui.add(
-                                       egui::Label::new(sub.clone()).halign(Align::Center),
-                                    );
-                                 }
+                                 ui.add(icon);
                               });
                            } else {
-                              ui.horizontal_top(|ui| {
-                                 if has_icon && !stacked_icon {
-                                    if let Some(icon) = &self.header_icon {
-                                       ui.add(icon.clone());
-                                       ui.add_space(10.0);
-                                    }
-                                 }
-                                 ui.vertical(|ui| {
-                                    if let Some(h) = &self.heading {
-                                       ui.add(egui::Label::new(h.clone()));
-                                    }
-                                    if let Some(sub) = &self.subtitle {
-                                       ui.add(egui::Label::new(sub.clone()));
-                                    }
-                                 });
-                                 ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                                    // A non-closable modal shows no "×":
-                                    // there's no user-driven way out, so
-                                    // an affordance would only mislead.
-                                    if closable {
-                                       let resp = close_button(ui, &theme);
-                                       if resp.clicked() {
-                                          should_close = true;
-                                       }
-                                       close_btn_id = Some(resp.id);
-                                    }
-                                 });
-                              });
+                              ui.add(icon);
+                           }
+                        }
+                     }
+
+                     if self.center_header {
+                        ui.vertical_centered(|ui| {
+                           if let Some(h) = &self.heading {
+                              ui.add(egui::Label::new(h.clone()).halign(Align::Center));
+                           }
+                           if let Some(sub) = &self.subtitle {
+                              ui.add(egui::Label::new(sub.clone()).halign(Align::Center));
                            }
                         });
-                     if self.header_separator {
-                        ui.add_space(6.0);
-                        ui.separator();
-                        ui.add_space(10.0);
                      } else {
-                        ui.add_space(10.0);
-                     }
-                  }
-                  // --- Body ---
-                  let body_result = Frame::new()
-                     .inner_margin(Margin {
-                        left: pad as i8,
-                        right: pad as i8,
-                        top: if has_heading || has_icon {
-                           0
-                        } else {
-                           pad as i8
-                        },
-                        bottom: if self.footer.is_some() {
-                           pad as i8 / 2
-                        } else {
-                           pad as i8
-                        },
-                     })
-                     .show(ui, |ui| add_contents(ui))
-                     .inner;
-
-                  // --- Footer ---
-                  if let Some(footer) = self.footer {
-                     if self.footer_separator {
-                        ui.separator();
-                     }
-                     // The recessed footer fill is painted by hand rather
-                     // than via the frame's own `.fill`. A plain frame
-                     // fill is a square-cornered rectangle flush with the
-                     // card edges, so it paints over the card's rounded
-                     // bottom corners and bottom border — the non-round
-                     // corners reported in issue #7. Instead we lay the
-                     // footer out with no fill, then drop a rounded fill
-                     // into a slot reserved *behind* the content, tucked
-                     // one pixel inside the 1px border so the border (and
-                     // its rounded corners) stays unbroken all the way
-                     // around.
-                     let footer_fill = theme.colors.widget_bg;
-                     let fill_idx = ui.painter().add(Shape::Noop);
-                     let footer_rect = Frame::new()
-                        .fill(theme.colors.bg)
-                        .inner_margin(Margin::symmetric(pad as i8, pad as i8 * 3 / 4))
-                        .show(ui, |ui| {
-                           ui.horizontal(|ui| {
-                              if let Some(left) = self.footer_left {
-                                 left(ui);
+                        ui.horizontal_top(|ui| {
+                           if has_icon && !stacked_icon {
+                              if let Some(icon) = &self.header_icon {
+                                 ui.add(icon.clone());
+                                 ui.add_space(10.0);
                               }
-                              ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                 footer(ui);
-                              });
+                           }
+                           ui.vertical(|ui| {
+                              if let Some(h) = &self.heading {
+                                 ui.add(egui::Label::new(h.clone()));
+                              }
+                              if let Some(sub) = &self.subtitle {
+                                 ui.add(egui::Label::new(sub.clone()));
+                              }
                            });
-                        })
-                        .response
-                        .rect;
-                     // Round the bottom corners one pixel tighter than the
-                     // card so the fill follows the inside of the border's
-                     // curve; leave the top flush with the divider above.
-                     let card_radius = theme.frame1.corner_radius.ne as f32;
-                     let r = (card_radius - 1.0).max(0.0) as u8;
-                     let fill_rect = Rect::from_min_max(
-                        Pos2::new(footer_rect.left() + 1.0, footer_rect.top()),
-                        Pos2::new(
-                           footer_rect.right() - 1.0,
-                           footer_rect.bottom() - 1.0,
-                        ),
-                     );
-                     ui.painter().set(
-                        fill_idx,
-                        Shape::rect_filled(
-                           fill_rect,
-                           CornerRadius {
-                              nw: 0,
-                              ne: 0,
-                              sw: r,
-                              se: r,
-                           },
-                           footer_fill,
-                        ),
-                     );
-                  }
-                  body_result
-               });
-
-            let card_rect = card.response.rect;
-            ui.expand_to_include_rect(card_rect);
-            #[cfg(test)]
-            ui.ctx().data_mut(|d| {
-               d.insert_temp(Id::new("egui_elements_test_card_rect"), card_rect);
-            });
-
-            // Centered headers skip the in-flow close button so a wide
-            // body can size the card first. Pin × to that final corner.
-            if closable && self.center_header {
-               let pad = theme.frame1.inner_margin.left as f32;
-               let close_rect = Rect::from_min_size(
-                  Pos2::new(
-                     card_rect.right() - pad - HEADER_CLOSE_SLOT,
-                     card_rect.top() + pad,
-                  ),
-                  vec2(HEADER_CLOSE_SLOT, HEADER_CLOSE_SLOT),
-               );
-               ui.scope_builder(
-                  UiBuilder::new()
-                     .max_rect(close_rect)
-                     .layout(Layout::right_to_left(Align::Min)),
-                  |ui| {
-                     let resp = close_button(ui, &theme);
-                     if resp.clicked() {
-                        should_close = true;
+                           ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                              // A non-closable modal shows no "×":
+                              // there's no user-driven way out, so
+                              // an affordance would only mislead.
+                              if closable {
+                                 let resp = close_button(ui, &theme);
+                                 if resp.clicked() {
+                                    should_close = true;
+                                 }
+                                 close_btn_id = Some(resp.id);
+                              }
+                           });
+                        });
                      }
-                     close_btn_id = Some(resp.id);
+                  });
+               if self.header_separator {
+                  ui.add_space(6.0);
+                  ui.separator();
+                  ui.add_space(10.0);
+               } else {
+                  ui.add_space(10.0);
+               }
+            }
+            // --- Body ---
+            let body_result = Frame::new()
+               .inner_margin(Margin {
+                  left: pad as i8,
+                  right: pad as i8,
+                  top: if has_heading || has_icon {
+                     0
+                  } else {
+                     pad as i8
                   },
+                  bottom: if self.footer.is_some() {
+                     pad as i8 / 2
+                  } else {
+                     pad as i8
+                  },
+               })
+               .show(ui, |ui| add_contents(ui))
+               .inner;
+
+            // --- Footer ---
+            if let Some(footer) = self.footer {
+               if self.footer_separator {
+                  ui.separator();
+               }
+               // The recessed footer fill is painted by hand rather
+               // than via the frame's own `.fill`. A plain frame
+               // fill is a square-cornered rectangle flush with the
+               // card edges, so it paints over the card's rounded
+               // bottom corners and bottom border — the non-round
+               // corners reported in issue #7. Instead we lay the
+               // footer out with no fill, then drop a rounded fill
+               // into a slot reserved *behind* the content, tucked
+               // one pixel inside the 1px border so the border (and
+               // its rounded corners) stays unbroken all the way
+               // around.
+               let footer_fill = theme.colors.widget_bg;
+               let fill_idx = ui.painter().add(Shape::Noop);
+               let footer_rect = Frame::new()
+                  .fill(theme.colors.bg)
+                  .inner_margin(Margin::symmetric(pad as i8, pad as i8 * 3 / 4))
+                  .show(ui, |ui| {
+                     ui.horizontal(|ui| {
+                        if let Some(left) = self.footer_left {
+                           left(ui);
+                        }
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                           footer(ui);
+                        });
+                     });
+                  })
+                  .response
+                  .rect;
+               // Round the bottom corners one pixel tighter than the
+               // card so the fill follows the inside of the border's
+               // curve; leave the top flush with the divider above.
+               let card_radius = theme.frame1.corner_radius.ne as f32;
+               let r = (card_radius - 1.0).max(0.0) as u8;
+               let fill_rect = Rect::from_min_max(
+                  Pos2::new(footer_rect.left() + 1.0, footer_rect.top()),
+                  Pos2::new(
+                     footer_rect.right() - 1.0,
+                     footer_rect.bottom() - 1.0,
+                  ),
+               );
+               ui.painter().set(
+                  fill_idx,
+                  Shape::rect_filled(
+                     fill_rect,
+                     CornerRadius {
+                        nw: 0,
+                        ne: 0,
+                        sw: r,
+                        se: r,
+                     },
+                     footer_fill,
+                  ),
                );
             }
-            card.inner
+            body_result
          });
+
+         let card_rect = card.response.rect;
+         ui.expand_to_include_rect(card_rect);
+         #[cfg(test)]
+         ui.ctx().data_mut(|d| {
+            d.insert_temp(Id::new("egui_elements_test_card_rect"), card_rect);
+         });
+
+         // Centered headers skip the in-flow close button so a wide
+         // body can size the card first. Pin × to that final corner.
+         if closable && self.center_header {
+            let pad = theme.frame1.inner_margin.left as f32;
+            let close_rect = Rect::from_min_size(
+               Pos2::new(
+                  card_rect.right() - pad - HEADER_CLOSE_SLOT,
+                  card_rect.top() + pad,
+               ),
+               vec2(HEADER_CLOSE_SLOT, HEADER_CLOSE_SLOT),
+            );
+            ui.scope_builder(
+               UiBuilder::new().max_rect(close_rect).layout(Layout::right_to_left(Align::Min)),
+               |ui| {
+                  let resp = close_button(ui, &theme);
+                  if resp.clicked() {
+                     should_close = true;
+                  }
+                  close_btn_id = Some(resp.id);
+               },
+            );
+         }
+         card.inner
+      });
 
       if closable && self.close_on_escape && ctx.input(|i| i.key_pressed(Key::Escape)) {
          should_close = true;
@@ -620,7 +627,10 @@ fn close_button(ui: &mut Ui, theme: &Theme) -> Response {
       .inner;
    #[cfg(test)]
    ui.ctx().data_mut(|d| {
-      d.insert_temp(Id::new("egui_elements_test_close_rect"), inner.rect);
+      d.insert_temp(
+         Id::new("egui_elements_test_close_rect"),
+         inner.rect,
+      );
    });
    let enabled = inner.enabled();
    inner.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, "Close"));
@@ -703,8 +713,7 @@ mod tests {
       let ctx = Context::default();
       ctx.set_fonts(egui::FontDefinitions::empty());
       for _ in 0..2 {
-         ctx.run_ui(Default::default(), |ui| f(ui.ctx()))
-            .drop_without_applying_deltas();
+         ctx.run_ui(Default::default(), |ui| f(ui.ctx())).drop_without_applying_deltas();
       }
    }
 
@@ -713,12 +722,10 @@ mod tests {
       let mut last: Option<(Rect, Rect)> = None;
       run_two_passes(|ctx| {
          let mut open = true;
-         Modal::new("modal_center", &mut open)
-            .heading("Title")
-            .show(ctx, |ui| {
-               ui.set_min_width(520.0);
-               ui.label("wide body");
-            });
+         Modal::new("modal_center", &mut open).heading("Title").show(ctx, |ui| {
+            ui.set_min_width(520.0);
+            ui.label("wide body");
+         });
          let card: Rect = ctx
             .data(|d| d.get_temp(Id::new("egui_elements_test_card_rect")))
             .expect("card rect");
