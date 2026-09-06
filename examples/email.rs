@@ -734,7 +734,6 @@ impl MailApp {
       Modal::new("compose_modal", &mut open)
          .heading("New message")
          .subtitle("Placeholder compose — nothing is sent.")
-         .header_icon("✉")
          .max_width(520.0)
          .footer(|ui| {
             let send_btn = Button::new(RichText::new("Send").color(on_accent))
@@ -804,7 +803,6 @@ impl MailApp {
       Modal::new("delete_modal", &mut open)
          .heading("Delete message")
          .subtitle("Placeholder — the thread stays put.")
-         .header_icon("⚠")
          .alert(true)
          .max_width(420.0)
          .footer(|ui| {

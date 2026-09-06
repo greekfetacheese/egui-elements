@@ -8,9 +8,9 @@
 //! Forked from <https://github.com/stephenberry/egui-elegance>
 
 use egui::{
-   Align, Align2, Area, Color32, Context, CornerRadius, FontId, Frame, Id, Key, Layout, Margin,
-   Order, Pos2, Rect, Response, RichText, Sense, Shape, Stroke, Ui, Vec2, WidgetInfo, WidgetText,
-   WidgetType, accesskit, vec2,
+   Align, Align2, Area, Color32, Context, CornerRadius, Frame, Id, Image, Key, Layout, Margin,
+   Order, Pos2, Rect, Response, RichText, Sense, Shape, Stroke, Ui, UiBuilder, Vec2, WidgetInfo,
+   WidgetText, WidgetType, accesskit, vec2,
 };
 
 use super::button::Button;
@@ -40,15 +40,19 @@ pub struct Modal<'a> {
    id_salt: Id,
    heading: Option<WidgetText>,
    subtitle: Option<WidgetText>,
-   header_icon: Option<WidgetText>,
+   header_icon: Option<Image<'a>>,
+   center_header_icon: bool,
    backdrop_order: Order,
    content_order: Order,
    open: &'a mut bool,
-   max_width: f32,
+   max_width: Option<f32>,
    closable: bool,
    close_on_backdrop: bool,
    close_on_escape: bool,
    alert: bool,
+   center_header: bool,
+   header_separator: bool,
+   footer_separator: bool,
    footer: Option<UiFn<'a>>,
    footer_left: Option<UiFn<'a>>,
 }
@@ -67,8 +71,9 @@ impl<'a> std::fmt::Debug for Modal<'a> {
          )
          .field(
             "header_icon",
-            &self.header_icon.as_ref().map(|h| h.text()),
+            &self.header_icon.as_ref().map(|_| "<image>"),
          )
+         .field("center_header_icon", &self.center_header_icon)
          .field("backdrop_order", &self.backdrop_order)
          .field("content_order", &self.content_order)
          .field("open", &*self.open)
@@ -77,6 +82,9 @@ impl<'a> std::fmt::Debug for Modal<'a> {
          .field("close_on_backdrop", &self.close_on_backdrop)
          .field("close_on_escape", &self.close_on_escape)
          .field("alert", &self.alert)
+         .field("center_header", &self.center_header)
+         .field("header_separator", &self.header_separator)
+         .field("footer_separator", &self.footer_separator)
          .field(
             "footer",
             &self.footer.as_ref().map(|_| "<closure>"),
@@ -97,14 +105,18 @@ impl<'a> Modal<'a> {
          heading: None,
          subtitle: None,
          header_icon: None,
+         center_header_icon: false,
          backdrop_order: Order::Middle,
          content_order: Order::Foreground,
          open,
-         max_width: 440.0,
+         max_width: None,
          closable: true,
          close_on_backdrop: true,
          close_on_escape: true,
          alert: false,
+         center_header: false,
+         header_separator: true,
+         footer_separator: true,
          footer: None,
          footer_left: None,
       }
@@ -122,11 +134,22 @@ impl<'a> Modal<'a> {
       self
    }
 
-   /// Paint a glyph in a tinted circular halo to the left of the heading.
-   /// Use any short text — `"⚠"`, `"✓"`, `"!"`, or an emoji. The halo
-   /// uses [`ThemeColors::accent`](crate::theme::ThemeColors::accent).
-   pub fn header_icon(mut self, icon: impl Into<WidgetText>) -> Self {
+   /// Show an image in the header. Alignment is independent of the title
+   /// — see [`Modal::center_header_icon`]. Pass a sized/tinted
+   /// [`egui::Image`], for example a Lucide SVG:
+   ///
+   /// ```ignore
+   /// .header_icon(Lucide::ShieldCheck.size(28.0).color(theme.colors.accent).image())
+   /// ```
+   pub fn header_icon(mut self, icon: impl Into<Image<'a>>) -> Self {
       self.header_icon = Some(icon.into());
+      self
+   }
+
+   /// Center the header image on its own row. Default: `false` (left).
+   /// Does not change title alignment — that is [`Modal::center_header`].
+   pub fn center_header_icon(mut self, center: bool) -> Self {
+      self.center_header_icon = center;
       self
    }
 
@@ -142,9 +165,10 @@ impl<'a> Modal<'a> {
       self
    }
 
-   /// Override the maximum width of the modal card in points. Default: 440.
+   /// Cap the modal card width in points. When unset the card shrink-wraps
+   /// to its contents and stays centered. Default: no cap.
    pub fn max_width(mut self, max_width: f32) -> Self {
-      self.max_width = max_width;
+      self.max_width = Some(max_width);
       self
    }
 
@@ -189,11 +213,32 @@ impl<'a> Modal<'a> {
       self
    }
 
+   /// Center the heading and subtitle in the header band. The close
+   /// button stays top-right. Default: `false` (left-aligned). Icon
+   /// alignment is separate — see [`Modal::center_header_icon`].
+   pub fn center_header(mut self, center: bool) -> Self {
+      self.center_header = center;
+      self
+   }
+
+   /// Draw a horizontal divider under the header. Default: `true`.
+   pub fn header_separator(mut self, show: bool) -> Self {
+      self.header_separator = show;
+      self
+   }
+
+   /// Draw a horizontal divider above the footer. Default: `true`.
+   pub fn footer_separator(mut self, show: bool) -> Self {
+      self.footer_separator = show;
+      self
+   }
+
    /// Add a footer row at the bottom of the modal. The closure runs in a
    /// right-to-left layout, so widgets added in source order land
    /// rightmost-first — matching the typical "Cancel | Confirm" reading.
-   /// The footer renders below a horizontal divider and over a slightly
-   /// recessed fill, separating it visually from the body.
+   /// The footer renders below an optional horizontal divider (see
+   /// [`Modal::footer_separator`]) and over a slightly recessed fill,
+   /// separating it visually from the body.
    pub fn footer<F: FnOnce(&mut Ui) + 'a>(mut self, add_footer: F) -> Self {
       self.footer = Some(Box::new(add_footer));
       self
@@ -271,10 +316,14 @@ impl<'a> Modal<'a> {
       let window_id = Id::new("elegance_modal_window").with(self.id_salt);
       let alert = self.alert;
       let heading_text: Option<String> = self.heading.as_ref().map(|h| h.text().to_string());
-      let result = Area::new(window_id)
+      let mut area = Area::new(window_id)
          .order(self.content_order)
          .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-         .show(ctx, |ui| {
+         .pivot(Align2::CENTER_CENTER);
+      // 0 = shrink-wrap the first frame so a missing max_width still
+      // measures true content width; Area re-anchors on the next pass.
+      area = area.default_width(self.max_width.unwrap_or(0.0));
+      let result = area.show(ctx, |ui| {
             // Upgrade this Ui's accesskit role from `GenericContainer`
             // (set automatically by `Ui::new`) to a dialog role, so
             // screen readers announce the modal correctly and
@@ -293,8 +342,10 @@ impl<'a> Modal<'a> {
                }
             });
 
-            ui.set_max_width(self.max_width);
-            Frame::new()
+            if let Some(max_width) = self.max_width {
+               ui.set_max_width(max_width);
+            }
+            let card = Frame::new()
                .fill(theme.colors.bg)
                .stroke(Stroke::new(1.0, theme.colors.border))
                .corner_radius(theme.frame1.corner_radius)
@@ -314,36 +365,77 @@ impl<'a> Modal<'a> {
                            bottom: 0,
                         })
                         .show(ui, |ui| {
-                           ui.horizontal_top(|ui| {
-                              if let Some(icon) = &self.header_icon {
-                                 paint_icon_halo(ui, icon.text(), &theme);
-                                 ui.add_space(10.0);
+                           let needs_full_width =
+                              self.center_header || self.center_header_icon;
+                           if needs_full_width {
+                              ui.set_min_width(ui.available_width());
+                           }
+
+                           let stacked_icon = has_icon
+                              && (self.center_header_icon || self.center_header);
+                           if stacked_icon {
+                              if let Some(icon) = self.header_icon.clone() {
+                                 if self.center_header_icon {
+                                    ui.vertical_centered(|ui| {
+                                       ui.add(icon);
+                                    });
+                                 } else {
+                                    ui.add(icon);
+                                 }
                               }
-                              ui.vertical(|ui| {
+                           }
+
+                           if self.center_header {
+                              ui.vertical_centered(|ui| {
                                  if let Some(h) = &self.heading {
-                                    ui.add(egui::Label::new(h.clone()));
+                                    ui.add(
+                                       egui::Label::new(h.clone()).halign(Align::Center),
+                                    );
                                  }
                                  if let Some(sub) = &self.subtitle {
-                                    ui.add(egui::Label::new(sub.clone()));
+                                    ui.add(
+                                       egui::Label::new(sub.clone()).halign(Align::Center),
+                                    );
                                  }
                               });
-                              ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                                 // A non-closable modal shows no "×":
-                                 // there's no user-driven way out, so
-                                 // an affordance would only mislead.
-                                 if closable {
-                                    let resp = close_button(ui, &theme);
-                                    if resp.clicked() {
-                                       should_close = true;
+                           } else {
+                              ui.horizontal_top(|ui| {
+                                 if has_icon && !stacked_icon {
+                                    if let Some(icon) = &self.header_icon {
+                                       ui.add(icon.clone());
+                                       ui.add_space(10.0);
                                     }
-                                    close_btn_id = Some(resp.id);
                                  }
+                                 ui.vertical(|ui| {
+                                    if let Some(h) = &self.heading {
+                                       ui.add(egui::Label::new(h.clone()));
+                                    }
+                                    if let Some(sub) = &self.subtitle {
+                                       ui.add(egui::Label::new(sub.clone()));
+                                    }
+                                 });
+                                 ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                                    // A non-closable modal shows no "×":
+                                    // there's no user-driven way out, so
+                                    // an affordance would only mislead.
+                                    if closable {
+                                       let resp = close_button(ui, &theme);
+                                       if resp.clicked() {
+                                          should_close = true;
+                                       }
+                                       close_btn_id = Some(resp.id);
+                                    }
+                                 });
                               });
-                           });
+                           }
                         });
-                     ui.add_space(6.0);
-                     ui.separator();
-                     ui.add_space(10.0);
+                     if self.header_separator {
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+                     } else {
+                        ui.add_space(10.0);
+                     }
                   }
                   // --- Body ---
                   let body_result = Frame::new()
@@ -366,7 +458,9 @@ impl<'a> Modal<'a> {
 
                   // --- Footer ---
                   if let Some(footer) = self.footer {
-                     ui.separator();
+                     if self.footer_separator {
+                        ui.separator();
+                     }
                      // The recessed footer fill is painted by hand rather
                      // than via the frame's own `.fill`. A plain frame
                      // fill is a square-cornered rectangle flush with the
@@ -422,7 +516,40 @@ impl<'a> Modal<'a> {
                      );
                   }
                   body_result
-               })
+               });
+
+            let card_rect = card.response.rect;
+            ui.expand_to_include_rect(card_rect);
+            #[cfg(test)]
+            ui.ctx().data_mut(|d| {
+               d.insert_temp(Id::new("egui_elements_test_card_rect"), card_rect);
+            });
+
+            // Centered headers skip the in-flow close button so a wide
+            // body can size the card first. Pin × to that final corner.
+            if closable && self.center_header {
+               let pad = theme.frame1.inner_margin.left as f32;
+               let close_rect = Rect::from_min_size(
+                  Pos2::new(
+                     card_rect.right() - pad - HEADER_CLOSE_SLOT,
+                     card_rect.top() + pad,
+                  ),
+                  vec2(HEADER_CLOSE_SLOT, HEADER_CLOSE_SLOT),
+               );
+               ui.scope_builder(
+                  UiBuilder::new()
+                     .max_rect(close_rect)
+                     .layout(Layout::right_to_left(Align::Min)),
+                  |ui| {
+                     let resp = close_button(ui, &theme);
+                     if resp.clicked() {
+                        should_close = true;
+                     }
+                     close_btn_id = Some(resp.id);
+                  },
+               );
+            }
+            card.inner
          });
 
       if closable && self.close_on_escape && ctx.input(|i| i.key_pressed(Key::Escape)) {
@@ -455,7 +582,7 @@ impl<'a> Modal<'a> {
          ctx.data_mut(|d| d.insert_temp(focus_storage, ModalFocusState::default()));
       }
 
-      Some(result.inner.inner)
+      Some(result.inner)
    }
 }
 
@@ -471,6 +598,10 @@ struct ModalFocusState {
    prev_focus: Option<Id>,
 }
 
+/// Overlay slot for the close button in a centered header. Sized to
+/// fit the 20×20 min button plus theme padding without clipping.
+const HEADER_CLOSE_SLOT: f32 = 48.0;
+
 /// Render the modal's close button. Returns its `Response` so the caller
 /// can route focus to it and check `clicked()`. The accesskit label is
 /// set to `"Close"` explicitly — without this, screen readers announce
@@ -482,29 +613,149 @@ fn close_button(ui: &mut Ui, theme: &Theme) -> Response {
    let inner = ui
       .push_id("modal_close", |ui| {
          let text = RichText::new("X").size(theme.typography.normal);
+         let padding = vec2(theme.spacing.sm, theme.spacing.xs);
+         ui.spacing_mut().button_padding = padding;
          ui.add(Button::new(text).min_size(vec2(20.0, 20.0)))
       })
       .inner;
+   #[cfg(test)]
+   ui.ctx().data_mut(|d| {
+      d.insert_temp(Id::new("egui_elements_test_close_rect"), inner.rect);
+   });
    let enabled = inner.enabled();
    inner.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, "Close"));
    inner
 }
 
-/// Paint a circular tinted halo with a centered glyph. The fg uses the full
-/// accent colour; the bg is the same colour at low alpha so the halo reads
-/// as a coloured "wash" against the card surface.
-fn paint_icon_halo(ui: &mut Ui, glyph: &str, theme: &Theme) {
-   let size = 32.0;
-   let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
-   let fg = theme.colors.accent;
-   let bg = Color32::from_rgba_unmultiplied(fg.r(), fg.g(), fg.b(), 36);
-   let painter = ui.painter();
-   painter.circle_filled(rect.center(), size * 0.5, bg);
-   painter.text(
-      rect.center(),
-      Align2::CENTER_CENTER,
-      glyph,
-      FontId::proportional(theme.typography.heading),
-      fg,
-   );
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn center_header_without_separators_renders() {
+      egui::__run_test_ctx(|ctx| {
+         let mut open = true;
+         Modal::new("modal_opts", &mut open)
+            .heading("Title")
+            .subtitle("Subtitle")
+            .header_icon(Image::new("file://modal_icon"))
+            .center_header(true)
+            .center_header_icon(true)
+            .header_separator(false)
+            .footer_separator(false)
+            .footer(|ui| {
+               ui.label("ok");
+            })
+            .show(ctx, |ui| {
+               ui.label("body");
+            });
+         assert!(open);
+      });
+   }
+
+   #[test]
+   fn default_header_layout_still_renders() {
+      egui::__run_test_ctx(|ctx| {
+         let mut open = true;
+         Modal::new("modal_default", &mut open)
+            .heading("Title")
+            .footer(|ui| {
+               ui.label("ok");
+            })
+            .show(ctx, |ui| {
+               ui.label("body");
+            });
+         assert!(open);
+      });
+   }
+
+   #[test]
+   fn centered_close_button_hugs_card_right() {
+      egui::__run_test_ctx(|ctx| {
+         let mut open = true;
+         Modal::new("modal_corner", &mut open)
+            .heading("Title")
+            .center_header(true)
+            .max_width(500.0)
+            .show(ctx, |ui| {
+               ui.set_min_width(480.0);
+               ui.label("wide body");
+            });
+         let close: Rect = ctx
+            .data(|d| d.get_temp(Id::new("egui_elements_test_close_rect")))
+            .expect("close button rect");
+         let card: Rect = ctx
+            .data(|d| d.get_temp(Id::new("egui_elements_test_card_rect")))
+            .expect("card rect");
+         let gap = card.right() - close.right();
+         assert!(
+            gap >= 0.0 && gap < 56.0,
+            "close button should hug the card's right edge, gap={gap}, close={close:?}, card={card:?}"
+         );
+         assert!(
+            close.right() > card.center().x,
+            "close button should be on the right half of the card"
+         );
+      });
+   }
+
+   fn run_two_passes(mut f: impl FnMut(&Context)) {
+      let ctx = Context::default();
+      ctx.set_fonts(egui::FontDefinitions::empty());
+      for _ in 0..2 {
+         ctx.run_ui(Default::default(), |ui| f(ui.ctx()))
+            .drop_without_applying_deltas();
+      }
+   }
+
+   #[test]
+   fn modal_centers_without_max_width() {
+      let mut last: Option<(Rect, Rect)> = None;
+      run_two_passes(|ctx| {
+         let mut open = true;
+         Modal::new("modal_center", &mut open)
+            .heading("Title")
+            .show(ctx, |ui| {
+               ui.set_min_width(520.0);
+               ui.label("wide body");
+            });
+         let card: Rect = ctx
+            .data(|d| d.get_temp(Id::new("egui_elements_test_card_rect")))
+            .expect("card rect");
+         last = Some((card, ctx.content_rect()));
+      });
+      let (card, screen) = last.expect("second pass");
+      let dx = (card.center().x - screen.center().x).abs();
+      let dy = (card.center().y - screen.center().y).abs();
+      assert!(
+         dx < 8.0 && dy < 8.0,
+         "card should be centered without max_width, dx={dx}, dy={dy}, card={card:?}, screen={screen:?}"
+      );
+   }
+
+   #[test]
+   fn modal_centers_with_max_width() {
+      let mut last: Option<(Rect, Rect)> = None;
+      run_two_passes(|ctx| {
+         let mut open = true;
+         Modal::new("modal_center_cap", &mut open)
+            .heading("Title")
+            .max_width(600.0)
+            .show(ctx, |ui| {
+               ui.set_min_width(520.0);
+               ui.label("wide body");
+            });
+         let card: Rect = ctx
+            .data(|d| d.get_temp(Id::new("egui_elements_test_card_rect")))
+            .expect("card rect");
+         last = Some((card, ctx.content_rect()));
+      });
+      let (card, screen) = last.expect("second pass");
+      let dx = (card.center().x - screen.center().x).abs();
+      let dy = (card.center().y - screen.center().y).abs();
+      assert!(
+         dx < 8.0 && dy < 8.0,
+         "card should be centered with max_width, dx={dx}, dy={dy}, card={card:?}, screen={screen:?}"
+      );
+   }
 }

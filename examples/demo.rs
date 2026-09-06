@@ -8,6 +8,7 @@ use egui_elements::components::{CredentialsForm, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
+use egui_elements::egui_lucide::Lucide;
 use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
 
 fn main() -> eframe::Result {
@@ -871,11 +872,19 @@ impl DemoApp {
       let mut open = self.modal_open;
       let mut close = false;
 
+      let theme = Theme::current(ui.ctx());
+      let title = RichText::new("Verify Credentials").size(theme.typography.heading);
+      let icon = Lucide::ShieldCheck
+         .size(28.0)
+         .color(theme.colors.accent)
+         .image();
+
       Modal::new("demo_modal", &mut open)
-         .heading("Modal")
-         .subtitle("Themed card over a dimmed backdrop. Esc / backdrop / × to dismiss.")
-         .header_icon("✦")
-         .max_width(460.0)
+         .heading(title)
+         .center_header(true)
+         .center_header_icon(false)
+         .header_separator(false)
+         .header_icon(icon)
          .footer(|ui| {
             let done = Button::new("Done").min_size(vec2(88.0, 32.0));
             if ui.add(done).clicked() {
@@ -883,19 +892,20 @@ impl DemoApp {
             }
          })
          .show(ui.ctx(), |ui| {
-            ui.label(
-               RichText::new(
-                  "Use Modal for confirmations and blocking flows. Footer is right-to-left.",
-               )
-               .size(self.theme.typography.normal)
-               .color(self.theme.colors.text),
-            );
-            ui.add_space(8.0);
-            ui.label(
-               RichText::new("Accent / success / warning / error all come from the theme.")
-                  .size(self.theme.typography.small)
-                  .color(self.theme.colors.text_muted),
-            );
+            ui.vertical_centered(|ui| {
+               ui.set_min_size(vec2(550.0, 350.0));
+
+               ui.scope(|ui| {
+                  ui.spacing_mut().button_padding = vec2(4.0, 4.0);
+                  self.credentials.set_confirm_password(false);
+                  self.credentials.show(ui);
+               });
+
+               let text = RichText::new("Confirm").size(self.theme.typography.large);
+               let button = Button::new(text).min_size(vec2(200.0, 30.0));
+
+               if ui.add(button).clicked() {}
+            });
          });
 
       if close {
