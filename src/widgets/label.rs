@@ -128,6 +128,14 @@ impl Label {
       self
    }
 
+   /// On-screen image size, honoring [`Image::fit_to_exact_size`].
+   ///
+   /// [`Image::size`] is the *texture* size (e.g. 32×32). Using that for wrap
+   /// width makes compact labels wrap even when the image is fitted to 24×24.
+   fn image_display_size(image: &Image<'_>, ui: &Ui) -> Vec2 {
+      image.calc_size(ui.available_size(), image.size())
+   }
+
    /// Calculate the size needed by the widget.
    ///
    /// `available_width` is the width available *for the text part* after accounting for image/spacing.
@@ -140,11 +148,11 @@ impl Label {
       let galley = ui.fonts_mut(|fonts| fonts.layout_job(layout_job));
       let text_size = galley.size();
 
-      let image_size = if let Some(image) = &self.image {
-         image.calc_size(ui.available_size(), image.size())
-      } else {
-         Vec2::ZERO
-      };
+      let image_size = self
+         .image
+         .as_ref()
+         .map(|image| Self::image_display_size(image, ui))
+         .unwrap_or(Vec2::ZERO);
 
       let total_width = text_size.x
          + if self.image.is_some() {
@@ -191,11 +199,8 @@ impl Label {
       button_visuals: &WidgetVisuals,
    ) {
       // Estimate available width for text layout within the provided rect
-      let available_width_for_text = if self.image.is_some() {
-         (rect.width()
-            - self.image.as_ref().map_or(0.0, |img| img.size().map_or(0.0, |s| s.x))
-            - self.spacing)
-            .max(0.0)
+      let available_width_for_text = if let Some(image) = &self.image {
+         (rect.width() - Self::image_display_size(image, ui).x - self.spacing).max(0.0)
       } else {
          rect.width()
       };
@@ -242,11 +247,10 @@ fn layout_content_within_rect(
    text_first: bool,
 ) -> (Pos2, Option<Rect>) {
    let text_size = galley.size();
-   let image_size = if let Some(image) = image {
-      image.calc_size(ui.available_size(), image.size())
-   } else {
-      Vec2::ZERO
-   };
+   let image_size = image
+      .as_ref()
+      .map(|image| Label::image_display_size(image, ui))
+      .unwrap_or(Vec2::ZERO);
 
    let total_content_height = text_size.y.max(image_size.y);
    let top_y = ui
@@ -291,11 +295,11 @@ fn layout_content_within_rect(
 impl Widget for Label {
    fn ui(self, ui: &mut Ui) -> Response {
       // Calculate Size (Content Only)
-      let image_size = if let Some(image) = &self.image {
-         image.calc_size(ui.available_size(), image.size())
-      } else {
-         Vec2::ZERO
-      };
+      let image_size = self
+         .image
+         .as_ref()
+         .map(|image| Self::image_display_size(image, ui))
+         .unwrap_or(Vec2::ZERO);
 
       let effective_wrap_mode = self.wrap_mode.unwrap_or_else(|| ui.wrap_mode());
 
