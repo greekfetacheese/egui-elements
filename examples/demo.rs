@@ -9,7 +9,9 @@ use egui_elements::editor::ThemeEditor;
 use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
+use egui_elements::widgets::{
+   Badge, BadgeCorner, Button, ComboBox, Label, Modal, SecureTextEdit, Window,
+};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
@@ -555,6 +557,7 @@ impl DemoApp {
       let text_color = self.theme.colors.text;
       let muted = self.theme.colors.text_muted;
       let size = self.theme.typography.normal;
+      let badge_text_size = self.theme.typography.normal;
       let button_size = vec2(120.0, 36.0);
 
       ui.spacing_mut().item_spacing = vec2(16.0, 16.0);
@@ -574,6 +577,26 @@ impl DemoApp {
             .selected(true)
             .min_size(button_size);
          ui.add(btn);
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 12.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+
+         for corner in BadgeCorner::to_vec() {
+            let badge = Badge::new("3").color(self.theme.colors.error).corner(*corner);
+            let btn = Button::new(RichText::new(corner.to_str()).size(size).color(text_color))
+               .badge(badge)
+               .min_size(button_size);
+
+            ui.scope(|ui| {
+               // Give more space for the badge
+               ui.spacing_mut().button_padding.x += 12.0;
+               ui.add(btn);
+            });
+         }
       });
 
       ui.add_space(8.0);

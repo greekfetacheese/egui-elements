@@ -6,6 +6,7 @@ use egui::{
 
 use crate::theme::Theme;
 use crate::visuals::ButtonVisuals;
+use crate::widgets::badge::Badge;
 
 /// Clickable themed button, built on egui [`Atom`]s.
 ///
@@ -28,6 +29,7 @@ pub struct Button<'a> {
    layout: AtomLayout<'a>,
    visuals: Option<ButtonVisuals>,
    bg_color: Option<Color32>,
+   badge: Option<Badge>,
    small: bool,
    frame_when_inactive: bool,
    min_size: Vec2,
@@ -45,6 +47,7 @@ impl<'a> Button<'a> {
             .fallback_font(TextStyle::Button),
          visuals: None,
          bg_color: None,
+         badge: None,
          small: false,
          frame_when_inactive: true,
          min_size: Vec2::ZERO,
@@ -221,11 +224,38 @@ impl<'a> Button<'a> {
       self
    }
 
+   /// Attach a notification [`Badge`] to a corner of this button.
+   ///
+   /// The badge is painted on top of the button and does not change its size or
+   /// layout. Use it to signal unseen content behind the button — e.g. a red
+   /// circle with the number of notifications.
+   ///
+   /// ```
+   /// # use egui::__run_test_ui;
+   /// # use egui::Color32;
+   /// # use egui_elements::widgets::{Badge, BadgeCorner, Button};
+   /// # __run_test_ui(|ui| {
+   /// ui.add(
+   ///    Button::new("Notifications").badge(
+   ///       Badge::new("3")
+   ///          .color(Color32::RED)
+   ///          .corner(BadgeCorner::TopRight),
+   ///    ),
+   /// );
+   /// # });
+   /// ```
+   #[inline]
+   pub fn badge(mut self, badge: Badge) -> Self {
+      self.badge = Some(badge);
+      self
+   }
+
    /// Show the button and return a [`AtomLayoutResponse`] for painting custom contents.
    pub fn atom_ui(self, ui: &mut Ui) -> AtomLayoutResponse {
       let Button {
          mut layout,
          bg_color,
+         badge,
          small,
          visuals,
          frame_when_inactive,
@@ -325,7 +355,11 @@ impl<'a> Button<'a> {
                .shadow(shadow);
          }
 
-         prepared.paint(ui)
+         let painted = prepared.paint(ui);
+         if let Some(badge) = &badge {
+            badge.paint_at(ui, painted.response.rect);
+         }
+         painted
       } else {
          AtomLayoutResponse::empty(prepared.response)
       };

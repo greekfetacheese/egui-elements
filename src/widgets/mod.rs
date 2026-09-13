@@ -8,6 +8,7 @@
 //! the theme stored on [`egui::Context`] by [`Theme::install`](crate::theme::Theme::install)
 //! → stock [`egui::Style`].
 
+pub mod badge;
 pub mod button;
 pub mod combo_box;
 pub mod frame;
@@ -17,6 +18,7 @@ pub mod multi_label;
 pub mod secure_text_edit;
 pub mod window;
 
+pub use badge::{Badge, BadgeCorner};
 pub use button::Button;
 pub use combo_box::ComboBox;
 pub use frame::Frame;

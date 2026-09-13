@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, and corner `Badges` for buttons
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
@@ -108,6 +108,30 @@ fn gallery(ui: &mut Ui, text: &mut String, modal_open: &mut bool) {
 ```
 
 Give each `ComboBox` / `SecureTextEdit` a unique `id_salt` if you repeat the same gallery on several surfaces (bg, frame, window). Otherwise their persistent state collides.
+
+### Badges
+
+Attach a notification `Badge` to a corner of a `Button` to signal unseen content
+behind it - e.g. the number changes:
+
+```rust
+use egui_elements::widgets::{Badge, BadgeCorner, Button};
+
+let changes = 3;
+ui.add(
+    Button::new("Notifications")
+        .badge(Badge::new(changes.to_string()).color(theme.colors.error)),
+);
+```
+
+`Badge::new(text)` shows that text in the top-right corner, filled with the theme
+error color; `Badge::dot()` is a plain coloured dot. `.corner(BadgeCorner::TopLeft)` /
+`TopRight` / `BottomLeft` / `BottomRight` picks the corner, `.color(...)` and
+`.text_color(...)` override the fill and glyph colors (text defaults to
+`theme.colors.bg` so it stays readable on chromatic fills).
+
+The badge is an overlay: it is painted on top of the button and never changes
+its size or layout.
 
 ### Credentials form (`secure-types`)
 
