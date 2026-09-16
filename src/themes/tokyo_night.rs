@@ -1,6 +1,5 @@
 //! Tokyo Night (dark). Source: <https://github.com/tokyo-night/tokyo-night-vscode-theme>.
 
-use crate::overlay::OverlayManager;
 use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeSpacing, ThemeVisuals, Typography};
 use crate::visuals::*;
 use egui::{
@@ -49,7 +48,6 @@ const OUTER_MARGIN: i8 = 5;
 pub fn theme() -> Theme {
    Theme {
       dark: true,
-      overlay_manager: OverlayManager::new(),
       image_tint_recommended: true,
       kind: ThemeKind::TokyoNight,
       colors: colors(),

@@ -288,8 +288,6 @@ impl MailApp {
 
 impl eframe::App for MailApp {
    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
-      self.theme.overlay_manager.paint_overlay(ui.ctx(), true);
-
       let space = self.theme.spacing;
 
       Panel::top("header")

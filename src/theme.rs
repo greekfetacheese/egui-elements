@@ -7,7 +7,6 @@
 //! Built-in palettes live in [`crate::themes`]. Slot roles are documented
 //! in the crate `docs/theme.md`.
 
-use crate::overlay::OverlayManager;
 use crate::themes::{
    mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, tokyo_night_light, wasp, wasp_light,
 };
@@ -127,9 +126,6 @@ impl ThemeKind {
 pub struct Theme {
    /// True if the theme is dark
    pub dark: bool,
-   /// Tracks open windows so [`OverlayManager::paint_overlay`] can dim the canvas.
-   #[cfg_attr(feature = "serde", serde(skip))]
-   pub overlay_manager: OverlayManager,
 
    /// True if a tint is recomended to be applied to images
    /// to soften the contrast between the image and the background

@@ -197,8 +197,6 @@ impl DemoApp {
 
 impl eframe::App for DemoApp {
    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
-      self.theme.overlay_manager.paint_overlay(ui.ctx(), true);
-
       Panel::top("header")
          .frame(
             Frame::new()
@@ -274,9 +272,6 @@ impl DemoApp {
 
             let window_btn = Button::new("Open Window").min_size(vec2(120.0, 28.0));
             if ui.add(window_btn).clicked() {
-               if !self.window_open {
-                  self.theme.overlay_manager.window_opened();
-               }
                self.window_open = true;
             }
 
@@ -557,7 +552,6 @@ impl DemoApp {
       let text_color = self.theme.colors.text;
       let muted = self.theme.colors.text_muted;
       let size = self.theme.typography.normal;
-      let badge_text_size = self.theme.typography.normal;
       let button_size = vec2(120.0, 36.0);
 
       ui.spacing_mut().item_spacing = vec2(16.0, 16.0);
@@ -884,9 +878,6 @@ impl DemoApp {
          });
 
       if open != self.window_open {
-         if !open {
-            self.theme.overlay_manager.window_closed();
-         }
          self.window_open = open;
       }
    }
