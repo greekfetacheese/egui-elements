@@ -1,13 +1,20 @@
 use crate::theme::Theme;
 use crate::visuals::LabelVisuals;
 use egui::{
-   Align, Color32, FontSelection, Image, Pos2, Rect, Response, Sense, Stroke, StrokeKind,
+   Align, Color32, FontSelection, Image, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind,
    TextWrapMode, Ui, Vec2, Widget, WidgetText,
    epaint::{RectShape, TextShape},
    style::WidgetVisuals,
    text::LayoutJob,
 };
 use std::sync::Arc;
+
+#[derive(Clone)]
+enum LabelText {
+   Widget(WidgetText),
+   /// One wrapping galley; each [`RichText`] keeps its own style.
+   Sections(Vec<RichText>),
+}
 
 /// Themed text label with an optional trailing (or leading) image.
 ///
@@ -25,7 +32,7 @@ use std::sync::Arc;
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 #[derive(Clone)]
 pub struct Label {
-   text: WidgetText,
+   text: LabelText,
    visuals: Option<LabelVisuals>,
    pub(crate) image: Option<Image<'static>>,
    spacing: f32,
@@ -37,13 +44,14 @@ pub struct Label {
    selected: bool,
    interactive: bool,
    fill_width: bool,
+   font_size: Option<f32>,
 }
 impl Label {
    /// Create a new `Label` with text and an optional image.
    /// By default the image is shown after the text
    pub fn new(text: impl Into<WidgetText>, image: Option<Image<'static>>) -> Self {
       Self {
-         text: text.into(),
+         text: LabelText::Widget(text.into()),
          visuals: None,
          image,
          spacing: 6.0,
@@ -55,7 +63,52 @@ impl Label {
          selected: false,
          interactive: false,
          fill_width: false,
+         font_size: None,
       }
+   }
+
+   /// Mixed-style wrapping paragraph from several [`RichText`] spans.
+   ///
+   /// Unlike [`super::MultiLabel`], the parts share **one** galley, so the
+   /// sentence wraps across style changes. [`RichText::strong`] is a stronger
+   /// color, not a heavier font weight.
+   ///
+   /// Plain strings need [`.into()`](Into::into) when mixed with [`RichText`]:
+   ///
+   /// ```
+   /// # use egui::{RichText, __run_test_ui};
+   /// # use egui_elements::widgets::Label;
+   /// # __run_test_ui(|ui| {
+   /// ui.add(
+   ///    Label::sections(
+   ///       [
+   ///          "Download icons from ".into(),
+   ///          RichText::new("app.com").strong(),
+   ///          " instead of a placeholder.".into(),
+   ///       ],
+   ///       None,
+   ///    )
+   ///    .wrap()
+   ///    .fill_width(true)
+   ///    .interactive(false),
+   /// );
+   /// # });
+   /// ```
+   pub fn sections(
+      parts: impl IntoIterator<Item = impl Into<RichText>>,
+      image: Option<Image<'static>>,
+   ) -> Self {
+      let mut label = Self::new("", image);
+      label.text = LabelText::Sections(parts.into_iter().map(Into::into).collect());
+      label
+   }
+
+   /// Font size for every section.
+   ///
+   /// Overrides per-span sizes from [`RichText::size`].
+   pub fn size(mut self, size: f32) -> Self {
+      self.font_size = Some(size);
+      self
    }
 
    /// Set the visuals of the label
@@ -167,14 +220,35 @@ impl Label {
 
    fn prepare_layout_job(&self, ui: &Ui, wrap_width: f32) -> LayoutJob {
       let wrap_mode = self.wrap_mode.unwrap_or_else(|| ui.wrap_mode());
-      let layout_job = self.text.clone().into_layout_job(
-         ui.style(),
-         FontSelection::Default,
-         ui.text_valign(),
-      );
+      let mut layout_job = match &self.text {
+         LabelText::Widget(text) => {
+            let layout_job = text.clone().into_layout_job(
+               ui.style(),
+               FontSelection::Default,
+               ui.text_valign(),
+            );
+            (*layout_job).clone()
+         }
+         LabelText::Sections(parts) => {
+            let mut job = LayoutJob::default();
+            for part in parts {
+               part.clone().append_to(
+                  &mut job,
+                  ui.style(),
+                  FontSelection::Default,
+                  ui.text_valign(),
+               );
+            }
+            job
+         }
+      };
 
-      // remove the Arc
-      let mut layout_job: LayoutJob = (*layout_job).clone();
+      if let Some(size) = self.font_size {
+         for section in &mut layout_job.sections {
+            section.format.font_id.size = size;
+         }
+      }
+
       match wrap_mode {
          TextWrapMode::Extend => {
             layout_job.wrap.max_width = f32::INFINITY;
@@ -395,5 +469,62 @@ impl Widget for Label {
          }
       }
       response
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn sections_keep_distinct_formats_and_wrap() {
+      egui::__run_test_ui(|ui| {
+         let label = Label::sections(
+            [
+               "Download icons from ".into(),
+               RichText::new("app.com").strong(),
+               " so unknown tokens show an image instead of a placeholder.".into(),
+            ],
+            None,
+         )
+         .size(18.0)
+         .wrap();
+
+         let job = label.prepare_layout_job(ui, 180.0);
+         assert!(
+            job.sections.len() >= 2,
+            "expected mixed styles, got {} section(s)",
+            job.sections.len()
+         );
+         assert!(job.text.contains("app.com"));
+         assert!(
+            job.sections.iter().all(|s| s.format.font_id.size == 18.0),
+            "Label::size should apply to every section"
+         );
+         let strong_color = ui.style().visuals.strong_text_color();
+         assert!(
+            job.sections.iter().any(|s| s.format.color == strong_color),
+            "strong span should keep the strong text color"
+         );
+         assert_eq!(job.wrap.max_width, 180.0);
+      });
+   }
+
+   #[test]
+   fn italics_and_underline_survive() {
+      egui::__run_test_ui(|ui| {
+         let label = Label::sections(
+            [
+               RichText::new("plain "),
+               RichText::new("italics").italics(),
+               RichText::new(" ").underline(),
+               RichText::new("underlined").underline(),
+            ],
+            None,
+         );
+         let job = label.prepare_layout_job(ui, 400.0);
+         assert!(job.sections.iter().any(|s| s.format.italics));
+         assert!(job.sections.iter().any(|s| s.format.underline != Stroke::NONE));
+      });
    }
 }

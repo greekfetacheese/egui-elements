@@ -37,7 +37,8 @@
 //! # Modules
 //!
 //! - [`theme`] / [`themes`] — palettes, [`ThemeKind`](crate::theme::ThemeKind), install
-//! - [`widgets`] — [`Button`](crate::widgets::Button), [`Label`](crate::widgets::Label),
+//! - [`widgets`] — [`Button`](crate::widgets::Button), [`Label`](crate::widgets::Label)
+//!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
 //!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
 //!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
 //!   [`Window`](crate::widgets::Window)

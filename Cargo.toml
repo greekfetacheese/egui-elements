@@ -45,3 +45,6 @@ required-features = ["full"]
 
 [[example]]
 name = "email"
+
+[[example]]
+name = "label_sections"
