@@ -23,7 +23,7 @@
 //! [`ThemeColors::bg`](crate::theme::ThemeColors::bg), matching the theme rule
 //! that chromatic fills carry `bg`-colored glyphs.
 
-use egui::{Align2, Color32, Rect, Stroke, TextWrapMode, TextStyle, Ui, Vec2, WidgetText};
+use egui::{Align2, Color32, Rect, Stroke, TextStyle, TextWrapMode, Ui, Vec2, WidgetText};
 
 #[cfg(test)]
 use egui::Pos2;
@@ -70,7 +70,12 @@ impl BadgeCorner {
    }
 
    pub const fn to_vec() -> &'static [Self] {
-      &[Self::TopLeft, Self::TopRight, Self::BottomLeft, Self::BottomRight]
+      &[
+         Self::TopLeft,
+         Self::TopRight,
+         Self::BottomLeft,
+         Self::BottomRight,
+      ]
    }
 }
 
@@ -175,13 +180,12 @@ impl Badge {
    /// Rect the circle occupies for a laid-out text of `text_size`, inside
    /// `widget_rect`. Pure geometry — shared by painting and tests.
    fn circle_rect(&self, text_size: Vec2, widget_rect: Rect) -> Rect {
-      let diameter = (text_size + Vec2::splat(2.0 * self.padding))
-         .max_elem()
-         .max(self.min_diameter);
-      self
-         .corner
-         .align2()
-         .align_size_within_rect(Vec2::splat(diameter), widget_rect.shrink(self.inset))
+      let diameter =
+         (text_size + Vec2::splat(2.0 * self.padding)).max_elem().max(self.min_diameter);
+      self.corner.align2().align_size_within_rect(
+         Vec2::splat(diameter),
+         widget_rect.shrink(self.inset),
+      )
    }
 
    /// Paint the badge on top of `widget_rect` (usually a widget's response rect).
@@ -248,9 +252,21 @@ mod tests {
       let radius = expected_diameter * 0.5;
 
       let cases = [
-         (BadgeCorner::TopLeft, r.left() + inset + radius, r.top() + inset + radius),
-         (BadgeCorner::TopRight, r.right() - inset - radius, r.top() + inset + radius),
-         (BadgeCorner::BottomLeft, r.left() + inset + radius, r.bottom() - inset - radius),
+         (
+            BadgeCorner::TopLeft,
+            r.left() + inset + radius,
+            r.top() + inset + radius,
+         ),
+         (
+            BadgeCorner::TopRight,
+            r.right() - inset - radius,
+            r.top() + inset + radius,
+         ),
+         (
+            BadgeCorner::BottomLeft,
+            r.left() + inset + radius,
+            r.bottom() - inset - radius,
+         ),
          (
             BadgeCorner::BottomRight,
             r.right() - inset - radius,
@@ -295,11 +311,13 @@ mod tests {
    #[test]
    fn paints_without_panicking() {
       egui::__run_test_ui(|ui| {
-         let response = ui.add(crate::widgets::Button::new("Balance & approvals").badge(
-            Badge::new("3")
-               .corner(BadgeCorner::TopRight)
-               .outline(Stroke::new(1.5, Color32::BLACK)),
-         ));
+         let response = ui.add(
+            crate::widgets::Button::new("Balance & approvals").badge(
+               Badge::new("3")
+                  .corner(BadgeCorner::TopRight)
+                  .outline(Stroke::new(1.5, Color32::BLACK)),
+            ),
+         );
          assert!(response.rect.width() > 0.0);
       });
    }

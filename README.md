@@ -13,15 +13,6 @@ This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
-There are **no crate-root re-exports**. Import from the modules:
-
-```rust
-use egui_elements::theme::{Theme, ThemeKind};
-use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
-use egui_elements::utils::theme_switcher;
-use egui_elements::editor::ThemeEditor;
-```
-
 `Button`, `ComboBox`, and `Window` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
 
 ## Installation
@@ -41,8 +32,8 @@ egui-elements = { version = "0.1", features = ["full"] }
 
 ```rust
 use egui::{Context, Ui};
-use egui_elements::theme::{Theme, ThemeKind};
-use egui_elements::widgets::Button;
+use egui_elements::{Theme, ThemeKind};
+use egui_elements::Button;
 
 fn ui(ctx: &Context, ui: &mut Ui) {
     let mut theme = Theme::new(ThemeKind::TokyoNight);
@@ -60,7 +51,7 @@ Always call `Theme::install` if you switch themes so egui sees the new look:
 
 ```rust
 use egui_elements::editor::ThemeEditor;
-use egui_elements::theme::{Theme, ThemeKind};
+use egui_elements::{Theme, ThemeKind};
 use egui_elements::utils::theme_switcher;
 
 fn chrome(theme: &mut Theme, editor: &mut ThemeEditor, ui: &mut egui::Ui) {
@@ -78,7 +69,7 @@ fn chrome(theme: &mut Theme, editor: &mut ThemeEditor, ui: &mut egui::Ui) {
 
 ```rust
 use egui::{Sense, Ui};
-use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
+use egui_elements::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
 
 fn gallery(ui: &mut Ui, text: &mut String, modal_open: &mut bool) {
     ui.add(Button::new("Primary"));
@@ -115,7 +106,7 @@ Attach a notification `Badge` to a corner of a `Button` to signal unseen content
 behind it - e.g. the number changes:
 
 ```rust
-use egui_elements::widgets::{Badge, BadgeCorner, Button};
+use egui_elements::{Badge, BadgeCorner, Button};
 
 let changes = 3;
 ui.add(

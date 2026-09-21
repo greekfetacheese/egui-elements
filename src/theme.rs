@@ -141,7 +141,7 @@ pub struct Theme {
    pub visuals: ThemeVisuals,
    /// Font sizes used by this crate's widgets and the demo.
    pub typography: Typography,
-   
+
    /// Layout rhythm (gaps between siblings and groups).
    ///
    /// Widget chrome padding stays on [`Theme::inner_margin`] /

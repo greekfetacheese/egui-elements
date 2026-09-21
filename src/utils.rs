@@ -196,7 +196,11 @@ pub fn remap_frame_visuals(
 ) {
    remap_if_eq(&mut visuals.bg_hover, old_hover, new_hover);
    remap_if_eq(&mut visuals.bg_click, old_click, new_click);
-   remap_if_eq(&mut visuals.bg_selected, old_highlight, new_highlight);
+   remap_if_eq(
+      &mut visuals.bg_selected,
+      old_highlight,
+      new_highlight,
+   );
    remap_if_eq(
       &mut visuals.border_hover.color,
       old_highlight,

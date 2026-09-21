@@ -18,7 +18,10 @@
 #[cfg(feature = "secure-types")]
 mod input_field;
 
-#[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
+#[cfg(all(
+   feature = "qr-scanner",
+   any(target_os = "linux", target_os = "windows")
+))]
 mod qr_scanner;
 
 #[cfg(feature = "secure-types")]
@@ -36,7 +39,10 @@ pub use secure_types;
 #[cfg(feature = "secure-types")]
 pub use input_field::SecureInputField;
 
-#[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
+#[cfg(all(
+   feature = "qr-scanner",
+   any(target_os = "linux", target_os = "windows")
+))]
 pub use qr_scanner::QRScanner;
 
 #[cfg(feature = "secure-types")]

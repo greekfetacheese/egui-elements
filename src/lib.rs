@@ -5,20 +5,12 @@
 //! editor, and a few higher-level components (credentials form, QR image,
 //! Linux/Windows QR scanner).
 //!
-//! There are no crate-root re-exports. Import from the modules:
-//!
-//! ```
-//! use egui_elements::theme::{Theme, ThemeKind};
-//! use egui_elements::widgets::{Button, ComboBox, Label, Modal, SecureTextEdit, Window};
-//! use egui_elements::utils::theme_switcher;
-//! ```
-//!
 //! # Quick start
 //!
 //! ```no_run
 //! use egui::{Context, Ui};
-//! use egui_elements::theme::{Theme, ThemeKind};
-//! use egui_elements::widgets::Button;
+//! use egui_elements::{Theme, ThemeKind};
+//! use egui_elements::Button;
 //!
 //! fn ui(ctx: &Context, ui: &mut Ui) {
 //!     let mut theme = Theme::new(ThemeKind::TokyoNight);
@@ -81,7 +73,7 @@ pub mod visuals;
 pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
-pub use widgets::{Button, ComboBox, Frame, Label, Modal, MultiLabel, Window};
+pub use widgets::{Badge, BadgeCorner, Button, ComboBox, Frame, Label, Modal, MultiLabel, Window};
 
 #[cfg(feature = "secure-types")]
 pub use widgets::SecureTextEdit;
@@ -89,7 +81,10 @@ pub use widgets::SecureTextEdit;
 #[cfg(any(feature = "secure-types", feature = "lucide"))]
 pub use egui_lucide;
 
-#[cfg(all(feature = "qr-scanner", any(target_os = "linux", target_os = "windows")))]
+#[cfg(all(
+   feature = "qr-scanner",
+   any(target_os = "linux", target_os = "windows")
+))]
 pub use components::QRScanner;
 
 #[cfg(feature = "secure-types")]

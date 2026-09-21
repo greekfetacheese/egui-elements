@@ -169,22 +169,22 @@ pub fn frame2(colors: &ThemeColors) -> Frame {
 }
 
 pub fn frame2_visuals(colors: &ThemeColors) -> FrameVisuals {
-    FrameVisuals {
-        bg: colors.bg,
-        bg_hover: colors.hover,
-        bg_click: colors.bg,
-        bg_selected: colors.highlight,
-        border: Stroke::NONE,
-        border_hover: Stroke::new(0.0, colors.highlight),
-        border_click: Stroke::new(0.0, colors.highlight),
-        corner_radius: CornerRadius::same(CORNER_RADIUS),
-        shadow: Shadow {
-            offset: (0, 0).into(),
-            blur: 2,
-            spread: 0,
-            color: colors.border,
-        },
-    }
+   FrameVisuals {
+      bg: colors.bg,
+      bg_hover: colors.hover,
+      bg_click: colors.bg,
+      bg_selected: colors.highlight,
+      border: Stroke::NONE,
+      border_hover: Stroke::new(0.0, colors.highlight),
+      border_click: Stroke::new(0.0, colors.highlight),
+      corner_radius: CornerRadius::same(CORNER_RADIUS),
+      shadow: Shadow {
+         offset: (0, 0).into(),
+         blur: 2,
+         spread: 0,
+         color: colors.border,
+      },
+   }
 }
 
 pub fn button_visuals() -> ButtonVisuals {

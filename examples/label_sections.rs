@@ -39,11 +39,7 @@ impl App {
       }
    }
 
-   fn paragraph(
-      ui: &mut Ui,
-      size: f32,
-      parts: impl IntoIterator<Item = RichText>,
-   ) {
+   fn paragraph(ui: &mut Ui, size: f32, parts: impl IntoIterator<Item = RichText>) {
       ui.add(
          Label::sections(parts, None)
             .size(size)
