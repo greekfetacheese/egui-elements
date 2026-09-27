@@ -884,7 +884,6 @@ impl DemoApp {
 
    fn show_modal(&mut self, ui: &mut Ui) {
       let mut open = self.modal_open;
-      let mut close = false;
 
       let theme = Theme::current(ui.ctx());
       let frame = theme.window_frame.fill(theme.frame1.fill);
@@ -914,10 +913,6 @@ impl DemoApp {
                if ui.add(button).clicked() {}
             });
          });
-
-      if close {
-         open = false;
-      }
       self.modal_open = open;
    }
 }

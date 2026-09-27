@@ -21,6 +21,10 @@ use egui::{
 /// The only behavior change: [`Self::title_frame`] fill is honored even when
 /// this window is the top layer. Stock egui replaces that fill from
 /// `widgets.open`.
+/// 
+/// 
+/// ### This misbehavior is fixed in egui 0.36.2 - https://github.com/emilk/egui/pull/8400
+/// 
 ///
 /// ```
 /// # use egui::__run_test_ctx;
