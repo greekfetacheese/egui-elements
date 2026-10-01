@@ -4,7 +4,7 @@
 //! Run with: `cargo run --example demo --features full`
 
 use eframe::egui::*;
-use egui_elements::components::{CredentialsForm, QrImage, SecureInputField};
+use egui_elements::components::{CredentialsForm, QrEncoding, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
 use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
@@ -12,6 +12,10 @@ use egui_elements::utils;
 use egui_elements::widgets::{
    Badge, BadgeCorner, Button, ComboBox, Label, Modal, SecureTextEdit, Window,
 };
+
+/// Display budget for the demo's QR symbol. The raster is built for this size and
+/// drawn at its natural size, so a scanner sees crisp module edges.
+const QR_DISPLAY_PX: u32 = 140;
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
@@ -154,9 +158,13 @@ impl DemoApp {
          text_password: String::from("hunter2"),
          credentials,
          secure_field,
-         qr: QrImage::new(
+         qr: QrImage::with_encoding(
             "egui-elements",
             "bytes://egui-elements-demo".to_string(),
+            QrEncoding {
+               target_px: QR_DISPLAY_PX,
+               ..Default::default()
+            },
          ),
       }
    }
@@ -831,7 +839,14 @@ impl DemoApp {
                         let text = self.secure_field.text();
 
                         let data = text.unlock_str(|s| s.to_string());
-                        let new_qr = QrImage::new(&data, uri);
+                        let new_qr = QrImage::with_encoding(
+                           &data,
+                           uri,
+                           QrEncoding {
+                              target_px: QR_DISPLAY_PX,
+                              ..Default::default()
+                           },
+                        );
                         self.qr = new_qr;
                      }
                   }
@@ -842,7 +857,11 @@ impl DemoApp {
                            .color(self.theme.colors.error),
                      );
                   } else {
-                     ui.add(self.qr.image().fit_to_exact_size(vec2(140.0, 140.0)));
+                     // Draw at the raster's own size: the symbol is built from
+                     // whole modules, so this needs no resampling and the module
+                     // edges stay sharp for a scanner.
+                     let size = self.qr.image_size_pt(ui.ctx().pixels_per_point());
+                     ui.add(self.qr.image().fit_to_exact_size(size));
                   }
                });
             });

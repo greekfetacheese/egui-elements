@@ -11,7 +11,10 @@ use std::sync::{
    atomic::{AtomicBool, AtomicI32, Ordering},
 };
 use std::time::{Duration, Instant};
-use xcap::{Monitor, image::DynamicImage};
+use xcap::{
+   Monitor,
+   image::{DynamicImage, GrayImage},
+};
 
 type Error = Box<dyn std::error::Error>;
 
@@ -20,6 +23,10 @@ const VIEWPORT_ID: &str = "qr_scanner";
 const HELP_HEIGHT_PT: f32 = 124.0;
 #[cfg(target_os = "windows")]
 const HELP_MIN_WIDTH_PT: f32 = 360.0;
+/// Gap between the help frame and the capture box. On Linux the overlay is part
+/// of the screenshot, so the frame has to stay clear of the captured pixels.
+#[cfg(not(target_os = "windows"))]
+const HELP_GAP_PT: f32 = 8.0;
 const MIN_CAPTURE_SIZE: i32 = 40;
 
 #[cfg(target_os = "windows")]
@@ -549,12 +556,23 @@ impl QRScanner {
             let stroke_kind = StrokeKind::Outside;
             painter.rect_stroke(rect, 0.0, stroke, stroke_kind);
 
-            // Show help frame above the capture area
-            let help_pos = pos2(rel_x_pt, rel_y_pt - 100.0); // Offset above
+            // The help frame has to stay out of `rect`: this overlay is part
+            // of the screenshot on Linux (the Windows path excludes its window
+            // from capture), so a frame pixel painted inside the capture box
+            // ends up in the decoded image. Anchor the frame by the edge that
+            // faces the box and put it on the roomier side — it grows when the
+            // error line shows, so its height cannot be assumed (assuming it
+            // pushed the frame onto the top of the box).
+            let (pivot, help_pos) = help_placement(rect, ui.ctx().content_rect());
             let err = last_error.lock().ok().and_then(|g| g.clone());
-            egui::Area::new("qr_help".into()).fixed_pos(help_pos).show(ui.ctx(), |ui| {
-               paint_help(ui, err.as_deref());
-            });
+            egui::Area::new("qr_help".into())
+               .pivot(pivot)
+               .fixed_pos(help_pos)
+               // Never let egui clamp the frame back onto the box.
+               .constrain(false)
+               .show(ui.ctx(), |ui| {
+                  paint_help(ui, err.as_deref());
+               });
 
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                open.store(false, Ordering::Relaxed);
@@ -571,6 +589,27 @@ impl QRScanner {
    /// Clone of the last successful decode, if any.
    pub fn get_result(&self) -> Option<SecureString> {
       self.result.lock().unwrap().clone()
+   }
+
+   /// Capture box size in device pixels.
+   pub fn capture_size(&self) -> i32 {
+      self.capture_size.load(Ordering::Relaxed)
+   }
+
+   /// Set the capture box size in device pixels, clamped to the minimum.
+   ///
+   /// A host that knows how big the symbol it is asking for is can size the box to
+   /// it, instead of making the user press `+` until it fits.
+   pub fn set_capture_size(&self, px: i32) {
+      self.capture_size.store(px.max(MIN_CAPTURE_SIZE), Ordering::Relaxed);
+   }
+
+   /// The most recent decode failure, if the last capture did not decode.
+   ///
+   /// The overlay shows this in its tip; it is also here for hosts that want to
+   /// report why a scan failed.
+   pub fn last_error(&self) -> Option<String> {
+      self.last_error.lock().ok().and_then(|error| error.clone())
    }
 }
 
@@ -593,9 +632,42 @@ fn handle_overlay_keys(ctx: &Context, open: &Arc<AtomicBool>, capture_size: &Arc
    });
 }
 
+/// Place the help frame on the roomier side of the capture box, anchored by the
+/// edge that faces the box.
+///
+/// The returned [`egui::Align2`] is the frame's [`egui::Area`] pivot, so that
+/// facing edge sits [`HELP_GAP_PT`] away from `capture` however tall the frame
+/// is.
+#[cfg(not(target_os = "windows"))]
+fn help_placement(capture: Rect, screen: Rect) -> (egui::Align2, egui::Pos2) {
+   let above = (capture.min.y - HELP_GAP_PT - screen.min.y).max(0.0);
+   let below = (screen.max.y - capture.max.y - HELP_GAP_PT).max(0.0);
+   if above >= below {
+      (
+         egui::Align2::LEFT_BOTTOM,
+         pos2(capture.min.x, capture.min.y - HELP_GAP_PT),
+      )
+   } else {
+      (
+         egui::Align2::LEFT_TOP,
+         pos2(capture.min.x, capture.max.y + HELP_GAP_PT),
+      )
+   }
+}
+
+/// Chrome of the help (tip) frame.
+///
+/// No window shadow: a shadow is painted *outside* the frame's rect, so on Linux
+/// it would spill into the capture box (the overlay is part of the screenshot)
+/// and darken the top of every captured image. Without it the frame paints
+/// strictly inside its rect, which is all [`help_placement`] has to keep clear
+/// of the capture box.
+fn help_frame(style: &egui::Style) -> Frame {
+   Frame::window(style).inner_margin(8.0).shadow(egui::Shadow::NONE)
+}
+
 fn paint_help(ui: &mut egui::Ui, last_error: Option<&str>) {
-   let frame = Frame::window(ui.style()).inner_margin(8.0);
-   frame.show(ui, |ui| {
+   help_frame(ui.style()).show(ui, |ui| {
       ui.spacing_mut().item_spacing.y = 4.0;
       ui.label(RichText::new("Move the mouse to target the QR code.").size(13.0));
       ui.label(RichText::new("+ / −  resize the capture box").size(13.0));
@@ -736,15 +808,234 @@ pub fn capture_and_decode(capture_size: i32, monitor: &Monitor) -> Result<Secure
       img.zeroize();
    }
 
-   let mut prepared = PreparedImage::prepare(luma);
+   decode_luma(luma)
+}
+
+/// Decode the first QR symbol in a luma capture.
+///
+/// `luma` is wiped before returning. The detector owns the copy it is given and
+/// wipes that on drop.
+fn decode_luma(mut luma: GrayImage) -> Result<SecureString, Error> {
+   let mut prepared = PreparedImage::prepare(luma.clone());
    let grids = prepared.detect_grids();
 
-   if grids.is_empty() {
-      return Err(format!("No QR grids detected (try adjusting size/position)").into());
+   let mut failure: Option<String> = None;
+
+   // Try every grid found, not only the first: a spurious grid can come back
+   // ahead of the symbol being aimed at.
+   for grid in &grids {
+      match grid.decode() {
+         Ok((_, content)) => {
+            luma.zeroize();
+            return Ok(SecureString::from(content));
+         }
+         Err(e) => failure = Some(e.to_string()),
+      }
    }
 
-   let (_, content) = grids[0].decode()?;
-   let sec_string = SecureString::from(content);
+   luma.zeroize();
 
-   Ok(sec_string)
+   // "Nothing there" and "found it but cannot read it" are different problems for
+   // the user: aiming, versus the symbol itself being too small or too crowded.
+   Err(match failure {
+      Some(e) => format!("QR code found but not readable ({e}) — make it bigger on screen").into(),
+      None => "No QR code found — centre the box on the code".into(),
+   })
+}
+
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests {
+   use super::*;
+   use egui::Align2;
+
+   fn screen() -> Rect {
+      Rect::from_min_max(pos2(0.0, 0.0), pos2(1920.0, 1080.0))
+   }
+
+   /// A default-size capture box (`capture_size` 250) with its top at `top`.
+   fn capture_box(top: f32) -> Rect {
+      Rect::from_min_size(pos2(1208.0, top), vec2(250.0, 250.0))
+   }
+
+   /// Where the frame ends up once [`egui::Area`] applies the pivot.
+   fn frame_rect(capture: Rect, size: egui::Vec2) -> Rect {
+      let (pivot, pos) = help_placement(capture, screen());
+      pivot.anchor_size(pos, size)
+   }
+
+   #[test]
+   fn help_frame_never_covers_the_capture_box() {
+      // Frame heights without and with the error line, and with a taller
+      // theme font.
+      for top in [0.0, 8.0, 60.0, 200.0, 415.0, 455.0, 700.0, 830.0] {
+         for height in [46.0, 104.0, 300.0] {
+            let capture = capture_box(top);
+            let frame = frame_rect(capture, vec2(247.0, height));
+            assert!(
+               !frame.intersects(capture),
+               "box top {top}, frame height {height}: {frame:?} covers {capture:?}"
+            );
+         }
+      }
+   }
+
+   #[test]
+   fn help_frame_favours_the_roomier_side() {
+      // Mid-screen box: above, the side it has always been on.
+      let capture = capture_box(455.0);
+      assert_eq!(
+         help_placement(capture, screen()),
+         (
+            Align2::LEFT_BOTTOM,
+            pos2(capture.min.x, capture.min.y - HELP_GAP_PT)
+         )
+      );
+
+      // Box hugging the top of the screen: below, where it is not clipped.
+      let capture = capture_box(20.0);
+      assert_eq!(
+         help_placement(capture, screen()),
+         (
+            Align2::LEFT_TOP,
+            pos2(capture.min.x, capture.max.y + HELP_GAP_PT)
+         )
+      );
+   }
+
+   #[test]
+   fn help_frame_paints_only_inside_its_rect() {
+      // A window shadow is painted outside the frame rect: on Linux that paint
+      // lands in the captured image and darkens its top rows, even when
+      // `help_placement` keeps the rect itself clear of the capture box.
+      assert_eq!(
+         help_frame(&egui::Style::default()).shadow,
+         egui::Shadow::NONE
+      );
+   }
+
+   #[test]
+   fn help_frame_fits_on_screen_where_there_is_room() {
+      let capture = capture_box(455.0);
+      assert!(screen().contains_rect(frame_rect(capture, vec2(247.0, 104.0))));
+
+      let capture = capture_box(20.0);
+      assert!(screen().contains_rect(frame_rect(capture, vec2(247.0, 104.0))));
+   }
+
+   /// The symbol's edge must not touch whatever surface it is drawn on.
+   ///
+   /// This is the bug behind "the scanner struggles with dense codes": on a dark
+   /// card a borderless symbol sits straight against dark pixels, the scan
+   /// thresholds its edge against them and detects nothing at all. Measured on a
+   /// real screen with a 61-module symbol in a 250 px capture: 0 grids without a
+   /// quiet zone, found and decoded with one. The quiet zone therefore belongs in
+   /// the raster — the app's surface is not ours to change.
+   #[cfg(feature = "qr-image")]
+   #[test]
+   fn quiet_zone_keeps_a_symbol_readable_on_a_dark_surface() {
+      use crate::components::qr_image::{QrEncoding, data_to_qr};
+      use image::{GrayImage, Luma};
+
+      let payload = "0123456789abcdef".repeat(8);
+
+      // The symbol alone, framed by the same dark surface a card in a dark UI has.
+      let on_dark_card = |quiet_zone| -> GrayImage {
+         let encoding = QrEncoding {
+            target_px: 244,
+            quiet_zone,
+            ..Default::default()
+         };
+         let (png, _, _) = data_to_qr(&payload, encoding).unwrap();
+         let symbol = image::load_from_memory_with_format(&png, image::ImageFormat::Png)
+            .unwrap()
+            .to_luma8();
+
+         let (symbol_w, symbol_h) = symbol.dimensions();
+         let border = 16;
+         let mut card = GrayImage::from_pixel(
+            symbol_w + border * 2,
+            symbol_h + border * 2,
+            Luma([27]),
+         );
+         for y in 0..symbol_h {
+            for x in 0..symbol_w {
+               card.put_pixel(x + border, y + border, *symbol.get_pixel(x, y));
+            }
+         }
+         card
+      };
+
+      let decode = |card: &GrayImage| -> Option<String> {
+         let mut prepared = PreparedImage::prepare(card.clone());
+         prepared
+            .detect_grids()
+            .iter()
+            .find_map(|grid| grid.decode().ok())
+            .map(|(_, content)| content)
+      };
+
+      assert_eq!(
+         decode(&on_dark_card(4)).as_deref(),
+         Some(payload.as_str()),
+         "a symbol with its quiet zone has to be found on a dark surface"
+      );
+      assert_eq!(
+         decode(&on_dark_card(0)),
+         None,
+         "without a quiet zone the dark surface touches the symbol's edge"
+      );
+   }
+
+   /// A crisp raster decodes across the whole density range, including modules a
+   /// couple of pixels wide — provided the raster is not resampled on the way to
+   /// the screen.
+   #[cfg(feature = "qr-image")]
+   #[test]
+   fn dense_symbol_decodes_at_any_module_size() {
+      use crate::components::qr_image::{QrEncoding, QrImage, data_to_qr};
+
+      // 128 hex characters, like a SHA-512 digest: 61 modules at ECC High.
+      let payload = "0123456789abcdef".repeat(8);
+
+      for module_px in [9_u32, 6, 4, 3, 2] {
+         let encoding = QrEncoding {
+            target_px: 64 * module_px,
+            ..Default::default()
+         };
+         let (png, modules, raster_module_px) = data_to_qr(&payload, encoding).unwrap();
+
+         // What the component advertises must be what it drew.
+         let qr = QrImage::with_encoding(
+            &payload,
+            format!("bytes://dense-{module_px}"),
+            encoding,
+         );
+         assert_eq!(qr.module_px(), raster_module_px);
+         assert_eq!(
+            qr.image_size().x as u32,
+            (modules + qr.quiet_zone() * 2) * raster_module_px
+         );
+
+         let luma = image::load_from_memory_with_format(&png, image::ImageFormat::Png)
+            .unwrap()
+            .to_luma8();
+
+         // What the detector sees without any help from the component.
+         let mut prepared = PreparedImage::prepare(luma.clone());
+         let raw_grids = prepared.detect_grids().len();
+
+         let decoded = decode_luma(luma).ok();
+         let got = decoded.as_ref().map(|s| s.unlock_str(|s| s.to_owned()));
+
+         println!(
+            "{raster_module_px} px/module ({modules} modules): raw grids {raw_grids}, decoded {}",
+            got.is_some()
+         );
+         assert_eq!(
+            got.as_deref(),
+            Some(payload.as_str()),
+            "{raster_module_px} px per module"
+         );
+      }
+   }
 }

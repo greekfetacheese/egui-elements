@@ -49,7 +49,7 @@ pub use qr_scanner::QRScanner;
 pub use virtual_keyboard::VirtualKeyboard;
 
 #[cfg(feature = "qr-image")]
-pub use qr_image::QrImage;
+pub use qr_image::{QrEcc, QrEncoding, QrImage};
 
 #[cfg(feature = "secure-types")]
 pub use credentials_form::CredentialsForm;
