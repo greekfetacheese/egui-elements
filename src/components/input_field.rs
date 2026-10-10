@@ -184,9 +184,10 @@ impl SecureInputField {
          ui,
          self.id,
          &mut self.text,
-         &mut hidden,
+         Some(&mut hidden),
          self.min_size,
          self.inner_margin,
+         WidgetText::default(),
          self.icon_size,
          self.qr_enabled,
       );
@@ -218,31 +219,30 @@ impl SecureInputField {
    }
 }
 
-/// A themed single-line input field backed by any [`TextBuffer`].
+/// A themed single-line input field backed by an owned [`String`].
 ///
-/// Same chrome as [`SecureInputField`] — the field name above the row and a
-/// Lucide `Eye` / `EyeOff` show/hide toggle — but it **borrows** its buffer
-/// instead of owning a [`SecureString`], so it can drive a plain [`String`]
-/// (or any other [`TextBuffer`]) for text that is not a secret.
+/// Same chrome as [`SecureInputField`] minus the show/hide toggle — the field
+/// name above the row and the Lucide `ScanQrCode` button — but the buffer is a
+/// plain [`String`] instead of a [`SecureString`]. The text is never masked:
+/// this field is for non-sensitive input.
 ///
-/// Because it only borrows the buffer it allocates nothing and does not zeroize
-/// on [`Self::erase`]. Use [`SecureInputField`] for secrets.
-///
-/// The QR button (Linux/Windows + `qr-scanner`) is the same as
-/// [`SecureInputField`]'s, but a decode is copied into the plain buffer and so is
-/// no longer wiped — fine for public data such as a recipient address, not for
+/// Owning its buffer is what lets a host **store** the field in its UI state,
+/// and that is what makes the QR button work: the scanner's live state lives on
+/// the field, so the field has to survive across frames for a scan to land. It
+/// does not zeroize on drop or [`Self::erase`]. Use [`SecureInputField`] for
 /// secrets.
 ///
 /// The host app must register egui's SVG loader once:
 /// `egui_extras::install_image_loaders(ctx)` with the `egui_extras` `svg` feature.
-pub struct InputField<'a> {
+pub struct InputField {
    open: bool,
-   text: &'a mut dyn TextBuffer,
-   text_hidden: bool,
+   text: String,
    id: &'static str,
    icon_size: Vec2,
    min_size: Vec2,
    inner_margin: Option<Margin>,
+   /// Placeholder shown while the buffer is empty.
+   hint_text: WidgetText,
    #[cfg(all(
       feature = "qr-scanner",
       any(target_os = "linux", target_os = "windows")
@@ -251,29 +251,23 @@ pub struct InputField<'a> {
    qr_enabled: bool,
 }
 
-impl<'a> InputField<'a> {
-   /// Create a new input field that borrows `text`.
+impl InputField {
+   /// Create a new input field with an empty buffer.
    ///
    /// # Arguments
    ///
-   /// * `id` - The id of the input field, this will also be used as the name of the input field
-   /// * `text` - The buffer to edit, e.g. a `String`
-   /// * `text_hidden` - Whether the text is masked
+   /// * `id` - The id of the input field; also the field-name label above the row
+   ///   (an empty `id` draws no label)
    /// * `open` - Whether the input field is open
-   pub fn new(
-      id: &'static str,
-      text: &'a mut dyn TextBuffer,
-      text_hidden: bool,
-      open: bool,
-   ) -> Self {
+   pub fn new(id: &'static str, open: bool) -> Self {
       Self {
          open,
-         text,
-         text_hidden,
+         text: String::new(),
          id,
          icon_size: vec2(20.0, 20.0),
          min_size: vec2(300.0, 20.0),
          inner_margin: None,
+         hint_text: WidgetText::default(),
          #[cfg(all(
             feature = "qr-scanner",
             any(target_os = "linux", target_os = "windows")
@@ -281,6 +275,17 @@ impl<'a> InputField<'a> {
          qr_scanner: QRScanner::new(),
          qr_enabled: true,
       }
+   }
+
+   /// Builder: placeholder shown while the buffer is empty.
+   pub fn hint_text(mut self, hint_text: impl Into<WidgetText>) -> Self {
+      self.hint_text = hint_text.into();
+      self
+   }
+
+   /// Set the placeholder shown while the buffer is empty.
+   pub fn set_hint_text(&mut self, hint_text: impl Into<WidgetText>) {
+      self.hint_text = hint_text.into();
    }
 
    /// Whether the field is currently shown.
@@ -293,30 +298,44 @@ impl<'a> InputField<'a> {
       self.open = true;
    }
 
-   /// Hide the field. Does not erase the text.
+   /// Hide the field. Does not erase the text. Stops any open QR overlay.
    pub fn close(&mut self) {
       self.open = false;
+      self.close_qr_scanner();
    }
 
-   /// Delete the whole buffer. Does not zeroize; use [`SecureInputField::erase`]
-   /// for secrets.
+   /// Stop an open QR overlay, if any.
+   ///
+   /// The scanner keeps a capture worker running while an overlay is open, and
+   /// the field keeps the scanner alive — so a host that stops drawing the field
+   /// (hides it, replaces it in the layout, …) must call this, or that worker
+   /// would outlive the field that opened it.
+   pub fn close_qr_scanner(&mut self) {
+      #[cfg(all(
+         feature = "qr-scanner",
+         any(target_os = "linux", target_os = "windows")
+      ))]
+      self.qr_scanner.close();
+   }
+
+   /// Clear the buffer. Does not zeroize; use [`SecureInputField::erase`] for
+   /// secrets.
    pub fn erase(&mut self) {
-      let len = self.text.char_len();
-      self.text.delete_text_char_range(0..len);
+      self.text.clear();
    }
 
-   /// A copy of the buffer contents.
-   pub fn text(&self) -> String {
-      self.text.to_string()
+   /// The buffer contents.
+   pub fn text(&self) -> &str {
+      &self.text
    }
 
    /// Replace the buffer contents with `text`.
    pub fn set_text(&mut self, text: &str) {
-      self.erase();
-      self.text.insert_text_at_char_idx(0, text);
+      self.text.clear();
+      self.text.push_str(text);
    }
 
-   /// Builder: Lucide icon size for the show/hide button.
+   /// Builder: Lucide icon size for the QR button.
    ///
    /// Display size is `size.x` (icons are square).
    pub fn icon_size(mut self, size: Vec2) -> Self {
@@ -341,19 +360,9 @@ impl<'a> InputField<'a> {
       self
    }
 
-   /// Whether the text is currently masked.
-   pub fn is_text_hidden(&self) -> bool {
-      self.text_hidden
-   }
-
    /// Set the id of this input field
    pub fn set_id(&mut self, id: &'static str) {
       self.id = id;
-   }
-
-   /// Set whether this input field is hidden
-   pub fn set_text_hidden(&mut self, text_hidden: bool) {
-      self.text_hidden = text_hidden;
    }
 
    /// Set the minimum size of this input field
@@ -396,15 +405,14 @@ impl<'a> InputField<'a> {
          return None;
       }
 
-      let mut hidden = self.text_hidden;
-
       let (output, qr_clicked) = show_field_chrome(
          ui,
          self.id,
-         &mut *self.text,
-         &mut hidden,
+         &mut self.text,
+         None,
          self.min_size,
          self.inner_margin,
+         self.hint_text.clone(),
          self.icon_size,
          self.qr_enabled,
       );
@@ -430,8 +438,6 @@ impl<'a> InputField<'a> {
          any(target_os = "linux", target_os = "windows")
       )))]
       let _ = qr_clicked;
-
-      self.set_text_hidden(hidden);
 
       Some(output)
    }
@@ -469,11 +475,15 @@ fn drive_qr_scanner(
 }
 
 /// Shared chrome for [`SecureInputField`] and [`InputField`]: the field name
-/// above the row, a single-line [`SecureTextEdit`], and the Lucide `Eye` /
-/// `EyeOff` show/hide toggle — plus the QR button when `qr_enabled` and the
-/// `qr-scanner` feature is active on Linux/Windows.
+/// above the row, a single-line [`SecureTextEdit`], the Lucide `Eye` / `EyeOff`
+/// show/hide toggle when `hidden` is `Some` — plus the QR button when
+/// `qr_enabled` and the `qr-scanner` feature is active on Linux/Windows.
 ///
-/// `hidden` is toggled in place; the caller stores it back on its field.
+/// An empty `id` skips the field-name label: the host already labels the field.
+///
+/// `hidden` is the masking state and the flag behind the toggle; `None` means
+/// the field is never masked and no toggle is drawn. It is toggled in place, and
+/// the caller stores it back on its field.
 ///
 /// Returns the edit output and whether the QR button was clicked. The caller
 /// owns the scanner lifecycle, so the scanner stays out of this helper.
@@ -482,25 +492,29 @@ fn show_field_chrome(
    ui: &mut Ui,
    id: &'static str,
    text: &mut dyn TextBuffer,
-   hidden: &mut bool,
+   mut hidden: Option<&mut bool>,
    min_size: Vec2,
    inner_margin: Option<Margin>,
+   hint_text: WidgetText,
    icon_size: Vec2,
    qr_enabled: bool,
 ) -> (SecureTextEditOutput, bool) {
    let theme = Theme::current(ui.ctx());
-   let field_name = id.to_string();
 
-   ui.label(RichText::new(field_name).size(theme.typography.large));
+   if !id.is_empty() {
+      ui.label(RichText::new(id).size(theme.typography.large));
+   }
 
    let margin = inner_margin.unwrap_or_else(|| Margin::same(theme.inner_margin));
    let row_height = (theme.typography.normal + margin.sum().y).max(min_size.y);
    let row_size = vec2(min_size.x, row_height);
 
+   let password = hidden.as_deref().copied().unwrap_or(false);
    let text_edit = SecureTextEdit::singleline(text)
       .min_size(min_size)
       .margin(margin)
-      .password(*hidden)
+      .hint_text(hint_text)
+      .password(password)
       .font(FontId::proportional(theme.typography.normal));
 
    #[cfg_attr(
@@ -519,10 +533,12 @@ fn show_field_chrome(
          let output = text_edit.show(ui);
 
          let text_color = theme.colors.text;
-         let icon = if *hidden { Lucide::EyeOff } else { Lucide::Eye };
-         let img = icon.size(icon_size.x).color(text_color).image();
-         if ui.add(Button::image(img)).clicked() {
-            *hidden = !*hidden;
+         if let Some(state) = hidden.as_deref_mut() {
+            let icon = if *state { Lucide::EyeOff } else { Lucide::Eye };
+            let img = icon.size(icon_size.x).color(text_color).image();
+            if ui.add(Button::image(img)).clicked() {
+               *state = !*state;
+            }
          }
 
          #[cfg(all(
@@ -558,8 +574,7 @@ mod tests {
 
    #[test]
    fn input_field_drives_a_plain_string() {
-      let mut buffer = String::new();
-      let mut field = InputField::new("Name", &mut buffer, false, true);
+      let mut field = InputField::new("Name", true);
 
       field.set_text("hello");
       assert_eq!(field.text(), "hello");

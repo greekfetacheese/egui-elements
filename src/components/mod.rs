@@ -5,7 +5,7 @@
 //! | Type | Feature | Notes |
 //! |------|---------|-------|
 //! | [`SecureInputField`] | `secure-types` | Masked field with Lucide show/hide; optional QR fill on Linux/Windows |
-//! | [`InputField`] | `secure-types` | Non-secret sibling; borrows any `TextBuffer` (e.g. `String`), Lucide show/hide + QR fill |
+//! | [`InputField`] | `secure-types` | Non-secret sibling; owns a `String` buffer, QR button (no masking) |
 //! | [`CredentialsForm`] | `secure-types` | Username / password / confirm + optional virtual keyboard |
 //! | [`VirtualKeyboard`] | `secure-types` | On-screen keyboard writing into a `SecureString` |
 //! | [`QrImage`] | `qr-image` | Encode text as a PNG QR `egui::Image` |
