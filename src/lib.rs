@@ -88,7 +88,7 @@ pub use egui_lucide;
 pub use components::QRScanner;
 
 #[cfg(feature = "secure-types")]
-pub use components::{CredentialsForm, SecureInputField, VirtualKeyboard};
+pub use components::{CredentialsForm, InputField, SecureInputField, VirtualKeyboard};
 
 #[cfg(feature = "qr-image")]
 pub use components::QrImage;
