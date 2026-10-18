@@ -5,7 +5,7 @@
 use egui::{Color32, Context, Id, LayerId, Order, Pos2, Rect, Vec2};
 use std::ops::RangeInclusive;
 
-use super::rng::ParticleRng;
+use super::super::shared::{ParticleLayer, ParticleRng, ordered, resolve_target};
 use super::settings::SnowSettings;
 
 #[derive(Clone)]
@@ -35,29 +35,6 @@ struct Snowflake {
    size: f32,
    /// Oscillation phase
    phase: f32,
-}
-
-/// Layer the snow effect is painted on.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SnowLayer {
-   /// Behind everything (`Order::Background`).
-   Background,
-   /// In front of windows (`Order::Foreground`).
-   Foreground,
-   /// On top of everything including debug/tooltips (`Order::Debug`).
-   Top,
-}
-
-impl SnowLayer {
-   /// Human-readable name, matching the settings window labels.
-   pub fn to_str(&self) -> &str {
-      match self {
-         SnowLayer::Background => "Background",
-         SnowLayer::Foreground => "Foreground",
-         SnowLayer::Top => "Top",
-      }
-   }
 }
 
 /// A configurable snow effect for egui.
@@ -116,9 +93,9 @@ impl Snow {
          .wind(settings.wind);
 
       match settings.layer {
-         SnowLayer::Background => snow.on_background(),
-         SnowLayer::Foreground => snow.on_foreground(),
-         SnowLayer::Top => snow.on_top(),
+         ParticleLayer::Background => snow.on_background(),
+         ParticleLayer::Foreground => snow.on_foreground(),
+         ParticleLayer::Top => snow.on_top(),
       }
    }
 
@@ -190,10 +167,15 @@ impl Snow {
    ///
    /// This should be called every frame. It automatically requests a repaint.
    pub fn show(self, ctx: &Context) {
-      let screen_rect = self.custom_area.unwrap_or_else(|| ctx.content_rect());
-      if screen_rect.width() <= 0.0 || screen_rect.height() <= 0.0 {
+      let Some((layer_id, screen_rect)) = resolve_target(
+         ctx,
+         self.id,
+         self.layer_order,
+         self.custom_layer,
+         self.custom_area,
+      ) else {
          return;
-      }
+      };
 
       let dt = ctx.input(|i| i.stable_dt).min(0.1);
       let time = ctx.input(|i| i.time);
@@ -219,7 +201,6 @@ impl Snow {
          snowflakes.truncate(self.density);
       }
 
-      let layer_id = self.custom_layer.unwrap_or_else(|| LayerId::new(self.layer_order, self.id));
       let painter = ctx.layer_painter(layer_id);
 
       // Cache values for alpha calculation
@@ -310,11 +291,6 @@ impl Snowflake {
    }
 }
 
-/// Orders two range endpoints, swapping them when the caller inverted them.
-fn ordered(a: f32, b: f32) -> (f32, f32) {
-   if a <= b { (a, b) } else { (b, a) }
-}
-
 #[cfg(test)]
 mod tests {
    use super::*;
@@ -341,7 +317,7 @@ mod tests {
    #[test]
    fn from_settings_maps_layer() {
       let settings = SnowSettings {
-         layer: SnowLayer::Top,
+         layer: ParticleLayer::Top,
          color: Color32::from_rgb(1, 2, 3),
          density: 12,
          ..Default::default()
@@ -355,7 +331,7 @@ mod tests {
       let background = Snow::from_settings(
          "background",
          &SnowSettings {
-            layer: SnowLayer::Background,
+            layer: ParticleLayer::Background,
             ..Default::default()
          },
       );
@@ -373,12 +349,5 @@ mod tests {
             .expect("SnowState should exist after show");
          assert_eq!(state.flakes.len(), 7);
       });
-   }
-
-   #[test]
-   fn snow_layer_to_str() {
-      assert_eq!(SnowLayer::Background.to_str(), "Background");
-      assert_eq!(SnowLayer::Foreground.to_str(), "Foreground");
-      assert_eq!(SnowLayer::Top.to_str(), "Top");
    }
 }

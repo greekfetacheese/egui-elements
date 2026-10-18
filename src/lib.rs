@@ -76,7 +76,7 @@ pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Modal, MultiLabel, Snow, SnowLayer,
+   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Modal, MultiLabel, ParticleLayer, Snow,
    SnowSettings, Window,
 };
 

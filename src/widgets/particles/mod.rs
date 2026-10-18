@@ -25,9 +25,8 @@
 //! }
 //! ```
 
-mod rng;
-mod settings;
+mod shared;
 mod snow;
 
-pub use settings::SnowSettings;
-pub use snow::{Snow, SnowLayer};
+pub use shared::ParticleLayer;
+pub use snow::{Snow, SnowSettings};

@@ -1,9 +1,8 @@
 //! [`SnowSettings`] — public knobs for the snow effect plus a themed settings window.
 
-use egui::{Color32, Context, ScrollArea, Slider, Ui, Vec2};
+use egui::{Color32, Context, Slider, Ui, Vec2};
 
-use super::snow::SnowLayer;
-use crate::widgets::Window;
+use super::super::shared::{ParticleLayer, begin_body, settings_window};
 
 /// User-facing knobs for [`Snow`](super::Snow).
 ///
@@ -32,7 +31,7 @@ pub struct SnowSettings {
    /// Global wind vector (x = horizontal, y = vertical).
    pub wind: Vec2,
    /// Layer the effect is painted on.
-   pub layer: SnowLayer,
+   pub layer: ParticleLayer,
 }
 
 impl Default for SnowSettings {
@@ -47,7 +46,7 @@ impl Default for SnowSettings {
          speed_min: 40.0,
          speed_max: 120.0,
          wind: Vec2::ZERO,
-         layer: SnowLayer::Foreground,
+         layer: ParticleLayer::Foreground,
       }
    }
 }
@@ -65,24 +64,13 @@ impl SnowSettings {
    /// Window chrome plus a vertical scroll area around [`Self::body_ui`], so a
    /// viewport shorter than the controls scrolls instead of clipping them.
    pub fn show_window(&mut self, ctx: &Context) -> Option<egui::Response> {
-      let theme = crate::theme::Theme::current(ctx);
-      let frame = theme.window_frame;
-      let title_frame = frame.stroke(egui::Stroke::NONE);
-      let mut open = self.open; // local copy — `.open()` borrows, `self` is used inside the closure
-      let resp = Window::new("Snow Settings")
-         .open(&mut open)
-         .default_width(300.0)
-         .resizable([true, true])
-         .frame(frame)
-         .title_frame(title_frame)
-         .show(ctx, |ui| {
-            ScrollArea::vertical().show(ui, |ui| {
-               self.body_ui(ui);
-            });
-         });
-
+      // Local copy — `settings_window` borrows `open` while the body borrows `self`.
+      let mut open = self.open;
+      let resp = settings_window(ctx, "Snow Settings", &mut open, |ui| {
+         self.body_ui(ui)
+      });
       self.open = open;
-      resp.map(|r| r.response)
+      resp
    }
 
    /// Draw the settings controls into `ui` — no window chrome.
@@ -91,9 +79,7 @@ impl SnowSettings {
    /// instead of using [`Self::show_window`]. If that container can be shorter than the
    /// controls, wrap it in an `egui::ScrollArea`.
    pub fn body_ui(&mut self, ui: &mut Ui) {
-      let theme = crate::theme::Theme::current(ui.ctx());
-      // Every row pays `item_spacing.y`; the installed style uses `md` (12).
-      ui.spacing_mut().item_spacing.y = theme.spacing.sm;
+      let theme = begin_body(ui);
 
       ui.heading("General");
       ui.checkbox(&mut self.active, "Effect Active");
@@ -166,20 +152,20 @@ impl SnowSettings {
          ui.label("Layer:");
          ui.selectable_value(
             &mut self.layer,
-            SnowLayer::Background,
-            SnowLayer::Background.to_str(),
+            ParticleLayer::Background,
+            ParticleLayer::Background.to_str(),
          )
          .on_hover_text("Behind everything (Order::Background)");
          ui.selectable_value(
             &mut self.layer,
-            SnowLayer::Foreground,
-            SnowLayer::Foreground.to_str(),
+            ParticleLayer::Foreground,
+            ParticleLayer::Foreground.to_str(),
          )
          .on_hover_text("In front of windows (Order::Foreground)");
          ui.selectable_value(
             &mut self.layer,
-            SnowLayer::Top,
-            SnowLayer::Top.to_str(),
+            ParticleLayer::Top,
+            ParticleLayer::Top.to_str(),
          )
          .on_hover_text("On top of everything including debug/tooltips (Order::Debug)");
       });
@@ -208,7 +194,7 @@ mod tests {
       assert_eq!(settings.speed_min, 40.0);
       assert_eq!(settings.speed_max, 120.0);
       assert_eq!(settings.wind, Vec2::ZERO);
-      assert_eq!(settings.layer, SnowLayer::Foreground);
+      assert_eq!(settings.layer, ParticleLayer::Foreground);
    }
 
    #[test]
@@ -222,7 +208,7 @@ mod tests {
          speed_min: 5.0,
          speed_max: 6.0,
          wind: Vec2::new(7.0, 8.0),
-         layer: SnowLayer::Top,
+         layer: ParticleLayer::Top,
          color: Color32::from_rgb(9, 9, 9),
          ..Default::default()
       };

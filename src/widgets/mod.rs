@@ -26,6 +26,6 @@ pub use frame::Frame;
 pub use label::Label;
 pub use modal::Modal;
 pub use multi_label::MultiLabel;
-pub use particles::{Snow, SnowLayer, SnowSettings};
+pub use particles::{ParticleLayer, Snow, SnowSettings};
 pub use secure_text_edit::SecureTextEdit;
 pub use window::Window;
