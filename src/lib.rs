@@ -70,6 +70,8 @@
 //! the same names as [`egui::ComboBox`] and [`egui::Window`]. Import this crate's
 //! widgets after `use egui::*`, or alias one of them.
 
+mod glow;
+
 pub mod components;
 pub mod editor;
 pub mod theme;
