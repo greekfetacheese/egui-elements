@@ -165,8 +165,14 @@ ui.add(
 
 `HoldSettings` also carries `burst_color` (`None` = the resolved fill colour),
 `burst_intensity` (`0.0..=1.0`, a multiplier over the effect's own profile — `0`
-disables the burst), `burst_ms`, and `burst_bolts` / `burst_branch_depth` for
-`HoldBurst::Lightning`. Its defaults (`1 s`, theme accent, a solid fill and a
+disables the burst) and `burst_ms`. For `HoldBurst::Lightning` it carries
+`burst_bolts`, `burst_branch_depth`, and the effect's `burst_thickness` /
+`burst_jitter` (defaults `2.0` and `0.18`, the effect's own). For
+`HoldBurst::Glow` it shapes the fan with `burst_glow_from` / `burst_glow_to`
+(the start/end radius as a multiple of the button's shorter side, default
+`1.0` → `2.2`, with `to` clamped to at least `from`) and `burst_glow_softness`
+(`1.0` = the shared profile exactly; above `1.0` spreads the falloff, below
+`1.0` tightens it). Its defaults (`1 s`, theme accent, a solid fill and a
 300 ms `Glow`) reproduce a button that configures nothing.
 
 Press and release under the duration resets the sweep and never fires; dragging
@@ -176,9 +182,11 @@ on a touch screen egui may also report a long touch as a secondary-click, which
 this widget leaves alone. A focused button confirms immediately
 on Enter or Space, matching egui's keyboard activation. `seconds <= 0.0` behaves
 as if `hold` was never called. When the hold fires, the fill clears and the burst
-takes over; `HoldBurst::Glow` grows a soft glow at the button's centre,
-`HoldBurst::Lightning` strikes a bolt across it. The burst fizzles out on its
-own and requests no repaints once idle.
+takes over; `HoldBurst::Glow` grows a soft glow at the button's centre (the
+`burst_glow_from` / `burst_glow_to` / `burst_glow_softness` knobs set its shape
+and falloff), `HoldBurst::Lightning` strikes a bolt across it (configurable
+thickness and jitter). The burst fizzles out on its own and requests no repaints
+once idle.
 
 ### Particles: Snow
 

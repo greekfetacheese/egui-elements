@@ -281,6 +281,26 @@ impl HoldSettings {
             ui.label("Duration (ms):");
             ui.add(Slider::new(&mut self.burst_ms, 80.0..=2000.0));
          });
+         if self.burst == HoldBurst::Glow {
+            ui.horizontal(|ui| {
+               ui.label("Size from:");
+               ui.add(Slider::new(&mut self.burst_glow_from, 0.2..=4.0))
+                  .on_hover_text("Start radius as a multiple of the button's shorter side");
+            });
+            ui.horizontal(|ui| {
+               ui.label("Size to:");
+               ui.add(Slider::new(&mut self.burst_glow_to, 0.2..=6.0))
+                  .on_hover_text("End radius as a multiple of the button's shorter side");
+            });
+            ui.horizontal(|ui| {
+               ui.label("Softness:");
+               ui.add(Slider::new(
+                  &mut self.burst_glow_softness,
+                  0.2..=3.0,
+               ))
+               .on_hover_text("1.0 reproduces the shared glow profile exactly");
+            });
+         }
          if self.burst == HoldBurst::Lightning {
             ui.horizontal(|ui| {
                ui.label("Bolts:");
@@ -289,6 +309,15 @@ impl HoldSettings {
             ui.horizontal(|ui| {
                ui.label("Branch depth:");
                ui.add(Slider::new(&mut self.burst_branch_depth, 0..=3));
+            });
+            ui.horizontal(|ui| {
+               ui.label("Thickness (px):");
+               ui.add(Slider::new(&mut self.burst_thickness, 0.5..=12.0));
+            });
+            ui.horizontal(|ui| {
+               ui.label("Jitter:");
+               ui.add(Slider::new(&mut self.burst_jitter, 0.0..=0.6))
+                  .on_hover_text("Midpoint displacement as a fraction of segment length");
             });
          }
       }

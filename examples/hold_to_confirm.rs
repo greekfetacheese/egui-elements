@@ -8,6 +8,9 @@ use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{Button, HoldSettings};
 
+/// Uniform button size, so the two hold buttons and the plain one line up.
+const BUTTON_SIZE: Vec2 = Vec2::new(250.0, 45.0);
+
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
       viewport: ViewportBuilder::default()
@@ -106,11 +109,25 @@ impl eframe::App for HoldApp {
             ui.horizontal(|ui| {
                ui.spacing_mut().item_spacing.x = space.md;
 
-               if ui.add(Button::new("Hold to delete").hold_settings(&self.settings)).clicked() {
+               if ui
+                  .add(
+                     Button::new("Hold to delete")
+                        .hold_settings(&self.settings)
+                        .min_size(BUTTON_SIZE),
+                  )
+                  .clicked()
+               {
                   self.confirmed += 1;
                }
 
-               if ui.add(Button::new("Hold to strike").hold_settings(&self.settings)).clicked() {
+               if ui
+                  .add(
+                     Button::new("Hold to strike")
+                        .hold_settings(&self.settings)
+                        .min_size(BUTTON_SIZE),
+                  )
+                  .clicked()
+               {
                   self.confirmed += 1;
                }
             });
@@ -128,7 +145,7 @@ impl eframe::App for HoldApp {
                   .size(self.theme.typography.normal)
                   .color(self.theme.colors.text_muted),
             );
-            if ui.add(Button::new("Normal button")).clicked() {
+            if ui.add(Button::new("Normal button").min_size(BUTTON_SIZE)).clicked() {
                self.normal_clicks += 1;
             }
             ui.label(
