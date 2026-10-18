@@ -10,6 +10,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
 - A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, and corner `Badges` for buttons
+- `Snow` with a drop-in, themed settings window, ported from [egui-snow](https://github.com/LaVashikk/egui-snow) (MIT)
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
@@ -123,6 +124,37 @@ error color; `Badge::dot()` is a plain coloured dot. `.corner(BadgeCorner::TopLe
 
 The badge is an overlay: it is painted on top of the button and never changes
 its size or layout.
+
+### Particles: Snow
+
+`Snow` draws a falling-snow effect on an egui layer, so it never disturbs your
+layout. `SnowSettings` collects the public knobs and opens a themed settings
+window with `show_window`; `Snow::from_settings` turns them into a configured
+effect. The effect is ported from [egui-snow](https://github.com/LaVashikk/egui-snow)
+(MIT, © 2025 LaVashikk) and keeps the upstream algorithm and defaults.
+
+```rust
+use egui_elements::widgets::particles::{Snow, SnowSettings};
+
+let mut settings = SnowSettings::default();
+settings.open = true;
+
+// every frame:
+settings.show_window(ctx);                              // themed floating settings window + scroll
+if settings.active {
+    Snow::from_settings("snow", &settings).show(ui);    // layout-neutral (rendered on a layer)
+}
+```
+
+Prefer your own container? `SnowSettings::body_ui(&mut settings, ui)` draws just the
+controls (no window chrome) inside a `SidePanel`, `Window`, or `ScrollArea` — wrap it in
+an `egui::ScrollArea` when that container can be shorter than the controls.
+
+```rust
+egui::SidePanel::right("snow").show(ctx, |ui| {
+    settings.body_ui(ui);
+});
+```
 
 ### Credentials form (`secure-types`)
 
@@ -245,6 +277,12 @@ Product-framed placeholder (mail client UI):
 cargo run --example email
 ```
 
+Interactive snow with the public settings window:
+
+```sh
+cargo run --example particles
+```
+
 ## Built-in themes
 
 | `ThemeKind` | Notes |
@@ -262,3 +300,5 @@ Palette slot roles (`bg` vs `widget_bg`, `hover` vs `highlight`, …) are docume
 ## License
 
 MIT. Icons from the `lucide` feature are [Lucide](https://lucide.dev) (ISC).
+
+The Snow particle effect is ported from [egui-snow](https://github.com/LaVashikk/egui-snow) (MIT, © 2025 LaVashikk).

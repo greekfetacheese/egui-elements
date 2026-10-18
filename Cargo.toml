@@ -48,3 +48,6 @@ name = "email"
 
 [[example]]
 name = "label_sections"
+
+[[example]]
+name = "particles"
