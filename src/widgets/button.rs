@@ -2070,4 +2070,49 @@ mod tests {
          "`.hold_fill(a).hold(seconds)` must keep the earlier fill"
       );
    }
+
+   #[test]
+   fn the_settings_body_renders_and_the_widget_uses_its_fields() {
+      let ctx = Context::default();
+      let mut settings = HoldSettings {
+         seconds: 0.5,
+         fill_from: Some(Color32::from_rgb(1, 1, 1)),
+         ..Default::default()
+      };
+
+      let output = ctx.run_ui(
+         RawInput {
+            screen_rect: Some(screen()),
+            ..Default::default()
+         },
+         |ui| {
+            settings.body_ui(ui);
+         },
+      );
+      output.drop_without_applying_deltas();
+      assert!(
+         !settings.open,
+         "body_ui must not touch the window flag"
+      );
+
+      // Edit the struct after the body pass: the widget must read the live value.
+      settings.fill_from = Some(SWEEP);
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let (pressed, response) = run_pass(
+         &ctx,
+         vec![press(warm.rect.center())],
+         f64::from(STEP),
+         build,
+      );
+      assert_eq!(
+         hold_state(&ctx, response.id).expect("hold state").progress,
+         0.2,
+         "the widget must use the settings' duration"
+      );
+      assert!(
+         sweep_shape(&pressed, SWEEP).is_some(),
+         "the widget must use the fill edited in the struct"
+      );
+   }
 }

@@ -1,12 +1,12 @@
-//! Interactive hold-to-confirm demo for `egui-elements`: [`Button::hold`] with a
-//! progress sweep and a [`HoldBurst`] completion flourish.
+//! Interactive hold-to-confirm demo for `egui-elements`: [`Button::hold_settings`]
+//! with a configurable progress fill and a [`HoldSettings`] completion flourish.
 //!
 //! Run with: `cargo run --example hold_to_confirm`
 
 use eframe::egui::*;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::widgets::{Button, HoldBurst};
+use egui_elements::widgets::{Button, HoldSettings};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
@@ -26,6 +26,7 @@ fn main() -> eframe::Result {
 
 struct HoldApp {
    theme: Theme,
+   settings: HoldSettings,
    confirmed: u32,
    normal_clicks: u32,
 }
@@ -37,6 +38,10 @@ impl HoldApp {
 
       Self {
          theme,
+         settings: HoldSettings {
+            open: true,
+            ..Default::default()
+         },
          confirmed: 0,
          normal_clicks: 0,
       }
@@ -57,6 +62,7 @@ impl HoldApp {
             if let Some(new_theme) = utils::theme_switcher(&self.theme, ui) {
                self.theme = new_theme;
             }
+            ui.checkbox(&mut self.settings.open, "Settings");
          });
       });
    }
@@ -76,7 +82,6 @@ impl eframe::App for HoldApp {
          .show(ui, |ui| self.header(ui));
 
       let bg = self.theme.colors.bg;
-      let danger = self.theme.colors.error;
       CentralPanel::default()
          .frame(Frame::new().fill(bg).inner_margin(space.margin(space.lg)))
          .show(ui, |ui| {
@@ -89,7 +94,8 @@ impl eframe::App for HoldApp {
             );
             ui.label(
                RichText::new(
-                  "clicked() only reports once the sweep fills; a plain click never confirms.",
+                  "clicked() only reports once the sweep fills; a plain click never confirms. \
+                   Both buttons share the settings window.",
                )
                .size(self.theme.typography.normal)
                .color(self.theme.colors.text_muted),
@@ -100,14 +106,11 @@ impl eframe::App for HoldApp {
             ui.horizontal(|ui| {
                ui.spacing_mut().item_spacing.x = space.md;
 
-               if ui.add(Button::new("Hold to delete").hold(1.0).hold_fill(danger)).clicked() {
+               if ui.add(Button::new("Hold to delete").hold_settings(&self.settings)).clicked() {
                   self.confirmed += 1;
                }
 
-               if ui
-                  .add(Button::new("Hold to strike").hold(1.0).hold_burst(HoldBurst::Lightning))
-                  .clicked()
-               {
+               if ui.add(Button::new("Hold to strike").hold_settings(&self.settings)).clicked() {
                   self.confirmed += 1;
                }
             });
@@ -134,5 +137,7 @@ impl eframe::App for HoldApp {
                   .color(self.theme.colors.text),
             );
          });
+
+      self.settings.show_window(ui.ctx());
    }
 }

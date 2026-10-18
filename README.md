@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, and hold-to-confirm buttons with a progress sweep
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, and hold-to-confirm buttons with a configurable progress sweep and completion burst
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
@@ -136,19 +136,38 @@ left-to-right sweep for `seconds` and only then reports
 > irreversible actions where a misclick must not fire.
 
 ```rust
-use egui_elements::{Button, HoldBurst};
+use egui_elements::{Button, HoldBurst, HoldSettings};
 
 if ui.add(Button::new("Delete vault").hold(1.0)).clicked() {
     // only reached once the sweep has filled
 }
 
+// One struct carries the duration, the progressive fill and the burst.
+let mut settings = HoldSettings {
+    seconds: 0.8,
+    fill_from: Some(theme.colors.error),   // None = the installed theme's accent
+    fill_to: Some(theme.colors.warning),   // shift as the hold fills; None = solid
+    burst: HoldBurst::Lightning,           // Off / Glow (default) / Lightning
+    ..Default::default()
+};
+settings.open = true;                      // draw the themed settings window
+settings.show_window(ui.ctx());            // …or just `body_ui(ui)` in your own panel
+ui.add(Button::new("Strike").hold_settings(&settings));
+
+// The per-field shortcuts compose in call order instead:
 ui.add(
     Button::new("Strike")
         .hold(0.8)
-        .hold_fill(theme.colors.error)          // sweep colour (default: theme accent)
-        .hold_burst(HoldBurst::Lightning),       // default: HoldBurst::Glow
+        .hold_fill(theme.colors.error)
+        .hold_burst(HoldBurst::Lightning),
 );
 ```
+
+`HoldSettings` also carries `burst_color` (`None` = the resolved fill colour),
+`burst_intensity` (`0.0..=1.0`, a multiplier over the effect's own profile — `0`
+disables the burst), `burst_ms`, and `burst_bolts` / `burst_branch_depth` for
+`HoldBurst::Lightning`. Its defaults (`1 s`, theme accent, a solid fill and a
+300 ms `Glow`) reproduce a button that configures nothing.
 
 Press and release under the duration resets the sweep and never fires; dragging
 the pointer off the button resets it too. The widget tracks the press itself, so
@@ -156,9 +175,10 @@ holds longer than egui's `max_click_duration` (0.8 s by default) still complete;
 on a touch screen egui may also report a long touch as a secondary-click, which
 this widget leaves alone. A focused button confirms immediately
 on Enter or Space, matching egui's keyboard activation. `seconds <= 0.0` behaves
-as if `hold` was never called. `HoldBurst::Glow` grows a soft glow at the
-button's centre; `HoldBurst::Lightning` strikes a bolt across it. Both fizzle out
-on their own, and neither requests repaints once idle.
+as if `hold` was never called. When the hold fires, the fill clears and the burst
+takes over; `HoldBurst::Glow` grows a soft glow at the button's centre,
+`HoldBurst::Lightning` strikes a bolt across it. The burst fizzles out on its
+own and requests no repaints once idle.
 
 ### Particles: Snow
 
@@ -391,7 +411,7 @@ Interactive lightning with the public settings window and an ambient scheduler:
 cargo run --example lightning
 ```
 
-Hold-to-confirm buttons with both completion bursts:
+Hold-to-confirm buttons sharing one `HoldSettings` window (fill shift, bursts):
 
 ```sh
 cargo run --example hold_to_confirm

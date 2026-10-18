@@ -1,7 +1,9 @@
 //! Hold-to-confirm settings: the completion burst and the public knobs for a
 //! [`Button::hold`](crate::widgets::Button::hold) action.
 
-use egui::Color32;
+use egui::{Color32, Context, Slider, Ui};
+
+use crate::widgets::particles::shared::{begin_body, settings_window};
 
 /// Completion burst drawn when a hold-to-confirm button reaches 100 %.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -132,6 +134,112 @@ impl HoldSettings {
    pub(crate) fn burst_visible(&self) -> bool {
       self.burst != HoldBurst::Off && self.burst_secs() > 0.0 && self.burst_intensity > 0.0
    }
+
+   /// Themed floating settings window; returns the window's outer `Response` when open.
+   ///
+   /// Window chrome plus a vertical scroll area around [`Self::body_ui`], so a
+   /// viewport shorter than the controls scrolls instead of clipping them.
+   pub fn show_window(&mut self, ctx: &Context) -> Option<egui::Response> {
+      // Local copy — `settings_window` borrows `open` while the body borrows `self`.
+      let mut open = self.open;
+      let resp = settings_window(ctx, "Hold Settings", &mut open, |ui| {
+         self.body_ui(ui)
+      });
+      self.open = open;
+      resp
+   }
+
+   /// Draw the settings controls into `ui` — no window chrome.
+   ///
+   /// Render them in your own container (`egui::Window`, `SidePanel`, `ScrollArea`, …)
+   /// instead of using [`Self::show_window`]. If that container can be shorter than the
+   /// controls, wrap it in an `egui::ScrollArea`. This method never touches
+   /// [`Self::open`].
+   pub fn body_ui(&mut self, ui: &mut Ui) {
+      let theme = begin_body(ui);
+
+      ui.heading("Hold");
+      ui.horizontal(|ui| {
+         ui.label("Duration (s):");
+         ui.add(Slider::new(&mut self.seconds, 0.2..=5.0));
+      });
+
+      ui.separator();
+      ui.heading("Fill");
+      ui.horizontal(|ui| {
+         let mut theme_accent = self.fill_from.is_none();
+         if ui.checkbox(&mut theme_accent, "Theme accent").changed() {
+            self.fill_from = if theme_accent {
+               None
+            } else {
+               Some(theme.colors.accent)
+            };
+         }
+         if let Some(color) = self.fill_from.as_mut() {
+            ui.color_edit_button_srgba(color);
+         }
+      });
+      ui.horizontal(|ui| {
+         let mut shifts = self.fill_to.is_some();
+         if ui.checkbox(&mut shifts, "Shift to a second colour").changed() {
+            self.fill_to = if shifts {
+               Some(self.fill_from.unwrap_or(theme.colors.accent))
+            } else {
+               None
+            };
+         }
+         if let Some(color) = self.fill_to.as_mut() {
+            ui.color_edit_button_srgba(color);
+         }
+      });
+
+      ui.separator();
+      ui.heading("Burst");
+      ui.horizontal(|ui| {
+         ui.label("Kind:");
+         for kind in [HoldBurst::Off, HoldBurst::Glow, HoldBurst::Lightning] {
+            ui.selectable_value(&mut self.burst, kind, kind.to_str());
+         }
+      });
+      if self.burst != HoldBurst::Off {
+         ui.horizontal(|ui| {
+            let mut same_as_fill = self.burst_color.is_none();
+            if ui.checkbox(&mut same_as_fill, "Same as the fill").changed() {
+               self.burst_color = if same_as_fill {
+                  None
+               } else {
+                  Some(self.fill_from.unwrap_or(theme.colors.accent))
+               };
+            }
+            if let Some(color) = self.burst_color.as_mut() {
+               ui.color_edit_button_srgba(color);
+            }
+         });
+         ui.horizontal(|ui| {
+            ui.label("Intensity:");
+            ui.add(Slider::new(&mut self.burst_intensity, 0.0..=1.0));
+         });
+         ui.horizontal(|ui| {
+            ui.label("Duration (ms):");
+            ui.add(Slider::new(&mut self.burst_ms, 80.0..=2000.0));
+         });
+         if self.burst == HoldBurst::Lightning {
+            ui.horizontal(|ui| {
+               ui.label("Bolts:");
+               ui.add(Slider::new(&mut self.burst_bolts, 1..=5));
+            });
+            ui.horizontal(|ui| {
+               ui.label("Branch depth:");
+               ui.add(Slider::new(&mut self.burst_branch_depth, 0..=3));
+            });
+         }
+      }
+
+      ui.add_space(theme.spacing.sm);
+      if ui.button("Reset").clicked() {
+         self.reset();
+      }
+   }
 }
 
 #[cfg(test)]
@@ -193,6 +301,35 @@ mod tests {
          "a fill without `fill_to` must not depend on progress"
       );
       assert_eq!(settings.fill_color(Color32::RED, 0.9), start);
+   }
+
+   #[test]
+   fn body_ui_renders_without_a_window() {
+      let mut settings = HoldSettings::default();
+      assert!(!settings.open);
+      egui::__run_test_ui(|ui| {
+         settings.body_ui(ui);
+      });
+      assert!(
+         !settings.open,
+         "body_ui must not touch the window flag"
+      );
+   }
+
+   #[test]
+   fn show_window_returns_response_only_when_open() {
+      egui::__run_test_ctx(|ctx| {
+         let mut closed = HoldSettings::default();
+         assert!(closed.show_window(ctx).is_none());
+      });
+
+      egui::__run_test_ctx(|ctx| {
+         let mut open = HoldSettings {
+            open: true,
+            ..Default::default()
+         };
+         assert!(open.show_window(ctx).is_some());
+      });
    }
 
    #[test]
