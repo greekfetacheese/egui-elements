@@ -518,9 +518,11 @@ impl<'a> Button<'a> {
          }
 
          // The button keeps its pressed chrome for the whole hold; egui's own
-         // active flag stops mid-press at `max_click_duration`.
+         // active flag stops mid-press at `max_click_duration`. Once the hold
+         // fires the pressed look is released, while the sweep and burst keep
+         // following `holding`.
          let is_active = if hold_seconds.is_some() {
-            holding
+            holding && !hold.fired
          } else {
             prepared.response.is_pointer_button_down_on()
          };
@@ -552,6 +554,7 @@ impl<'a> Button<'a> {
          };
 
          let text_color = visuals.as_ref().map(|v| v.text).unwrap_or(interact_visuals.text_color());
+         let shadow = visuals.as_ref().map(|v| v.shadow).unwrap_or(Shadow::NONE);
 
          let visible_frame = if frame_when_inactive {
             has_frame_margin
@@ -565,7 +568,6 @@ impl<'a> Button<'a> {
          prepared.fallback_text_color = text_color;
 
          if visible_frame {
-            let shadow = visuals.as_ref().map(|v| v.shadow).unwrap_or(Shadow::NONE);
             prepared.frame = prepared
                .frame
                .inner_margin(
@@ -587,12 +589,19 @@ impl<'a> Button<'a> {
 
          if let Some(hold_color) = hold_color {
             if visible_frame {
-               // Give up the frame's own fill so the base fill, sweep and edge
-               // can be painted under it; stroke and shadow still land on top.
-               prepared.frame = prepared.frame.fill(Color32::TRANSPARENT);
+               // Give up the frame's own fill *and* shadow so the base fill,
+               // sweep and edge can be painted under the frame; the frame's
+               // stroke still lands on top. The shadow is taken over here and
+               // painted before the base fill, exactly as `Frame::paint` would
+               // have ordered it — otherwise its opaque spread would cover the
+               // alpha-filled button and the sweep.
+               prepared.frame = prepared.frame.fill(Color32::TRANSPARENT).shadow(Shadow::NONE);
 
                let rect = prepared.response.rect;
                let expanded = rect.expand(interact_visuals.expansion);
+               if shadow != Shadow::NONE {
+                  ui.painter().add(shadow.as_shape(expanded, corner_radius));
+               }
                ui.painter().add(Shape::rect_filled(expanded, corner_radius, fill));
 
                if sweep_active {
@@ -773,6 +782,27 @@ mod tests {
          )),
          _ => None,
       })
+   }
+
+   /// Every `RectShape` fill in paint order, flattening nested [`Shape::Vec`]s
+   /// so a frame-painted shadow stays visible to the ordering assertions.
+   fn rect_fills(output: &FullOutput) -> Vec<Color32> {
+      fn collect(shape: &Shape, fills: &mut Vec<Color32>) {
+         match shape {
+            Shape::Rect(rect) => fills.push(rect.fill),
+            Shape::Vec(shapes) => {
+               for shape in shapes {
+                  collect(shape, fills);
+               }
+            }
+            _ => {}
+         }
+      }
+      let mut fills = Vec::new();
+      for clipped in &output.shapes {
+         collect(&clipped.shape, &mut fills);
+      }
+      fills
    }
 
    fn has_mesh(output: &FullOutput) -> bool {
@@ -1278,6 +1308,73 @@ mod tests {
    }
 
    #[test]
+   fn the_shadow_does_not_paint_over_the_sweep() {
+      /// An opaque test shadow, distinct from every chrome fill.
+      const SHADOW: Color32 = Color32::from_rgb(200, 30, 40);
+      /// Shadow spread, in points — enough to ring the button's rect.
+      const SHADOW_SPREAD: u8 = 4;
+      /// Distinct fills so the chrome selection is unambiguous; the shipped
+      /// themes alias idle and pressed, which is why sentinels are needed.
+      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
+      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
+      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
+      let ctx = Context::default();
+      let visuals = ButtonVisuals {
+         bg: IDLE,
+         bg_hover: HOVER,
+         bg_click: PRESSED,
+         shadow: Shadow {
+            offset: [0, 0],
+            blur: 0,
+            spread: SHADOW_SPREAD,
+            color: SHADOW,
+         },
+         ..Default::default()
+      };
+      let build = || Button::new("Hold").hold(0.5).hold_fill(SWEEP).visuals(visuals);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let rect = warm.rect;
+      let center = rect.center();
+
+      let (output, pressed) = run_pass(&ctx, vec![press(center)], f64::from(STEP), build);
+      let progress = hold_state(&ctx, pressed.id).expect("hold state").progress;
+      assert!(
+         progress > 0.0 && progress < 1.0,
+         "the sweep must be partial mid-hold, got progress {progress}"
+      );
+
+      let fills = rect_fills(&output);
+      let sweep_index = fills
+         .iter()
+         .position(|fill| *fill == SWEEP)
+         .expect("the sweep must be painted mid-hold");
+      let shadow_indices: Vec<usize> = fills
+         .iter()
+         .enumerate()
+         .filter_map(|(index, fill)| (*fill == SHADOW).then_some(index))
+         .collect();
+      assert!(
+         !shadow_indices.is_empty(),
+         "the frame's shadow must still be painted while the sweep is drawn"
+      );
+      assert!(
+         shadow_indices.iter().all(|&index| index < sweep_index),
+         "the shadow (shapes {shadow_indices:?}) paints at or after the sweep (shape {sweep_index}) and would cover it"
+      );
+
+      let (clip_width, clip_left) = sweep_shape(&output, SWEEP).expect("a sweep shape");
+      assert!(
+         (clip_width - progress * rect.width()).abs() < 0.01,
+         "sweep width {clip_width} does not track progress {progress} of {}",
+         rect.width()
+      );
+      assert!(
+         (clip_left - rect.left()).abs() < 0.01,
+         "the sweep must start at the button's left edge"
+      );
+   }
+
+   #[test]
    fn the_chrome_stays_pressed_for_the_whole_hold() {
       const SECONDS: f32 = 1.5;
       /// A sample well inside egui's click window.
@@ -1337,6 +1434,86 @@ mod tests {
       assert_eq!(
          early, PRESSED,
          "the hold must paint its pressed chrome while the pointer is down, got {early:?}"
+      );
+   }
+
+   #[test]
+   fn the_chrome_releases_when_the_hold_completes() {
+      const SECONDS: f32 = 0.5;
+      /// Distinct test-only chrome fills; the shipped themes alias idle and
+      /// pressed, so pick explicit ones to isolate the release.
+      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
+      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
+      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
+      let ctx = Context::default();
+      let visuals = ButtonVisuals {
+         bg: IDLE,
+         bg_hover: HOVER,
+         bg_click: PRESSED,
+         ..Default::default()
+      };
+      let build = || Button::new("Hold").hold(SECONDS).visuals(visuals);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let rect = warm.rect;
+      let id = warm.id;
+      let center = rect.center();
+
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+
+      // Mid-hold, before completion: the pressed chrome must be painted.
+      time += f64::from(STEP);
+      let (held_output, _) = run_pass(&ctx, vec![], time, build);
+      let held_progress = hold_state(&ctx, id).expect("hold state").progress;
+      assert!(
+         held_progress > 0.0 && held_progress < 1.0,
+         "the hold must still be running, got progress {held_progress}"
+      );
+      assert_eq!(
+         base_fill(&held_output, rect),
+         Some(PRESSED),
+         "the pressed chrome must be painted mid-hold"
+      );
+
+      // Hold to completion without releasing the pointer.
+      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
+      let mut completed_output = None;
+      for _ in 0..max_frames {
+         time += f64::from(STEP);
+         let (output, frame) = run_pass(&ctx, vec![], time, build);
+         if frame.clicked() {
+            assert_eq!(
+               hold_state(&ctx, id).expect("hold state").progress,
+               1.0,
+               "the completed hold must be full"
+            );
+            completed_output = Some(output);
+            break;
+         }
+         assert!(
+            hold_state(&ctx, id).expect("hold state").progress < 1.0,
+            "the hold must not be full before it clicks"
+         );
+      }
+      let completed_output = completed_output.expect("the hold must complete without a release");
+      assert_ne!(
+         base_fill(&completed_output, rect),
+         Some(PRESSED),
+         "the pressed chrome must be released once the hold fires"
+      );
+
+      // Still held: the next frame must neither re-press nor reset.
+      time += f64::from(STEP);
+      let (after_output, _) = run_pass(&ctx, vec![], time, build);
+      assert_eq!(
+         hold_state(&ctx, id).expect("hold state").progress,
+         1.0,
+         "the pointer is still down, so the completed sweep must stay full"
+      );
+      assert_ne!(
+         base_fill(&after_output, rect),
+         Some(PRESSED),
+         "the pressed chrome must stay released while the completed hold is still held"
       );
    }
 
