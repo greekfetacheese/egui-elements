@@ -11,8 +11,20 @@ use super::settings::LightSettings;
 const MIN_SEGMENTS: usize = 12;
 /// Largest number of segments a glow fan is built from.
 const MAX_SEGMENTS: usize = 48;
+/// Hot-core ring radius as a fraction of the mote radius.
+const CORE_RING: f32 = 0.15;
 /// Inner-ring radius as a fraction of the mote radius.
 const INNER_RING: f32 = 0.45;
+/// Outer-ring (rim) radius as a fraction of the mote radius, fully transparent.
+const RIM_RING: f32 = 1.0;
+/// Alpha of the hot-core ring, as a fraction of the mote colour.
+const CORE_ALPHA: f32 = 0.55;
+/// Alpha of the inner ring, as a fraction of the mote colour.
+const INNER_ALPHA: f32 = 0.18;
+/// Exponent of the size-attenuation curve (peak alpha against mote radius).
+const SIZE_ATTENUATION_POWER: f32 = 0.5;
+/// Lower clamp of the size-attenuation curve.
+const MIN_SIZE_ATTENUATION: f32 = 0.4;
 /// Peak wander speed of a drifting mote in pixels per second.
 const DRIFT_SPEED: f32 = 20.0;
 /// How quickly a drifting mote's velocity chases its wander target, per second.
@@ -388,7 +400,14 @@ impl Light {
             - mote.flicker_depth
                * 0.5
                * (1.0 + (mote.phase + time as f32 * mote.flicker_rate).sin());
-         let alpha = (mote.intensity * shrink * envelope * flicker).clamp(0.0, 1.0);
+         // A big disc must not dump more light than a small one, so scale its
+         // peak alpha down with its radius.
+         let attenuation = size_attenuation(
+            mote.radius,
+            *self.radius_range.start(),
+            *self.radius_range.end(),
+         );
+         let alpha = (mote.intensity * shrink * envelope * flicker * attenuation).clamp(0.0, 1.0);
 
          let pixel_pos = Pos2::new(
             area.min.x + mote.pos.x * area.width(),
@@ -410,11 +429,19 @@ impl Light {
    }
 }
 
-/// Builds one radial glow as a triangle fan.
+/// Builds one radial glow as a triangle fan with a hot core and a long tail.
 ///
-/// The centre is painted at `color`, an inner ring at `0.45 * radius` carries
-/// half alpha, and the rim is [`Color32::TRANSPARENT`]; the mesh uses the font
-/// texture (white at `WHITE_UV`), so the fan fades out instead of tinting.
+/// The centre is painted at full `color`, then three rings close the fan: a hot
+/// core at `CORE_RING * radius` carrying `CORE_ALPHA` of the colour, an inner
+/// ring at `INNER_RING * radius` carrying `INNER_ALPHA`, and a transparent rim
+/// at `RIM_RING * radius`. The steep centre-to-core drop gives the point its
+/// hot core and the long, faint core-to-rim tail gives it reach, which is what
+/// reads as a light. A single linear two-ring fan instead fades at one constant
+/// rate from centre to rim, and the eye reads that flat profile as a milky disc
+/// rather than a glowing source.
+///
+/// The mesh uses the font texture (white at `WHITE_UV`), so the fan fades out
+/// instead of tinting; the rim must stay premultiplied zero for that reason.
 fn glow_mesh(center: Pos2, radius: f32, color: Color32) -> Mesh {
    let segments = ((radius / 4.0).clamp(MIN_SEGMENTS as f32, MAX_SEGMENTS as f32)) as usize;
    let mut mesh = Mesh::default();
@@ -422,38 +449,66 @@ fn glow_mesh(center: Pos2, radius: f32, color: Color32) -> Mesh {
 
    mesh.colored_vertex(center, color);
 
-   let inner_radius = radius * INNER_RING;
-   let inner_color = color.gamma_multiply(0.5);
-   for i in 0..segments {
-      let (sin, cos) = (i as f32 / segments as f32 * std::f32::consts::TAU).sin_cos();
-      mesh.colored_vertex(
-         center + vec2(cos, sin) * inner_radius,
-         inner_color,
-      );
-   }
-
-   for i in 0..segments {
-      let (sin, cos) = (i as f32 / segments as f32 * std::f32::consts::TAU).sin_cos();
-      mesh.colored_vertex(
-         center + vec2(cos, sin) * radius,
-         Color32::TRANSPARENT,
-      );
+   // Ring radii and alphas, innermost first; the rim stays fully transparent.
+   let rings = [
+      (
+         CORE_RING * radius,
+         color.gamma_multiply(CORE_ALPHA),
+      ),
+      (
+         INNER_RING * radius,
+         color.gamma_multiply(INNER_ALPHA),
+      ),
+      (RIM_RING * radius, Color32::TRANSPARENT),
+   ];
+   for (ring_radius, ring_color) in rings {
+      for i in 0..segments {
+         let (sin, cos) = (i as f32 / segments as f32 * std::f32::consts::TAU).sin_cos();
+         mesh.colored_vertex(center + vec2(cos, sin) * ring_radius, ring_color);
+      }
    }
 
    for i in 0..segments {
       let next = (i + 1) % segments;
-      let core_a = 1 + i as u32;
-      let core_b = 1 + next as u32;
-      let rim_a = 1 + segments as u32 + i as u32;
-      let rim_b = 1 + segments as u32 + next as u32;
 
-      // Core fan and the two triangles of the halo quad strip.
-      mesh.add_triangle(0, core_a, core_b);
-      mesh.add_triangle(core_a, rim_a, rim_b);
-      mesh.add_triangle(core_a, rim_b, core_b);
+      // Centre fan onto the hot-core ring, then a quad strip between each
+      // successive pair of rings out to the rim.
+      mesh.add_triangle(0, 1 + i as u32, 1 + next as u32);
+      for ring in 0..(rings.len() as u32 - 1) {
+         let inner = 1 + ring * segments as u32 + i as u32;
+         let inner_next = 1 + ring * segments as u32 + next as u32;
+         let outer = 1 + (ring + 1) * segments as u32 + i as u32;
+         let outer_next = 1 + (ring + 1) * segments as u32 + next as u32;
+
+         mesh.add_triangle(inner, outer, outer_next);
+         mesh.add_triangle(inner, outer_next, inner_next);
+      }
    }
 
    mesh
+}
+
+/// Peak-alpha multiplier that stops a large mote from outshining a small one.
+///
+/// A glow's peak is its centre, so shrinking that peak by size changes how much
+/// light a mote dumps into the frame while leaving its shape alone. The curve is
+/// `(min_radius / radius).powf(SIZE_ATTENUATION_POWER)` clamped to
+/// `MIN_SIZE_ATTENUATION..=1.0`. With the crate's default `8.0..=36.0` radius
+/// range the exponent lands near `0.47` at `max_radius`: a disc 4.5x larger
+/// peaks at roughly half the alpha, which is enough to even out the frame
+/// without making the big motes read as dim. A gentler exponent such as `0.35`
+/// only reaches ~`0.59` over that range and leaves the largest motes dominant,
+/// which is the complaint this curve answers.
+///
+/// Monotonic non-increasing in `radius`, exactly `1.0` at `min_radius`, and
+/// never leaves `0.4..=1.0`.
+fn size_attenuation(radius: f32, min_radius: f32, max_radius: f32) -> f32 {
+   // Treat the smaller endpoint as the floor and never divide by zero, so an
+   // inverted or zero-width range cannot produce a NaN alpha.
+   let floor = min_radius.min(max_radius).max(f32::MIN_POSITIVE);
+   (floor / radius.max(floor))
+      .powf(SIZE_ATTENUATION_POWER)
+      .clamp(MIN_SIZE_ATTENUATION, 1.0)
 }
 
 /// Life envelope over `u = age / lifetime`.
@@ -479,10 +534,10 @@ mod tests {
    #[test]
    fn glow_mesh_vertex_and_index_counts() {
       let mesh = glow_mesh(Pos2::ZERO, 100.0, Color32::WHITE);
-      // radius / 4 == 25 segments -> 1 centre + 2 * 25 ring vertices.
-      assert_eq!(mesh.vertices.len(), 51);
-      // 3 indices for the core fan + 6 for the halo, per segment.
-      assert_eq!(mesh.indices.len(), 225);
+      // radius / 4 == 25 segments -> 1 centre + 3 * 25 ring vertices.
+      assert_eq!(mesh.vertices.len(), 76);
+      // 3 indices for the core fan + 12 for the two halo quad strips, per segment.
+      assert_eq!(mesh.indices.len(), 375);
       assert_eq!(mesh.texture_id, TextureId::default());
    }
 
@@ -491,12 +546,17 @@ mod tests {
       let segments = 25;
       let mesh = glow_mesh(Pos2::ZERO, 100.0, Color32::from_white_alpha(255));
       let center = mesh.vertices[0].color;
-      let inner = mesh.vertices[1].color;
-      let rim = mesh.vertices[1 + segments].color;
+      let core = mesh.vertices[1].color;
+      let inner = mesh.vertices[1 + segments].color;
+      let rim = mesh.vertices[1 + 2 * segments].color;
 
       assert!(
-         center.a() > inner.a(),
-         "centre must be brighter than the inner ring"
+         center.a() > core.a(),
+         "centre must be brighter than the hot-core ring"
+      );
+      assert!(
+         core.a() > inner.a(),
+         "hot-core ring must be brighter than the inner ring"
       );
       assert!(
          inner.a() > rim.a(),
@@ -511,6 +571,76 @@ mod tests {
       let bright = glow_mesh(Pos2::ZERO, 20.0, Color32::from_white_alpha(220));
       assert_eq!(dim.vertices[0].color.a(), 60);
       assert_eq!(bright.vertices[0].color.a(), 220);
+   }
+
+   #[test]
+   fn size_attenuation_is_one_at_min_radius() {
+      assert_eq!(size_attenuation(8.0, 8.0, 36.0), 1.0);
+   }
+
+   #[test]
+   fn size_attenuation_is_non_increasing_across_the_range() {
+      let (min_radius, max_radius) = (8.0, 36.0);
+      let mut previous = f32::INFINITY;
+      for step in 0..=64 {
+         let radius = min_radius + (max_radius - min_radius) * step as f32 / 64.0;
+         let value = size_attenuation(radius, min_radius, max_radius);
+         assert!(
+            value <= previous,
+            "attenuation grew from {previous} to {value} at radius {radius}"
+         );
+         previous = value;
+      }
+   }
+
+   #[test]
+   fn size_attenuation_stays_within_bounds() {
+      let (min_radius, max_radius) = (8.0, 36.0);
+      for step in 0..=64 {
+         let radius = min_radius + (max_radius - min_radius) * step as f32 / 64.0;
+         let value = size_attenuation(radius, min_radius, max_radius);
+         assert!(
+            (0.4..=1.0).contains(&value),
+            "attenuation {value} left 0.4..=1.0 at radius {radius}"
+         );
+      }
+
+      let at_max = size_attenuation(max_radius, min_radius, max_radius);
+      assert!(
+         (0.45..=0.5).contains(&at_max),
+         "attenuation at max radius {at_max} must read about 0.45..=0.5"
+      );
+   }
+
+   #[test]
+   fn peak_alpha_does_not_grow_with_radius() {
+      let (min_radius, max_radius) = (8.0, 36.0);
+      // Mirrors the peak of `Light::show`'s alpha: the envelope and flicker
+      // both reach 1.0 there, and the settings are identical apart from the
+      // mote radius, so the size attenuation is the only difference.
+      let peak_alpha = |radius: f32| {
+         let intensity = 0.8;
+         let shrink = 1.0;
+         let envelope = 1.0;
+         let flicker = 1.0;
+         (intensity
+            * shrink
+            * envelope
+            * flicker
+            * size_attenuation(radius, min_radius, max_radius))
+         .clamp(0.0, 1.0)
+      };
+
+      let small = peak_alpha(min_radius);
+      let large = peak_alpha(max_radius);
+      assert!(
+         large <= small,
+         "a mote at radius_max must not outshine one at radius_min ({large} > {small})"
+      );
+      assert!(
+         small > large,
+         "the peak alpha must actually fall with radius ({small} == {large})"
+      );
    }
 
    #[test]
