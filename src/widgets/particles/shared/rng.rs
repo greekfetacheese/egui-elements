@@ -2,12 +2,12 @@
 
 /// xorshift64* stream, seeded through splitmix64; any seed (incl. 0) is valid.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct ParticleRng {
+pub(crate) struct ParticleRng {
    state: u64,
 }
 
 impl ParticleRng {
-   pub(super) fn new(seed: u64) -> Self {
+   pub(crate) fn new(seed: u64) -> Self {
       // splitmix64 finalizer to spread the seed; nudge away from the all-zero state
       let mut z = seed.wrapping_add(0x9E3779B97F4A7C15);
       z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
@@ -18,7 +18,7 @@ impl ParticleRng {
       }
    }
 
-   pub(super) fn next_u64(&mut self) -> u64 {
+   pub(crate) fn next_u64(&mut self) -> u64 {
       let mut x = self.state;
       x ^= x >> 12;
       x ^= x << 25;
@@ -28,12 +28,12 @@ impl ParticleRng {
    }
 
    /// Uniform in [0.0, 1.0).
-   pub(super) fn f32(&mut self) -> f32 {
+   pub(crate) fn f32(&mut self) -> f32 {
       ((self.next_u64() >> 40) as f32) / (1u64 << 24) as f32
    }
 
    /// Uniform in [min, max); returns `min` when `min >= max` (callers normally pre-normalize).
-   pub(super) fn range(&mut self, min: f32, max: f32) -> f32 {
+   pub(crate) fn range(&mut self, min: f32, max: f32) -> f32 {
       if min >= max {
          min
       } else {
