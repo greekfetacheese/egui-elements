@@ -10,7 +10,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
 - A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, and corner `Badges` for buttons
-- `Snow` with a drop-in, themed settings window, ported from [egui-snow](https://github.com/LaVashikk/egui-snow) (MIT)
+- `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
@@ -156,6 +156,30 @@ egui::SidePanel::right("snow").show(ctx, |ui| {
 });
 ```
 
+### Particles: Light
+
+`Light` paints soft radial glow motes and rising embers on an egui layer, so it
+never disturbs your layout. `LightSettings` collects the public knobs and opens a
+themed settings window with `show_window`; `Light::from_settings` turns them into
+a configured effect. `LightMotion` picks the behaviour: `Drift` wanders and
+bounces off the area edges, `Rise` floats embers up from the bottom edge.
+
+```rust
+use egui_elements::widgets::particles::{Light, LightSettings};
+
+let mut settings = LightSettings::default();
+settings.open = true;
+
+// every frame:
+settings.show_window(ctx);                              // themed floating settings window + scroll
+if settings.active {
+    Light::from_settings("light", &settings).show(ui);  // layout-neutral (rendered on a layer)
+}
+```
+
+Prefer your own container? `LightSettings::body_ui(&mut settings, ui)` draws just
+the controls (no window chrome), exactly like `SnowSettings::body_ui`.
+
 ### Credentials form (`secure-types`)
 
 Show/hide (and the QR-scan button) use [Lucide](https://lucide.dev) SVG icons
@@ -281,6 +305,12 @@ Interactive snow with the public settings window:
 
 ```sh
 cargo run --example particles
+```
+
+Interactive light with the public settings window:
+
+```sh
+cargo run --example light
 ```
 
 ## Built-in themes

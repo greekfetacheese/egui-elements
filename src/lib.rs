@@ -34,8 +34,10 @@
 //!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
 //!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
 //!   [`Window`](crate::widgets::Window)
-//! - [`widgets::particles`] — [`Snow`](crate::widgets::particles::Snow) with a themed
-//!   [`SnowSettings`](crate::widgets::particles::SnowSettings) window
+//! - [`widgets::particles`] — [`Snow`](crate::widgets::particles::Snow) and
+//!   [`Light`](crate::widgets::particles::Light) with themed
+//!   [`SnowSettings`](crate::widgets::particles::SnowSettings) /
+//!   [`LightSettings`](crate::widgets::particles::LightSettings) windows
 //! - [`components`] — feature-gated composites (`secure-types`, `qr-image`, `qr-scanner`)
 //! - [`editor`] — live [`ThemeEditor`](crate::editor::ThemeEditor)
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
@@ -76,8 +78,8 @@ pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Modal, MultiLabel, ParticleLayer, Snow,
-   SnowSettings, Window,
+   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Light, LightMotion, LightSettings, Modal,
+   MultiLabel, ParticleLayer, Snow, SnowSettings, Window,
 };
 
 #[cfg(feature = "secure-types")]

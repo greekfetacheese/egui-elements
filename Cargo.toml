@@ -51,3 +51,6 @@ name = "label_sections"
 
 [[example]]
 name = "particles"
+
+[[example]]
+name = "light"
