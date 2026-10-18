@@ -82,7 +82,7 @@ pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, Label, Light, LightMotion,
+   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, HoldSettings, Label, Light, LightMotion,
    LightSettings, Lightning, LightningSettings, Modal, MultiLabel, ParticleLayer, Snow,
    SnowSettings, Window,
 };

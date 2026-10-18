@@ -8,21 +8,15 @@ use crate::glow::{glow_mesh, size_attenuation};
 use crate::theme::Theme;
 use crate::visuals::ButtonVisuals;
 use crate::widgets::badge::Badge;
+use crate::widgets::hold::{HoldBurst, HoldSettings};
 use crate::widgets::particles::Lightning;
 
 /// Longest `stable_dt` the hold accumulation accepts, in seconds (spike guard).
 const HOLD_MAX_DT: f32 = 0.1;
 /// Width of the sweep's leading-edge line, in pixels.
 const HOLD_EDGE_WIDTH: f32 = 1.5;
-/// Duration of a completion burst, in milliseconds.
-const HOLD_BURST_MS: f32 = 300.0;
-/// Duration of a completion burst, in seconds.
-const HOLD_BURST_SECS: f32 = HOLD_BURST_MS / 1000.0;
-/// Number of bolts in a [`HoldBurst::Lightning`] completion burst.
-const HOLD_BURST_BOLTS: usize = 1;
-/// Branch depth of a [`HoldBurst::Lightning`] completion burst.
-const HOLD_BURST_BRANCH_DEPTH: u32 = 1;
-/// Peak flash alpha of a [`HoldBurst::Lightning`] completion burst.
+/// Peak flash alpha of a [`HoldBurst::Lightning`] completion burst at full
+/// intensity.
 const HOLD_BURST_FLASH: f32 = 0.22;
 /// [`HoldBurst::Glow`] radius at the start of the burst, as a multiple of the
 /// button's shorter side.
@@ -30,16 +24,6 @@ const HOLD_GLOW_START: f32 = 1.0;
 /// [`HoldBurst::Glow`] radius at the end of the burst, as a multiple of the
 /// button's shorter side.
 const HOLD_GLOW_END: f32 = 2.2;
-
-/// Completion burst drawn when a hold-to-confirm button reaches 100 %.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum HoldBurst {
-   /// An expanding radial glow at the button's centre, fading out.
-   #[default]
-   Glow,
-   /// A single lightning bolt and flash struck across the button.
-   Lightning,
-}
 
 /// Per-button hold-to-confirm state, keyed by the button's response [`Id`].
 #[derive(Clone, Copy, Default)]
@@ -60,42 +44,52 @@ struct HoldState {
 
 /// A [`HoldBurst::Lightning`] strike, addressed by a derived id so it never
 /// collides with a host's own [`Lightning`].
-fn burst_lightning(id: Id, area: Rect) -> Lightning {
+fn burst_lightning(id: Id, area: Rect, settings: &HoldSettings, color: Color32) -> Lightning {
+   let intensity = settings.burst_intensity.clamp(0.0, 1.0);
    Lightning::new(("hold_burst", id))
-      .bolt_count(HOLD_BURST_BOLTS)
-      .branch_depth(HOLD_BURST_BRANCH_DEPTH)
-      .duration_ms(HOLD_BURST_MS)
-      .flash_intensity(HOLD_BURST_FLASH)
+      .color(color.gamma_multiply(intensity))
+      .bolt_count(settings.burst_bolts)
+      .branch_depth(settings.burst_branch_depth)
+      .duration_ms(settings.burst_ms)
+      .flash_intensity(HOLD_BURST_FLASH * intensity)
       .area(area)
 }
 
 /// Paints one frame of a completion burst on `ui`'s painter.
 fn paint_burst(
    ui: &Ui,
-   burst: HoldBurst,
+   settings: &HoldSettings,
    id: Id,
    rect: Rect,
    expansion: f32,
    age: f32,
    color: Color32,
 ) {
-   let t = (age / HOLD_BURST_SECS).clamp(0.0, 1.0);
-   match burst {
+   if !settings.burst_visible() {
+      return;
+   }
+
+   let t = (age / settings.burst_secs()).clamp(0.0, 1.0);
+   let intensity = settings.burst_intensity.clamp(0.0, 1.0);
+   match settings.burst {
+      HoldBurst::Off => {}
       HoldBurst::Glow => {
          // Grow and fade the shared glow fan; `size_attenuation` keeps the peak
          // alpha in family with the Light effect instead of a second falloff.
          let short = rect.width().min(rect.height()).max(1.0);
          let radius = short * (HOLD_GLOW_START + (HOLD_GLOW_END - HOLD_GLOW_START) * t);
          let attenuation = size_attenuation(radius, short, short * HOLD_GLOW_END);
-         let tint = color.gamma_multiply((1.0 - t) * attenuation);
-         ui.painter().add(Shape::mesh(glow_mesh(
-            rect.center(),
-            radius,
-            tint,
-         )));
+         let tint = color.gamma_multiply((1.0 - t) * attenuation * intensity);
+         if tint.a() > 0 {
+            ui.painter().add(Shape::mesh(glow_mesh(
+               rect.center(),
+               radius,
+               tint,
+            )));
+         }
       }
       HoldBurst::Lightning => {
-         burst_lightning(id, rect.expand(expansion)).show(ui.ctx());
+         burst_lightning(id, rect.expand(expansion), settings, color).show(ui.ctx());
       }
    }
 }
@@ -128,9 +122,7 @@ pub struct Button<'a> {
    selected: bool,
    image_tint_follows_text_color: bool,
    limit_image_size: bool,
-   hold_seconds: Option<f32>,
-   hold_fill: Option<Color32>,
-   hold_burst: HoldBurst,
+   hold: Option<HoldSettings>,
 }
 
 impl<'a> Button<'a> {
@@ -149,9 +141,7 @@ impl<'a> Button<'a> {
          selected: false,
          image_tint_follows_text_color: false,
          limit_image_size: false,
-         hold_seconds: None,
-         hold_fill: None,
-         hold_burst: HoldBurst::default(),
+         hold: None,
       }
    }
 
@@ -367,28 +357,62 @@ impl<'a> Button<'a> {
    ///
    /// While the hold progresses the frame's fill is replaced by a left-to-right
    /// sweep that grows as the hold completes; when it fills, the button fires
-   /// once and plays its [`HoldBurst`]. Pressing Enter or Space on a focused
-   /// button confirms immediately, like egui's keyboard activation for buttons.
+   /// once and plays its [`HoldSettings::burst`]. Pressing Enter or Space on a
+   /// focused button confirms immediately, like egui's keyboard activation for
+   /// buttons.
+   ///
+   /// This shortcut only sets [`HoldSettings::seconds`]; every other field keeps
+   /// its current value, so shortcuts compose in call order.
    pub fn hold(mut self, seconds: f32) -> Self {
-      self.hold_seconds = Some(seconds);
+      let mut settings = self.hold.unwrap_or_else(HoldSettings::default);
+      settings.seconds = seconds;
+      self.hold = Some(settings);
       self
    }
 
-   /// Colour of the hold sweep, and the default tint of a
+   /// Set a solid hold-sweep colour, and the default tint of a
    /// [`HoldBurst::Glow`] burst.
    ///
+   /// This sets [`HoldSettings::fill_from`] and clears
+   /// [`HoldSettings::fill_to`], so the sweep stays one colour; use
+   /// [`Self::hold_settings`] for a colour that shifts as the hold fills.
+   ///
    /// Defaults to the installed theme's
-   /// [`colors.accent`](crate::theme::ThemeColors::accent).
+   /// [`colors.accent`](crate::theme::ThemeColors::accent). This shortcut does
+   /// **not** arm the hold on its own — call [`Self::hold`] or
+   /// [`Self::hold_settings`] too.
    pub fn hold_fill(mut self, color: Color32) -> Self {
-      self.hold_fill = Some(color);
+      let settings = self.hold.get_or_insert_with(|| HoldSettings {
+         seconds: 0.0,
+         ..Default::default()
+      });
+      settings.fill_from = Some(color);
+      settings.fill_to = None;
       self
    }
 
-   /// Completion burst played when the hold fires.
+   /// Set the completion burst played when the hold fires.
    ///
-   /// Default: [`HoldBurst::Glow`].
+   /// This sets [`HoldSettings::burst`]. Default: [`HoldBurst::Glow`]. This
+   /// shortcut does **not** arm the hold on its own — call [`Self::hold`] or
+   /// [`Self::hold_settings`] too.
    pub fn hold_burst(mut self, burst: HoldBurst) -> Self {
-      self.hold_burst = burst;
+      let settings = self.hold.get_or_insert_with(|| HoldSettings {
+         seconds: 0.0,
+         ..Default::default()
+      });
+      settings.burst = burst;
+      self
+   }
+
+   /// Replace the whole hold configuration with `settings`.
+   ///
+   /// Copies every field, including [`HoldSettings::seconds`]; a value of
+   /// `0.0` or less leaves the button as an ordinary click button. The most
+   /// recent of this call and the per-field shortcuts wins for the fields it
+   /// sets.
+   pub fn hold_settings(mut self, settings: &HoldSettings) -> Self {
+      self.hold = Some(*settings);
       self
    }
 
@@ -405,12 +429,10 @@ impl<'a> Button<'a> {
          selected,
          image_tint_follows_text_color,
          limit_image_size,
-         hold_seconds,
-         hold_fill,
-         hold_burst,
+         hold,
       } = self;
 
-      let hold_seconds = hold_seconds.filter(|seconds| *seconds > 0.0);
+      let hold_settings = hold.filter(|settings| settings.seconds > 0.0);
 
       let visuals = visuals.or_else(|| Theme::button_visuals_from_ctx(ui.ctx()));
 
@@ -454,8 +476,9 @@ impl<'a> Button<'a> {
          let mut hold = HoldState::default();
          let mut fired_now = false;
          let mut holding = false;
-         if let Some(seconds) = hold_seconds {
+         if let Some(settings) = hold_settings {
             let id = prepared.response.id;
+            let seconds = settings.seconds;
             let dt = ui.ctx().input(|i| i.stable_dt).min(HOLD_MAX_DT);
             let (pointer_pos, primary_down) =
                ui.ctx().input(|i| (i.pointer.interact_pos(), i.pointer.primary_down()));
@@ -483,7 +506,9 @@ impl<'a> Button<'a> {
                }
                if state.progress >= 1.0 && !state.fired {
                   state.fired = true;
-                  state.burst_age = Some(0.0);
+                  if settings.burst_visible() {
+                     state.burst_age = Some(0.0);
+                  }
                   fired_now = true;
                }
                let snapshot = *state;
@@ -491,7 +516,7 @@ impl<'a> Button<'a> {
                // is this frame's age, so the burst paints before it advances.
                if let Some(age) = state.burst_age.as_mut() {
                   *age += dt;
-                  if *age >= HOLD_BURST_SECS {
+                  if *age >= settings.burst_secs() {
                      state.burst_age = None;
                   }
                }
@@ -508,10 +533,15 @@ impl<'a> Button<'a> {
             }
 
             // Queue the lightning once, at completion.
-            if fired_now && matches!(hold_burst, HoldBurst::Lightning) {
+            if fired_now && settings.burst == HoldBurst::Lightning && settings.burst_visible() {
+               let accent = Theme::current(ui.ctx()).colors.accent;
+               let fill = settings.fill_color(accent, 1.0);
+               let color = settings.burst_color.unwrap_or(fill);
                burst_lightning(
                   id,
                   prepared.response.rect.expand(interact_visuals.expansion),
+                  &settings,
+                  color,
                )
                .strike(ui.ctx());
             }
@@ -521,7 +551,7 @@ impl<'a> Button<'a> {
          // active flag stops mid-press at `max_click_duration`. Once the hold
          // fires the pressed look is released, while the sweep and burst keep
          // following `holding`.
-         let is_active = if hold_seconds.is_some() {
+         let is_active = if hold_settings.is_some() {
             holding && !hold.fired
          } else {
             prepared.response.is_pointer_button_down_on()
@@ -582,10 +612,13 @@ impl<'a> Button<'a> {
          }
 
          // ---- sweep + burst painting -------------------------------------
-         let sweep_active = hold.progress > 0.0;
+         // The fill clears the moment the hold fires; the burst takes over.
+         let sweep_active = hold.progress > 0.0 && !hold.fired;
          let burst_active = hold.burst_age.is_some();
-         let hold_color = (sweep_active || burst_active)
-            .then(|| hold_fill.unwrap_or_else(|| Theme::current(ui.ctx()).colors.accent));
+         let hold_color = hold_settings.filter(|_| sweep_active || burst_active).map(|settings| {
+            let accent = Theme::current(ui.ctx()).colors.accent;
+            settings.fill_color(accent, hold.progress)
+         });
 
          if let Some(hold_color) = hold_color {
             if visible_frame {
@@ -635,15 +668,16 @@ impl<'a> Button<'a> {
                }
             }
 
-            if let Some(age) = hold.burst_age {
+            if let (Some(settings), Some(age)) = (hold_settings, hold.burst_age) {
+               let burst_color = settings.burst_color.unwrap_or(hold_color);
                paint_burst(
                   ui,
-                  hold_burst,
+                  &settings,
                   prepared.response.id,
                   prepared.response.rect,
                   interact_visuals.expansion,
                   age,
-                  hold_color,
+                  burst_color,
                );
             }
          }
@@ -807,6 +841,103 @@ mod tests {
 
    fn has_mesh(output: &FullOutput) -> bool {
       output.shapes.iter().any(|clipped| matches!(clipped.shape, Shape::Mesh(_)))
+   }
+
+   /// Highest vertex alpha of any glow mesh in the frame (`0` when none).
+   fn mesh_alpha(output: &FullOutput) -> u8 {
+      output
+         .shapes
+         .iter()
+         .filter_map(|clipped| match &clipped.shape {
+            Shape::Mesh(mesh) => Some(mesh.vertices.iter().map(|vertex| vertex.color.a()).max()),
+            _ => None,
+         })
+         .flatten()
+         .max()
+         .unwrap_or(0)
+   }
+
+   /// Number of polylines painted this frame (a lightning strike's bolts).
+   fn path_count(output: &FullOutput) -> usize {
+      output
+         .shapes
+         .iter()
+         .filter(|clipped| matches!(clipped.shape, Shape::Path(_)))
+         .count()
+   }
+
+   /// Whether the frame paints any completion-burst shape (glow mesh or bolt).
+   fn has_burst_shape(output: &FullOutput) -> bool {
+      has_mesh(output) || path_count(output) > 0
+   }
+
+   /// Fill of the partial sweep rect at `progress`, found by geometry rather
+   /// than by colour so a shifting fill can be read too.
+   fn painted_sweep(output: &FullOutput, rect: Rect, progress: f32) -> Option<Color32> {
+      output.shapes.iter().find_map(|clipped| match &clipped.shape {
+         Shape::Rect(shape)
+            if (shape.rect.width() - rect.width()).abs() < 4.0
+               && (shape.rect.height() - rect.height()).abs() < 4.0
+               && (clipped.clip_rect.width() - progress * rect.width()).abs() < 0.5
+               && (clipped.clip_rect.left() - rect.left()).abs() < 0.5 =>
+         {
+            Some(shape.fill)
+         }
+         _ => None,
+      })
+   }
+
+   /// Advance passes until the hold fires, returning that frame's output and time.
+   fn advance_until_fired(
+      ctx: &Context,
+      time: &mut f64,
+      build: &impl Fn() -> Button<'static>,
+   ) -> (FullOutput, f64) {
+      for _ in 0..12 {
+         *time += f64::from(STEP);
+         let (output, frame) = run_pass(ctx, vec![], *time, || build());
+         if frame.clicked() {
+            return (output, *time);
+         }
+      }
+      panic!("the hold must complete");
+   }
+
+   /// Press a button built from `settings` and hold it to completion.
+   fn complete_hold(settings: HoldSettings) -> (Context, FullOutput, Response, f64) {
+      let ctx = Context::default();
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let center = warm.rect.center();
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+      let (completed, completion_time) = advance_until_fired(&ctx, &mut time, &build);
+      (ctx, completed, warm, completion_time)
+   }
+
+   /// The press frame's progress and the number of further passes until the
+   /// hold reports `clicked()`.
+   fn press_outcome(build: impl Fn() -> Button<'static> + Copy) -> (f32, usize) {
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let center = warm.rect.center();
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+      let first = hold_state(&ctx, warm.id).expect("hold state").progress;
+      let mut passes = 0;
+      loop {
+         time += f64::from(STEP);
+         passes += 1;
+         let (_, frame) = run_pass(&ctx, vec![], time, build);
+         if frame.clicked() {
+            break;
+         }
+         assert!(
+            passes < 12,
+            "the hold did not complete after {passes} passes"
+         );
+      }
+      (first, passes)
    }
 
    /// The fill of the button's own base (chrome) rect, picked by matching the
@@ -1583,6 +1714,360 @@ mod tests {
       assert!(
          second_fired,
          "the second hold must fire on its own"
+      );
+   }
+   #[test]
+   fn a_solid_fill_ignores_progress() {
+      let settings = HoldSettings {
+         seconds: 1.0,
+         fill_from: Some(SWEEP),
+         fill_to: None,
+         ..Default::default()
+      };
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let rect = warm.rect;
+
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(rect.center())], time, build);
+
+      time += f64::from(STEP);
+      let (early, _) = run_pass(&ctx, vec![], time, build);
+      let early_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
+      assert!(
+         (early_progress - 0.2).abs() < 1e-6,
+         "unexpected early progress {early_progress}"
+      );
+      assert_eq!(
+         painted_sweep(&early, rect, early_progress),
+         Some(SWEEP),
+         "a solid fill must paint its colour at {early_progress} progress"
+      );
+
+      let mut late = None;
+      for _ in 0..7 {
+         time += f64::from(STEP);
+         let (output, _) = run_pass(&ctx, vec![], time, build);
+         late = Some(output);
+      }
+      let late = late.expect("a late frame");
+      let late_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
+      assert!(
+         (late_progress - 0.9).abs() < 1e-6,
+         "unexpected late progress {late_progress}"
+      );
+      assert_eq!(
+         painted_sweep(&late, rect, late_progress),
+         Some(SWEEP),
+         "a solid fill must paint the same colour at {late_progress} progress"
+      );
+   }
+
+   #[test]
+   fn the_fill_shifts_towards_the_second_colour() {
+      /// The shift starts here.
+      const FROM: Color32 = Color32::from_rgb(16, 200, 32);
+      /// …and ends here; every channel moves a long way, so between-ness is
+      /// unambiguous.
+      const TO: Color32 = Color32::from_rgb(224, 48, 176);
+      let settings = HoldSettings {
+         seconds: 1.0,
+         fill_from: Some(FROM),
+         fill_to: Some(TO),
+         ..Default::default()
+      };
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let rect = warm.rect;
+
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(rect.center())], time, build);
+
+      time += f64::from(STEP);
+      let (early, _) = run_pass(&ctx, vec![], time, build);
+      let early_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
+      assert!(
+         (early_progress - 0.2).abs() < 1e-6,
+         "unexpected early progress {early_progress}"
+      );
+      let early = painted_sweep(&early, rect, early_progress).expect("the early sweep");
+
+      let mut late = None;
+      for _ in 0..7 {
+         time += f64::from(STEP);
+         let (output, _) = run_pass(&ctx, vec![], time, build);
+         late = Some(output);
+      }
+      let late = late.expect("a late frame");
+      let late_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
+      assert!(
+         (late_progress - 0.9).abs() < 1e-6,
+         "unexpected late progress {late_progress}"
+      );
+      let late = painted_sweep(&late, rect, late_progress).expect("the late sweep");
+
+      assert_ne!(
+         early, late,
+         "the fill painted the same colour at {early_progress} and {late_progress}"
+      );
+      for (from, to, actual, label) in [
+         (FROM.r(), TO.r(), early.r(), "red early"),
+         (FROM.g(), TO.g(), early.g(), "green early"),
+         (FROM.b(), TO.b(), early.b(), "blue early"),
+         (FROM.r(), TO.r(), late.r(), "red late"),
+         (FROM.g(), TO.g(), late.g(), "green late"),
+         (FROM.b(), TO.b(), late.b(), "blue late"),
+      ] {
+         assert!(
+            actual >= from.min(to).saturating_sub(1) && actual <= from.max(to).saturating_add(1),
+            "{label} channel {actual} is not between {from} and {to}"
+         );
+      }
+   }
+
+   #[test]
+   fn the_fill_clears_when_the_hold_fires() {
+      let settings = HoldSettings {
+         seconds: 0.5,
+         fill_from: Some(SWEEP),
+         fill_to: None,
+         ..Default::default()
+      };
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let center = warm.rect.center();
+
+      let mut time = f64::from(STEP);
+      let (held, pressed) = run_pass(&ctx, vec![press(center)], time, build);
+      let progress = hold_state(&ctx, pressed.id).expect("hold state").progress;
+      assert!(
+         progress > 0.0 && progress < 1.0,
+         "the sweep must be partial mid-hold, got progress {progress}"
+      );
+      assert!(
+         sweep_shape(&held, SWEEP).is_some(),
+         "the sweep must be painted mid-hold"
+      );
+
+      let (completed, completion_time) = advance_until_fired(&ctx, &mut time, &build);
+      assert!(
+         sweep_shape(&completed, SWEEP).is_none(),
+         "the sweep must clear on the frame the hold fires"
+      );
+
+      time = completion_time + f64::from(STEP);
+      let (after, _) = run_pass(&ctx, vec![], time, build);
+      assert_eq!(
+         hold_state(&ctx, warm.id).expect("hold state").progress,
+         1.0,
+         "the pointer is still down, so the completed hold must stay full"
+      );
+      assert!(
+         sweep_shape(&after, SWEEP).is_none(),
+         "the sweep must stay cleared while the completed hold is still held"
+      );
+   }
+
+   #[test]
+   fn burst_off_paints_nothing_and_costs_no_frames() {
+      let settings = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Off,
+         ..Default::default()
+      };
+      let (ctx, completed, warm, mut time) = complete_hold(settings);
+      assert!(
+         !has_burst_shape(&completed),
+         "a burst set to Off must not paint a completion shape"
+      );
+
+      // Still held: nothing animates, so the widget must not pin the frame loop.
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      time += f64::from(STEP);
+      let (after, _) = run_pass(&ctx, vec![], time, build);
+      assert_eq!(
+         hold_state(&ctx, warm.id).expect("hold state").progress,
+         1.0,
+         "the pointer is still down after completion"
+      );
+      assert!(
+         !has_burst_shape(&after),
+         "an Off burst must stay unpainted while the completed hold is held"
+      );
+      let delay = after.viewport_output[&ViewportId::ROOT].repaint_delay;
+      assert_eq!(
+         delay,
+         Duration::MAX,
+         "an Off burst requested a repaint after {delay:?}"
+      );
+   }
+
+   #[test]
+   fn the_burst_honours_its_duration() {
+      /// Long enough that the old 300 ms constant would be long gone.
+      const BURST_MS: f32 = 600.0;
+      let settings = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Glow,
+         burst_ms: BURST_MS,
+         ..Default::default()
+      };
+      let (ctx, _, _, completion_time) = complete_hold(settings);
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let mut time = completion_time;
+
+      // ~375 ms after completion: the burst must still be visible.
+      for _ in 0..3 {
+         time += f64::from(STEP);
+         run_pass(&ctx, vec![], time, build);
+      }
+      let (still, _) = run_pass(&ctx, vec![], time, build);
+      assert!(
+         mesh_alpha(&still) > 0,
+         "the {BURST_MS} ms burst was already invisible ~400 ms after completion"
+      );
+
+      // ~750 ms after completion: the burst must be over.
+      for _ in 0..2 {
+         time += f64::from(STEP);
+         run_pass(&ctx, vec![], time, build);
+      }
+      let (gone, _) = run_pass(&ctx, vec![], time, build);
+      assert_eq!(
+         mesh_alpha(&gone),
+         0,
+         "the {BURST_MS} ms burst still painted ~700 ms after completion"
+      );
+   }
+
+   #[test]
+   fn burst_intensity_zero_hides_the_burst() {
+      let visible = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Glow,
+         burst_intensity: 1.0,
+         ..Default::default()
+      };
+      let hidden = HoldSettings {
+         burst_intensity: 0.0,
+         ..visible
+      };
+
+      let (_, hidden_output, _, _) = complete_hold(hidden);
+      assert_eq!(
+         mesh_alpha(&hidden_output),
+         0,
+         "intensity 0 must not paint a visible glow"
+      );
+
+      let (_, visible_output, _, _) = complete_hold(visible);
+      assert!(
+         mesh_alpha(&visible_output) > 0,
+         "intensity 1 must paint the glow"
+      );
+   }
+
+   #[test]
+   fn lightning_knobs_reach_the_effect() {
+      let few = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Lightning,
+         burst_bolts: 1,
+         burst_branch_depth: 1,
+         ..Default::default()
+      };
+      let many = HoldSettings {
+         burst_bolts: 4,
+         burst_branch_depth: 3,
+         ..few
+      };
+
+      let (_, few_output, _, _) = complete_hold(few);
+      let (_, many_output, _, _) = complete_hold(many);
+      let few_paths = path_count(&few_output);
+      let many_paths = path_count(&many_output);
+      assert!(
+         few_paths > 0,
+         "the lightning burst must paint at least one bolt stroke"
+      );
+      assert!(
+         many_paths > few_paths,
+         "4 bolts / depth 3 painted {many_paths} bolt polylines, 1 bolt / depth 1 painted {few_paths}"
+      );
+   }
+
+   #[test]
+   fn hold_settings_sets_the_duration() {
+      let settings = HoldSettings {
+         seconds: 0.5,
+         ..Default::default()
+      };
+      let from_settings = press_outcome(move || Button::new("Hold").hold_settings(&settings));
+      let from_shortcut = press_outcome(|| Button::new("Hold").hold(0.5));
+      assert_eq!(
+         from_settings, from_shortcut,
+         "hold_settings(seconds = 0.5) must fire exactly like hold(0.5)"
+      );
+      assert_eq!(
+         from_settings.0, 0.2,
+         "the first press frame must accumulate one capped step"
+      );
+   }
+
+   #[test]
+   fn shortcuts_and_settings_compose_in_call_order() {
+      // The later `hold(0.5)` wins over `hold(2.0)` for `seconds`.
+      let later_shortcut = press_outcome(|| Button::new("Hold").hold(2.0).hold(0.5));
+      let plain = press_outcome(|| Button::new("Hold").hold(0.5));
+      assert_eq!(
+         later_shortcut, plain,
+         "`.hold(2.0).hold(0.5)` must behave like `.hold(0.5)`"
+      );
+
+      /// The shortcut's fill, replaced by `hold_settings`.
+      const SHORTCUT_FILL: Color32 = Color32::from_rgb(220, 20, 20);
+      /// The settings' fill, which must win.
+      const SETTINGS_FILL: Color32 = Color32::from_rgb(20, 220, 20);
+      let settings = HoldSettings {
+         seconds: 0.5,
+         fill_from: Some(SETTINGS_FILL),
+         fill_to: None,
+         ..Default::default()
+      };
+      let build = move || Button::new("Hold").hold_fill(SHORTCUT_FILL).hold_settings(&settings);
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let (pressed, _) = run_pass(
+         &ctx,
+         vec![press(warm.rect.center())],
+         f64::from(STEP),
+         build,
+      );
+      assert!(
+         sweep_shape(&pressed, SETTINGS_FILL).is_some(),
+         "`.hold_fill(a).hold_settings(&s)` must use the settings' fill"
+      );
+      assert!(
+         sweep_shape(&pressed, SHORTCUT_FILL).is_none(),
+         "the earlier shortcut fill must have been replaced"
+      );
+
+      // Fill before `hold` still composes: `.hold_fill(a).hold(0.5)` keeps `a`.
+      let before_hold = || Button::new("Hold").hold_fill(SHORTCUT_FILL).hold(0.5);
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, before_hold);
+      let (pressed, _) = run_pass(
+         &ctx,
+         vec![press(warm.rect.center())],
+         f64::from(STEP),
+         before_hold,
+      );
+      assert!(
+         sweep_shape(&pressed, SHORTCUT_FILL).is_some(),
+         "`.hold_fill(a).hold(seconds)` must keep the earlier fill"
       );
    }
 }
