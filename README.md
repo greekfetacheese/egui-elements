@@ -180,6 +180,43 @@ if settings.active {
 Prefer your own container? `LightSettings::body_ui(&mut settings, ui)` draws just
 the controls (no window chrome), exactly like `SnowSettings::body_ui`.
 
+### Particles: Lightning
+
+`Lightning` paints a jagged bolt plus a full-area flash — the "room lighting up"
+— on an egui layer, so it never disturbs your layout. A strike is episodic: it
+lives for a configurable duration and flickers through several sub-flashes.
+`LightningSettings` collects the public knobs and opens a themed settings window
+with `show_window`; `Lightning::from_settings` turns them into a configured
+effect.
+
+Trigger a strike yourself with `Lightning::strike`, or set
+`ambient_interval_secs` and let the scheduler fire on its own. Use one
+`id_source` for `show` and `strike` so both address the same state; the settings
+window's "Strike now" button uses `LightningSettings::STRIKE_ID`.
+
+```rust
+use egui_elements::widgets::particles::{Lightning, LightningSettings};
+
+let mut settings = LightningSettings::default();
+settings.open = true;
+
+// every frame:
+settings.show_window(ctx);                              // themed floating settings window + scroll
+if settings.active {
+    Lightning::from_settings(LightningSettings::STRIKE_ID, &settings).show(ui);
+}
+
+// on a host event (button click, timer, …):
+Lightning::from_settings(LightningSettings::STRIKE_ID, &settings).strike(ctx);
+```
+
+Prefer your own container? `LightningSettings::body_ui(&mut settings, ui)` draws
+just the controls (no window chrome), exactly like the other effects.
+
+While a strike animates the effect requests a repaint; when idle it requests
+nothing (ambient off) or wakes exactly for the next ambient strike, so it is safe
+to leave running in a battery-sensitive host.
+
 ### Credentials form (`secure-types`)
 
 Show/hide (and the QR-scan button) use [Lucide](https://lucide.dev) SVG icons
@@ -311,6 +348,12 @@ Interactive light with the public settings window:
 
 ```sh
 cargo run --example light
+```
+
+Interactive lightning with the public settings window and an ambient scheduler:
+
+```sh
+cargo run --example lightning
 ```
 
 ## Built-in themes
