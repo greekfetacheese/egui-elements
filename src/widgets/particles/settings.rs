@@ -1,6 +1,6 @@
 //! [`SnowSettings`] — public knobs for the snow effect plus a themed settings window.
 
-use egui::{Color32, Context, Slider, Vec2};
+use egui::{Color32, Context, ScrollArea, Slider, Ui, Vec2};
 
 use super::snow::SnowLayer;
 use crate::widgets::Window;
@@ -61,6 +61,9 @@ impl SnowSettings {
    }
 
    /// Themed floating settings window; returns the window's outer `Response` when open.
+   ///
+   /// Window chrome plus a vertical scroll area around [`Self::body_ui`], so a
+   /// viewport shorter than the controls scrolls instead of clipping them.
    pub fn show_window(&mut self, ctx: &Context) -> Option<egui::Response> {
       let theme = crate::theme::Theme::current(ctx);
       let frame = theme.window_frame;
@@ -69,105 +72,122 @@ impl SnowSettings {
       let resp = Window::new("Snow Settings")
          .open(&mut open)
          .default_width(300.0)
+         .resizable([true, true])
          .frame(frame)
          .title_frame(title_frame)
          .show(ctx, |ui| {
-            ui.heading("General");
-            ui.checkbox(&mut self.active, "Effect Active");
-            ui.horizontal(|ui| {
-               ui.label("Color:");
-               ui.color_edit_button_srgba(&mut self.color);
+            ScrollArea::vertical().show(ui, |ui| {
+               self.body_ui(ui);
             });
-
-            ui.separator();
-            ui.heading("Particles");
-
-            ui.label("Density (Count):");
-            ui.add(Slider::new(&mut self.density, 0..=20000).logarithmic(true));
-
-            ui.add_space(5.0);
-            ui.label("Size Range (px):");
-            ui.horizontal(|ui| {
-               ui.add(
-                  egui::DragValue::new(&mut self.size_min)
-                     .speed(0.1)
-                     .range(0.1..=20.0)
-                     .prefix("Min: "),
-               );
-               ui.add(
-                  egui::DragValue::new(&mut self.size_max)
-                     .speed(0.1)
-                     .range(0.1..=20.0)
-                     .prefix("Max: "),
-               );
-            });
-            // Ensure min does not exceed max
-            if self.size_min > self.size_max {
-               self.size_min = self.size_max;
-            }
-
-            ui.separator();
-            ui.heading("Physics");
-
-            ui.label("Fall Speed Range (px/s):");
-            ui.horizontal(|ui| {
-               ui.add(
-                  egui::DragValue::new(&mut self.speed_min)
-                     .speed(1.0)
-                     .range(0.0..=500.0)
-                     .prefix("Min: "),
-               );
-               ui.add(
-                  egui::DragValue::new(&mut self.speed_max)
-                     .speed(1.0)
-                     .range(0.0..=500.0)
-                     .prefix("Max: "),
-               );
-            });
-            if self.speed_min > self.speed_max {
-               self.speed_min = self.speed_max;
-            }
-
-            ui.label("Wind Vector:");
-            ui.horizontal(|ui| {
-               ui.add(Slider::new(&mut self.wind.x, -200.0..=200.0).text("Horizontal"));
-            });
-            ui.horizontal(|ui| {
-               ui.add(Slider::new(&mut self.wind.y, -100.0..=100.0).text("Vertical"));
-            });
-
-            ui.separator();
-            ui.heading("Rendering");
-            ui.horizontal(|ui| {
-               ui.label("Layer:");
-               ui.selectable_value(
-                  &mut self.layer,
-                  SnowLayer::Background,
-                  SnowLayer::Background.to_str(),
-               )
-               .on_hover_text("Behind everything (Order::Background)");
-               ui.selectable_value(
-                  &mut self.layer,
-                  SnowLayer::Foreground,
-                  SnowLayer::Foreground.to_str(),
-               )
-               .on_hover_text("In front of windows (Order::Foreground)");
-               ui.selectable_value(
-                  &mut self.layer,
-                  SnowLayer::Top,
-                  SnowLayer::Top.to_str(),
-               )
-               .on_hover_text("On top of everything including debug/tooltips (Order::Debug)");
-            });
-
-            ui.add_space(10.0);
-            if ui.button("Reset Defaults").clicked() {
-               self.reset();
-            }
          });
 
       self.open = open;
       resp.map(|r| r.response)
+   }
+
+   /// Draw the settings controls into `ui` — no window chrome.
+   ///
+   /// Render them in your own container (`egui::Window`, `SidePanel`, `ScrollArea`, …)
+   /// instead of using [`Self::show_window`]. If that container can be shorter than the
+   /// controls, wrap it in an `egui::ScrollArea`.
+   pub fn body_ui(&mut self, ui: &mut Ui) {
+      let theme = crate::theme::Theme::current(ui.ctx());
+      // Every row pays `item_spacing.y`; the installed style uses `md` (12).
+      ui.spacing_mut().item_spacing.y = theme.spacing.sm;
+
+      ui.heading("General");
+      ui.checkbox(&mut self.active, "Effect Active");
+      ui.horizontal(|ui| {
+         ui.label("Color:");
+         ui.color_edit_button_srgba(&mut self.color);
+      });
+
+      ui.separator();
+      ui.heading("Particles");
+
+      ui.horizontal(|ui| {
+         ui.label("Density (Count):");
+         ui.add(Slider::new(&mut self.density, 0..=20000).logarithmic(true));
+      });
+
+      ui.horizontal(|ui| {
+         ui.label("Size (px):");
+         ui.add(
+            egui::DragValue::new(&mut self.size_min)
+               .speed(0.1)
+               .range(0.1..=20.0)
+               .prefix("Min: "),
+         );
+         ui.add(
+            egui::DragValue::new(&mut self.size_max)
+               .speed(0.1)
+               .range(0.1..=20.0)
+               .prefix("Max: "),
+         );
+      });
+      // Ensure min does not exceed max
+      if self.size_min > self.size_max {
+         self.size_min = self.size_max;
+      }
+
+      ui.separator();
+      ui.heading("Physics");
+
+      ui.horizontal(|ui| {
+         ui.label("Fall Speed (px/s):");
+         ui.add(
+            egui::DragValue::new(&mut self.speed_min)
+               .speed(1.0)
+               .range(0.0..=500.0)
+               .prefix("Min: "),
+         );
+         ui.add(
+            egui::DragValue::new(&mut self.speed_max)
+               .speed(1.0)
+               .range(0.0..=500.0)
+               .prefix("Max: "),
+         );
+      });
+      if self.speed_min > self.speed_max {
+         self.speed_min = self.speed_max;
+      }
+
+      ui.label("Wind Vector:");
+      ui.horizontal(|ui| {
+         ui.add(Slider::new(&mut self.wind.x, -200.0..=200.0).text("Horizontal"));
+      });
+      ui.horizontal(|ui| {
+         ui.add(Slider::new(&mut self.wind.y, -100.0..=100.0).text("Vertical"));
+      });
+
+      ui.separator();
+      ui.heading("Rendering");
+      ui.horizontal(|ui| {
+         ui.label("Layer:");
+         ui.selectable_value(
+            &mut self.layer,
+            SnowLayer::Background,
+            SnowLayer::Background.to_str(),
+         )
+         .on_hover_text("Behind everything (Order::Background)");
+         ui.selectable_value(
+            &mut self.layer,
+            SnowLayer::Foreground,
+            SnowLayer::Foreground.to_str(),
+         )
+         .on_hover_text("In front of windows (Order::Foreground)");
+         ui.selectable_value(
+            &mut self.layer,
+            SnowLayer::Top,
+            SnowLayer::Top.to_str(),
+         )
+         .on_hover_text("On top of everything including debug/tooltips (Order::Debug)");
+      });
+
+      ui.add_space(theme.spacing.sm);
+      if ui.button("Reset Defaults").clicked() {
+         self.reset();
+      }
    }
 }
 
@@ -216,6 +236,73 @@ mod tests {
             open: true,
             ..Default::default()
          }
+      );
+   }
+
+   /// Lay the open settings window out on `screen` twice and return the second
+   /// pass's outer window height (window rects settle on the second pass).
+   ///
+   /// Unlike [`egui::__run_test_ctx`] this keeps the real fonts: empty fonts
+   /// make every galley 0 tall and the measured height meaningless.
+   fn window_height_on(screen: Vec2) -> f32 {
+      let ctx = Context::default();
+      // Mirror the demo: install the theme once so spacing/`item_spacing`
+      // match the real app instead of egui's tighter default style.
+      let mut theme = crate::theme::Theme::new(crate::theme::ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut settings = SnowSettings {
+         open: true,
+         ..Default::default()
+      };
+      let mut size = Vec2::ZERO;
+      for _ in 0..2 {
+         let output = ctx.run_ui(
+            egui::RawInput {
+               screen_rect: Some(egui::Rect::from_min_size(
+                  egui::Pos2::ZERO,
+                  screen,
+               )),
+               ..Default::default()
+            },
+            |ui| {
+               if let Some(resp) = settings.show_window(ui.ctx()) {
+                  size = resp.rect.size();
+               }
+            },
+         );
+         output.drop_without_applying_deltas();
+      }
+      size.y
+   }
+
+   #[test]
+   fn settings_body_fits_the_demo_root() {
+      let height = window_height_on(Vec2::new(900.0, 2000.0));
+      assert!(
+         height <= 650.0,
+         "settings window is {height} tall, root is 650"
+      );
+   }
+
+   #[test]
+   fn settings_window_never_exceeds_a_short_root() {
+      let height = window_height_on(Vec2::new(900.0, 400.0));
+      assert!(
+         height <= 400.0,
+         "settings window is {height} tall, root is 400"
+      );
+   }
+
+   #[test]
+   fn body_ui_renders_without_a_window() {
+      let mut settings = SnowSettings::default();
+      assert!(!settings.open);
+      egui::__run_test_ui(|ui| {
+         settings.body_ui(ui);
+      });
+      assert!(
+         !settings.open,
+         "body_ui must not touch the window flag"
       );
    }
 

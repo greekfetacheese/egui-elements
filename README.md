@@ -140,10 +140,20 @@ let mut settings = SnowSettings::default();
 settings.open = true;
 
 // every frame:
-settings.show_window(ctx);                              // themed floating settings window
+settings.show_window(ctx);                              // themed floating settings window + scroll
 if settings.active {
     Snow::from_settings("snow", &settings).show(ui);    // layout-neutral (rendered on a layer)
 }
+```
+
+Prefer your own container? `SnowSettings::body_ui(&mut settings, ui)` draws just the
+controls (no window chrome) inside a `SidePanel`, `Window`, or `ScrollArea` — wrap it in
+an `egui::ScrollArea` when that container can be shorter than the controls.
+
+```rust
+egui::SidePanel::right("snow").show(ctx, |ui| {
+    settings.body_ui(ui);
+});
 ```
 
 ### Credentials form (`secure-types`)

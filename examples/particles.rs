@@ -78,8 +78,6 @@ impl eframe::App for ParticlesApp {
          )
          .show(ui, |ui| self.header(ui));
 
-      self.theme.install(ui.ctx());
-
       let bg = self.theme.colors.bg;
       CentralPanel::default()
          .frame(Frame::new().fill(bg).inner_margin(space.margin(space.lg)))

@@ -9,8 +9,9 @@
 //! The effect keeps its per-frame state in egui's temporary data storage and
 //! paints on an egui layer, so it never disturbs the host layout.
 //! [`SnowSettings`] collects the public knobs and draws a themed settings window
-//! through [`SnowSettings::show_window`]; [`Snow::from_settings`] turns the
-//! knobs into a configured effect.
+//! through [`SnowSettings::show_window`], or just the controls through
+//! [`SnowSettings::body_ui`] for a host-provided container; [`Snow::from_settings`]
+//! turns the knobs into a configured effect.
 //!
 //! ```no_run
 //! use egui::Ui;
