@@ -34,10 +34,12 @@
 //!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
 //!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
 //!   [`Window`](crate::widgets::Window)
-//! - [`widgets::particles`] — [`Snow`](crate::widgets::particles::Snow) and
-//!   [`Light`](crate::widgets::particles::Light) with themed
+//! - [`widgets::particles`] — [`Snow`](crate::widgets::particles::Snow),
+//!   [`Light`](crate::widgets::particles::Light) and
+//!   [`Lightning`](crate::widgets::particles::Lightning) with themed
 //!   [`SnowSettings`](crate::widgets::particles::SnowSettings) /
-//!   [`LightSettings`](crate::widgets::particles::LightSettings) windows
+//!   [`LightSettings`](crate::widgets::particles::LightSettings) /
+//!   [`LightningSettings`](crate::widgets::particles::LightningSettings) windows
 //! - [`components`] — feature-gated composites (`secure-types`, `qr-image`, `qr-scanner`)
 //! - [`editor`] — live [`ThemeEditor`](crate::editor::ThemeEditor)
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
@@ -78,8 +80,8 @@ pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Light, LightMotion, LightSettings, Modal,
-   MultiLabel, ParticleLayer, Snow, SnowSettings, Window,
+   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Light, LightMotion, LightSettings,
+   Lightning, LightningSettings, Modal, MultiLabel, ParticleLayer, Snow, SnowSettings, Window,
 };
 
 #[cfg(feature = "secure-types")]

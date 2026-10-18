@@ -54,3 +54,6 @@ name = "particles"
 
 [[example]]
 name = "light"
+
+[[example]]
+name = "lightning"
