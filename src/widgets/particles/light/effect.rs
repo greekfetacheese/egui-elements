@@ -89,7 +89,10 @@ impl LightMote {
    }
 
    /// Advances the mote by `dt` seconds inside `area` (never leaving it).
-   fn advance(&mut self, motion: LightMotion, wind: Vec2, time: f32, dt: f32, area: Rect) {
+   ///
+   /// Returns `true` when a rising ember climbed out of the top edge and must
+   /// be recycled; drifting motes always bounce and return `false`.
+   fn advance(&mut self, motion: LightMotion, wind: Vec2, time: f32, dt: f32, area: Rect) -> bool {
       match motion {
          LightMotion::Drift => {
             // Damped wander: the velocity smoothly chases a slow phase-driven target.
@@ -109,6 +112,9 @@ impl LightMote {
 
       self.pos.x += self.vel.x * dt / area.width();
       self.pos.y += self.vel.y * dt / area.height();
+
+      // A rising ember that crossed the top edge is recycled by the caller.
+      let escaped = matches!(motion, LightMotion::Rise) && self.pos.y < 0.0;
 
       if matches!(motion, LightMotion::Drift) {
          // Bounce off the area edges so drifting motes stay on screen.
@@ -131,6 +137,8 @@ impl LightMote {
       // Clamp away any residual overshoot (e.g. after a spike in `dt`).
       self.pos.x = self.pos.x.clamp(0.0, 1.0);
       self.pos.y = self.pos.y.clamp(0.0, 1.0);
+
+      escaped
    }
 }
 
@@ -354,7 +362,10 @@ impl Light {
       for mote in &mut motes {
          // --- Update ---
          mote.age += dt;
-         if mote.age >= mote.lifetime {
+         let escaped = mote.advance(self.motion, self.wind, time as f32, dt, area);
+         // Recycle expired motes, and rising embers that climbed out of the top
+         // edge, so no glow is painted outside the effect area.
+         if mote.age >= mote.lifetime || escaped {
             *mote = LightMote::spawn(
                &mut rng,
                self.motion,
@@ -364,7 +375,6 @@ impl Light {
                self.flicker,
             );
          }
-         mote.advance(self.motion, self.wind, time as f32, dt, area);
 
          // --- Render ---
          let u = (mote.age / mote.lifetime).clamp(0.0, 1.0);
@@ -609,6 +619,70 @@ mod tests {
                mote.pos.y
             );
          }
+      });
+   }
+
+   #[test]
+   fn large_dt_keeps_rising_motes_contained() {
+      __run_test_ctx(|ctx| {
+         let area = Rect::from_min_size(Pos2::ZERO, vec2(64.0, 64.0));
+         let id = Id::new("test_light_rise_large_dt");
+
+         // Smallest `y` any ember reached. It proves the run actually drove
+         // embers into the top edge, and stays above zero only when they are
+         // recycled instead of piling up on it.
+         let mut min_y = f32::INFINITY;
+
+         for frame in 0..120 {
+            ctx.input_mut(|i| {
+               i.stable_dt = 30.0;
+               i.time = f64::from(frame);
+            });
+            Light::new("test_light_rise_large_dt")
+               .density(9)
+               .motion(LightMotion::Rise)
+               .area(area)
+               .show(ctx);
+
+            let state = ctx
+               .data(|d| d.get_temp::<LightState>(id))
+               .expect("LightState should exist after show");
+            for mote in &state.motes {
+               min_y = min_y.min(mote.pos.y);
+            }
+         }
+
+         let state = ctx
+            .data(|d| d.get_temp::<LightState>(id))
+            .expect("LightState should exist after show");
+         assert_eq!(state.motes.len(), 9);
+         for mote in &state.motes {
+            assert!(
+               mote.age <= mote.lifetime,
+               "age {} exceeded lifetime {}",
+               mote.age,
+               mote.lifetime
+            );
+            assert!(
+               (0.0..=1.0).contains(&mote.pos.x),
+               "x {} left the area",
+               mote.pos.x
+            );
+            assert!(
+               (0.0..=1.0).contains(&mote.pos.y),
+               "y {} left the area",
+               mote.pos.y
+            );
+         }
+
+         assert!(
+            min_y < 0.1,
+            "no rising ember reached the top edge (min y {min_y})"
+         );
+         assert!(
+            min_y > 0.0,
+            "an ember was left resting on the top edge (min y {min_y})"
+         );
       });
    }
 
