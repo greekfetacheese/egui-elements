@@ -34,6 +34,8 @@
 //!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
 //!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
 //!   [`Window`](crate::widgets::Window)
+//! - [`widgets::particles`] — [`Snow`](crate::widgets::particles::Snow) with a themed
+//!   [`SnowSettings`](crate::widgets::particles::SnowSettings) window
 //! - [`components`] — feature-gated composites (`secure-types`, `qr-image`, `qr-scanner`)
 //! - [`editor`] — live [`ThemeEditor`](crate::editor::ThemeEditor)
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
@@ -73,7 +75,10 @@ pub mod visuals;
 pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
-pub use widgets::{Badge, BadgeCorner, Button, ComboBox, Frame, Label, Modal, MultiLabel, Window};
+pub use widgets::{
+   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Modal, MultiLabel, Snow, SnowLayer,
+   SnowSettings, Window,
+};
 
 #[cfg(feature = "secure-types")]
 pub use widgets::SecureTextEdit;
