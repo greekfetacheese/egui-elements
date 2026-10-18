@@ -3,7 +3,12 @@
 
 use egui::{Color32, Context, Slider, Ui};
 
+use crate::widgets::button::{HOLD_GLOW_END, HOLD_GLOW_START};
+use crate::widgets::particles::LightningSettings;
 use crate::widgets::particles::shared::{begin_body, settings_window};
+
+/// Softness that reproduces the shared glow fan exactly.
+const DEFAULT_GLOW_SOFTNESS: f32 = 1.0;
 
 /// Completion burst drawn when a hold-to-confirm button reaches 100 %.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -85,10 +90,51 @@ pub struct HoldSettings {
    ///
    /// Default `1`.
    pub burst_branch_depth: u32,
+   /// Core stroke thickness of a [`HoldBurst::Lightning`] burst, in pixels;
+   /// ignored by the other kinds.
+   ///
+   /// Default `2.0`, the [`LightningSettings::default`] value (see
+   /// `DEFAULT_THICKNESS` in `widgets/particles/lightning/effect.rs`).
+   pub burst_thickness: f32,
+   /// Midpoint-displacement jitter of a [`HoldBurst::Lightning`] burst, as a
+   /// fraction of each segment's length; ignored by the other kinds.
+   ///
+   /// Default `0.18`, the [`LightningSettings::default`] value (see
+   /// `DEFAULT_JITTER` in `widgets/particles/lightning/effect.rs`).
+   pub burst_jitter: f32,
+   /// Radius of a [`HoldBurst::Glow`] at the start of the burst, as a multiple
+   /// of the button's shorter side; ignored by the other kinds.
+   ///
+   /// Default `1.0` (`HOLD_GLOW_START`).
+   pub burst_glow_from: f32,
+   /// Radius of a [`HoldBurst::Glow`] at the end of the burst, as a multiple of
+   /// the button's shorter side; ignored by the other kinds.
+   ///
+   /// At paint time this is clamped to at least [`Self::burst_glow_from`], so a
+   /// pair that would shrink (or a negative one) paints a constant radius
+   /// instead of a shrinking band.
+   ///
+   /// Default `2.2` (`HOLD_GLOW_END`).
+   pub burst_glow_to: f32,
+   /// Falloff softness of a [`HoldBurst::Glow`]; ignored by the other kinds.
+   ///
+   /// The shared fan keeps its hot-core ring at `0.15` of the radius and its
+   /// inner ring at `0.45`, carrying `0.55` and `0.18` of the colour. This knob
+   /// maps each interior ring fraction `r` to `r.powf(1.0 / softness)`; the rim
+   /// and every alpha stay put. Values above `1.0` push the two interior rings
+   /// outward, spreading the colour over a longer run to the transparent rim (a
+   /// gentler falloff); values below `1.0` pull them in for a tighter, harder
+   /// core. Exactly `1.0` reproduces the shared profile vertex for vertex.
+   ///
+   /// Default `1.0`.
+   pub burst_glow_softness: f32,
 }
 
 impl Default for HoldSettings {
    fn default() -> Self {
+      // The burst's strike knobs default to the effect's own, so a hold burst
+      // paints exactly like the same `Lightning` built without those calls.
+      let lightning = LightningSettings::default();
       Self {
          open: false,
          seconds: 1.0,
@@ -100,6 +146,11 @@ impl Default for HoldSettings {
          burst_ms: 300.0,
          burst_bolts: 1,
          burst_branch_depth: 1,
+         burst_thickness: lightning.thickness,
+         burst_jitter: lightning.jitter,
+         burst_glow_from: HOLD_GLOW_START,
+         burst_glow_to: HOLD_GLOW_END,
+         burst_glow_softness: DEFAULT_GLOW_SOFTNESS,
       }
    }
 }
@@ -125,6 +176,13 @@ impl HoldSettings {
    /// Burst length in seconds; `0.0` for a zero-length burst.
    pub(crate) fn burst_secs(&self) -> f32 {
       (self.burst_ms / 1000.0).max(0.0)
+   }
+
+   /// The [`Self::burst_glow_from`]..[`Self::burst_glow_to`] radius band, with
+   /// both ends non-negative and `to` never below `from`.
+   pub(crate) fn glow_radius_range(&self) -> (f32, f32) {
+      let from = self.burst_glow_from.max(0.0);
+      (from, self.burst_glow_to.max(from))
    }
 
    /// Whether a completed hold should start a burst at all.
@@ -259,6 +317,18 @@ mod tests {
       assert_eq!(settings.burst_ms, 300.0);
       assert_eq!(settings.burst_bolts, 1);
       assert_eq!(settings.burst_branch_depth, 1);
+      let lightning = LightningSettings::default();
+      assert_eq!(
+         settings.burst_thickness, lightning.thickness,
+         "the burst's thickness default must be the effect's own"
+      );
+      assert_eq!(
+         settings.burst_jitter, lightning.jitter,
+         "the burst's jitter default must be the effect's own"
+      );
+      assert_eq!(settings.burst_glow_from, 1.0);
+      assert_eq!(settings.burst_glow_to, 2.2);
+      assert_eq!(settings.burst_glow_softness, 1.0);
    }
 
    #[test]
@@ -274,6 +344,11 @@ mod tests {
          burst_ms: 900.0,
          burst_bolts: 4,
          burst_branch_depth: 3,
+         burst_thickness: 7.0,
+         burst_jitter: 0.5,
+         burst_glow_from: 0.4,
+         burst_glow_to: 3.0,
+         burst_glow_softness: 2.0,
       };
 
       settings.reset();
@@ -285,6 +360,31 @@ mod tests {
             open: true,
             ..Default::default()
          }
+      );
+   }
+
+   #[test]
+   fn the_glow_band_never_shrinks() {
+      let inverted = HoldSettings {
+         burst_glow_from: 2.5,
+         burst_glow_to: 0.8,
+         ..Default::default()
+      };
+      assert_eq!(
+         inverted.glow_radius_range(),
+         (2.5, 2.5),
+         "an end radius below the start must clamp up to it"
+      );
+
+      let negative = HoldSettings {
+         burst_glow_from: -1.0,
+         burst_glow_to: -3.0,
+         ..Default::default()
+      };
+      assert_eq!(
+         negative.glow_radius_range(),
+         (0.0, 0.0),
+         "a negative band must clamp to zero"
       );
    }
 

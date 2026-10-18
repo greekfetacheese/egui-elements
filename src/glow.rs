@@ -17,18 +17,75 @@ const RIM_RING: f32 = 1.0;
 const CORE_ALPHA: f32 = 0.55;
 /// Alpha of the inner ring, as a fraction of the mote colour.
 const INNER_ALPHA: f32 = 0.18;
+/// Softness that reproduces the original ring profile.
+const DEFAULT_SOFTNESS: f32 = 1.0;
+/// Lower clamp of the softness knob, so a rogue value cannot collapse the fan.
+const MIN_SOFTNESS: f32 = 0.05;
 /// Exponent of the size-attenuation curve (peak alpha against mote radius).
 const SIZE_ATTENUATION_POWER: f32 = 0.5;
 /// Lower clamp of the size-attenuation curve.
 const MIN_SIZE_ATTENUATION: f32 = 0.4;
 
+/// Ring radii and alphas of the shared radial-glow fan.
+///
+/// Radii are fractions of the glow radius; alphas are fractions of the glow
+/// colour. [`GlowProfile::DEFAULT`] is the profile every caller painted before
+/// the profile became a parameter, and [`GlowProfile::softness`] reshapes it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GlowProfile {
+   /// Hot-core ring radius as a fraction of the glow radius.
+   core_ring: f32,
+   /// Inner-ring radius as a fraction of the glow radius.
+   inner_ring: f32,
+   /// Outer-ring (rim) radius as a fraction of the glow radius.
+   rim_ring: f32,
+   /// Alpha of the hot-core ring, as a fraction of the glow colour.
+   core_alpha: f32,
+   /// Alpha of the inner ring, as a fraction of the glow colour.
+   inner_alpha: f32,
+}
+
+impl GlowProfile {
+   /// The shared fan's original profile: the hot core at [`CORE_RING`], the
+   /// inner ring at [`INNER_RING`], the transparent rim at [`RIM_RING`], and
+   /// the two ring alphas at [`CORE_ALPHA`] / [`INNER_ALPHA`].
+   pub(crate) const DEFAULT: Self = Self {
+      core_ring: CORE_RING,
+      inner_ring: INNER_RING,
+      rim_ring: RIM_RING,
+      core_alpha: CORE_ALPHA,
+      inner_alpha: INNER_ALPHA,
+   };
+
+   /// The default profile reshaped by `softness`.
+   ///
+   /// Each interior ring fraction `r` becomes `r.powf(1.0 / softness)`; the rim
+   /// and both alphas are untouched. `softness > 1.0` pushes the hot core and
+   /// inner ring outward, so the colour drops to the transparent rim over a
+   /// longer run (a gentler falloff); `softness < 1.0` pulls them in for a
+   /// tighter, harder core. Exactly [`DEFAULT_SOFTNESS`] returns
+   /// [`Self::DEFAULT`], so `1.0` is vertex-for-vertex identical.
+   pub(crate) fn softness(softness: f32) -> Self {
+      if softness == DEFAULT_SOFTNESS {
+         return Self::DEFAULT;
+      }
+      let exponent = softness.max(MIN_SOFTNESS).recip();
+      Self {
+         core_ring: CORE_RING.powf(exponent),
+         inner_ring: INNER_RING.powf(exponent),
+         ..Self::DEFAULT
+      }
+   }
+}
+
 /// Builds one radial glow as a triangle fan with a hot core and a long tail.
 ///
-/// The centre is painted at full `color`, then three rings close the fan: a hot
-/// core at `CORE_RING * radius` carrying `CORE_ALPHA` of the colour, an inner
-/// ring at `INNER_RING * radius` carrying `INNER_ALPHA`, and a transparent rim
-/// at `RIM_RING * radius`. The steep centre-to-core drop gives the point its
-/// hot core and the long, faint core-to-rim tail gives it reach, which is what
+/// Shorthand for [`glow_mesh_with`] with [`GlowProfile::DEFAULT`]: the centre is
+/// painted at full `color`, then three rings close the fan: a hot core at
+/// `CORE_RING * radius` carrying `CORE_ALPHA` of the colour, an inner ring at
+/// `INNER_RING * radius` carrying `INNER_ALPHA`, and a transparent rim at
+/// `RIM_RING * radius`. The steep centre-to-core drop gives the point its hot
+/// core and the long, faint core-to-rim tail gives it reach, which is what
 /// reads as a light. A single linear two-ring fan instead fades at one constant
 /// rate from centre to rim, and the eye reads that flat profile as a milky disc
 /// rather than a glowing source.
@@ -36,6 +93,19 @@ const MIN_SIZE_ATTENUATION: f32 = 0.4;
 /// The mesh uses the font texture (white at `WHITE_UV`), so the fan fades out
 /// instead of tinting; the rim must stay premultiplied zero for that reason.
 pub(crate) fn glow_mesh(center: Pos2, radius: f32, color: Color32) -> Mesh {
+   glow_mesh_with(center, radius, color, GlowProfile::DEFAULT)
+}
+
+/// Builds one radial glow with a custom [`GlowProfile`].
+///
+/// [`glow_mesh`] is this function with [`GlowProfile::DEFAULT`]; see it for the
+/// fan's shape and the texture contract.
+pub(crate) fn glow_mesh_with(
+   center: Pos2,
+   radius: f32,
+   color: Color32,
+   profile: GlowProfile,
+) -> Mesh {
    let segments = ((radius / 4.0).clamp(MIN_SEGMENTS as f32, MAX_SEGMENTS as f32)) as usize;
    let mut mesh = Mesh::default();
    mesh.texture_id = TextureId::default();
@@ -45,14 +115,14 @@ pub(crate) fn glow_mesh(center: Pos2, radius: f32, color: Color32) -> Mesh {
    // Ring radii and alphas, innermost first; the rim stays fully transparent.
    let rings = [
       (
-         CORE_RING * radius,
-         color.gamma_multiply(CORE_ALPHA),
+         profile.core_ring * radius,
+         color.gamma_multiply(profile.core_alpha),
       ),
       (
-         INNER_RING * radius,
-         color.gamma_multiply(INNER_ALPHA),
+         profile.inner_ring * radius,
+         color.gamma_multiply(profile.inner_alpha),
       ),
-      (RIM_RING * radius, Color32::TRANSPARENT),
+      (profile.rim_ring * radius, Color32::TRANSPARENT),
    ];
    for (ring_radius, ring_color) in rings {
       for i in 0..segments {

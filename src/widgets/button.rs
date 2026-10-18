@@ -4,7 +4,7 @@ use egui::{
    TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, WidgetType, response::Flags,
 };
 
-use crate::glow::{glow_mesh, size_attenuation};
+use crate::glow::{GlowProfile, glow_mesh_with, size_attenuation};
 use crate::theme::Theme;
 use crate::visuals::ButtonVisuals;
 use crate::widgets::badge::Badge;
@@ -19,11 +19,11 @@ const HOLD_EDGE_WIDTH: f32 = 1.5;
 /// intensity.
 const HOLD_BURST_FLASH: f32 = 0.22;
 /// [`HoldBurst::Glow`] radius at the start of the burst, as a multiple of the
-/// button's shorter side.
-const HOLD_GLOW_START: f32 = 1.0;
+/// button's shorter side; the default of [`HoldSettings::burst_glow_from`].
+pub(crate) const HOLD_GLOW_START: f32 = 1.0;
 /// [`HoldBurst::Glow`] radius at the end of the burst, as a multiple of the
-/// button's shorter side.
-const HOLD_GLOW_END: f32 = 2.2;
+/// button's shorter side; the default of [`HoldSettings::burst_glow_to`].
+pub(crate) const HOLD_GLOW_END: f32 = 2.2;
 
 /// Per-button hold-to-confirm state, keyed by the button's response [`Id`].
 #[derive(Clone, Copy, Default)]
@@ -50,6 +50,8 @@ fn burst_lightning(id: Id, area: Rect, settings: &HoldSettings, color: Color32) 
       .color(color.gamma_multiply(intensity))
       .bolt_count(settings.burst_bolts)
       .branch_depth(settings.burst_branch_depth)
+      .thickness(settings.burst_thickness)
+      .jitter(settings.burst_jitter)
       .duration_ms(settings.burst_ms)
       .flash_intensity(HOLD_BURST_FLASH * intensity)
       .area(area)
@@ -77,14 +79,16 @@ fn paint_burst(
          // Grow and fade the shared glow fan; `size_attenuation` keeps the peak
          // alpha in family with the Light effect instead of a second falloff.
          let short = rect.width().min(rect.height()).max(1.0);
-         let radius = short * (HOLD_GLOW_START + (HOLD_GLOW_END - HOLD_GLOW_START) * t);
-         let attenuation = size_attenuation(radius, short, short * HOLD_GLOW_END);
+         let (from, to) = settings.glow_radius_range();
+         let radius = short * (from + (to - from) * t);
+         let attenuation = size_attenuation(radius, short * from, short * to);
          let tint = color.gamma_multiply((1.0 - t) * attenuation * intensity);
          if tint.a() > 0 {
-            ui.painter().add(Shape::mesh(glow_mesh(
+            ui.painter().add(Shape::mesh(glow_mesh_with(
                rect.center(),
                radius,
                tint,
+               GlowProfile::softness(settings.burst_glow_softness),
             )));
          }
       }
@@ -719,7 +723,8 @@ impl Widget for Button<'_> {
 mod tests {
    use super::*;
    use egui::{
-      Context, Event, FullOutput, Key, Modifiers, PointerButton, RawInput, ViewportId, vec2,
+      Context, Event, FullOutput, Key, Modifiers, PointerButton, RawInput, ViewportId,
+      epaint::Mesh, vec2,
    };
    use std::time::Duration;
 
@@ -907,6 +912,91 @@ mod tests {
    fn complete_hold(settings: HoldSettings) -> (Context, FullOutput, Response, f64) {
       let ctx = Context::default();
       let build = move || Button::new("Hold").hold_settings(&settings);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let center = warm.rect.center();
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+      let (completed, completion_time) = advance_until_fired(&ctx, &mut time, &build);
+      (ctx, completed, warm, completion_time)
+   }
+
+   /// The glow mesh the frame painted, identified by its fully transparent rim
+   /// (text stays a `Shape::Text`, so the glow is the only `Shape::Mesh` with a
+   /// zero-alpha vertex).
+   fn burst_mesh(output: &FullOutput) -> Option<Mesh> {
+      output.shapes.iter().find_map(|clipped| match &clipped.shape {
+         Shape::Mesh(mesh) if mesh.vertices.iter().any(|vertex| vertex.color.a() == 0) => {
+            Some(mesh.as_ref().clone())
+         }
+         _ => None,
+      })
+   }
+
+   /// Largest distance from `center` to any vertex of `mesh`.
+   fn mesh_radius(mesh: &Mesh, center: Pos2) -> f32 {
+      mesh
+         .vertices
+         .iter()
+         .map(|vertex| vertex.pos.distance(center))
+         .fold(0.0_f32, f32::max)
+   }
+
+   /// Every painted polyline as `(points, stroke width)`, in paint order.
+   fn polylines(output: &FullOutput) -> Vec<(Vec<Pos2>, f32)> {
+      output
+         .shapes
+         .iter()
+         .filter_map(|clipped| match &clipped.shape {
+            Shape::Path(path) => Some((path.points.clone(), path.stroke.width)),
+            _ => None,
+         })
+         .collect()
+   }
+
+   /// Largest perpendicular distance of `points` from the line joining their
+   /// first and last point (`0.0` for a straight polyline).
+   fn max_deviation(points: &[Pos2]) -> f32 {
+      let (Some(&first), Some(&last)) = (points.first(), points.last()) else {
+         return 0.0;
+      };
+      let direction = last - first;
+      let length = direction.length();
+      if length <= f32::MIN_POSITIVE {
+         return 0.0;
+      }
+      points
+         .iter()
+         .map(|point| {
+            let offset = *point - first;
+            (offset.x * direction.y - offset.y * direction.x).abs() / length
+         })
+         .fold(0.0_f32, f32::max)
+   }
+
+   /// Hold a button from `settings` to completion and advance `extra` frames,
+   /// returning the last frame's glow mesh and the button rect.
+   fn glow_burst_after(settings: HoldSettings, extra: usize) -> (Mesh, Rect) {
+      let ctx = Context::default();
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let center = warm.rect.center();
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+      let (mut output, mut time) = advance_until_fired(&ctx, &mut time, &build);
+      for _ in 0..extra {
+         time += f64::from(STEP);
+         let (next, _) = run_pass(&ctx, vec![], time, build);
+         output = next;
+      }
+      let mesh = burst_mesh(&output).expect("the Glow burst must paint its mesh");
+      (mesh, warm.rect)
+   }
+
+   /// Like [`complete_hold`], but at the demo's `(250, 45)` button size so a
+   /// strike's geometry has a stable area to bend in.
+   fn complete_hold_sized(settings: HoldSettings) -> (Context, FullOutput, Response, f64) {
+      let ctx = Context::default();
+      let build = move || Button::new("Hold").hold_settings(&settings).min_size(vec2(250.0, 45.0));
       let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
       let center = warm.rect.center();
       let mut time = f64::from(STEP);
@@ -1996,6 +2086,250 @@ mod tests {
       assert!(
          many_paths > few_paths,
          "4 bolts / depth 3 painted {many_paths} bolt polylines, 1 bolt / depth 1 painted {few_paths}"
+      );
+   }
+
+   #[test]
+   fn the_glow_size_range_is_honoured() {
+      /// Burst long enough to sample it late.
+      const BURST_MS: f32 = 2000.0;
+      /// Seconds a burst advances per pass (`stable_dt`, capped by `HOLD_MAX_DT`).
+      const BURST_DT: f32 = HOLD_MAX_DT;
+      /// Passes from completion to the last painted frame: the age reaches
+      /// `secs - BURST_DT`, i.e. `t = 1 - BURST_DT / secs`.
+      const LATE_FRAMES: usize = ((BURST_MS / 1000.0 - BURST_DT) / BURST_DT) as usize;
+      /// The start radius, in short sides; shared by both pairs.
+      const FROM: f32 = 1.0;
+      /// A small end radius.
+      const SMALL_TO: f32 = 1.4;
+      /// A larger end radius.
+      const LARGE_TO: f32 = 2.6;
+
+      let base = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Glow,
+         burst_ms: BURST_MS,
+         burst_glow_from: FROM,
+         ..Default::default()
+      };
+      let small = HoldSettings {
+         burst_glow_to: SMALL_TO,
+         ..base
+      };
+      let large = HoldSettings {
+         burst_glow_to: LARGE_TO,
+         ..base
+      };
+
+      // At completion the radius is exactly `short x from`; at the last painted
+      // frame it is `short x (from + (to - from) x t)`.
+      let (start_mesh, rect) = glow_burst_after(small, 0);
+      let (small_mesh, _) = glow_burst_after(small, LATE_FRAMES);
+      let (large_mesh, _) = glow_burst_after(large, LATE_FRAMES);
+      let center = rect.center();
+      let short = rect.width().min(rect.height()).max(1.0);
+
+      let start_radius = mesh_radius(&start_mesh, center);
+      assert!(
+         (start_radius - short * FROM).abs() < 1e-3,
+         "the glow started at {start_radius} px, expected {short} px (short x {FROM})"
+      );
+
+      let t = 1.0 - BURST_DT / (BURST_MS / 1000.0);
+      let small_radius = mesh_radius(&small_mesh, center);
+      let large_radius = mesh_radius(&large_mesh, center);
+      let expected_small = short * (FROM + (SMALL_TO - FROM) * t);
+      let expected_large = short * (FROM + (LARGE_TO - FROM) * t);
+      assert!(
+         (small_radius - expected_small).abs() < 1e-3,
+         "the small glow's bounding radius was {small_radius} px, expected \
+          {expected_small} px (short {short} x {FROM} + ({SMALL_TO} - {FROM}) x {t})"
+      );
+      assert!(
+         (large_radius - expected_large).abs() < 1e-3,
+         "the large glow's bounding radius was {large_radius} px, expected \
+          {expected_large} px (short {short} x {FROM} + ({LARGE_TO} - {FROM}) x {t})"
+      );
+      assert!(
+         large_radius > small_radius,
+         "a larger end radius must paint a larger glow: {large_radius} px vs {small_radius} px"
+      );
+      assert!(
+         (large_radius - short * LARGE_TO).abs() < 0.1 * short * LARGE_TO,
+         "the late large glow reached {large_radius} px, not ~ short x {LARGE_TO} = {} px",
+         short * LARGE_TO
+      );
+   }
+
+   #[test]
+   fn softness_one_matches_the_shared_profile() {
+      /// A known burst colour, so the expected fan's tint is unambiguous.
+      const BURST: Color32 = Color32::from_rgb(140, 90, 40);
+
+      let settings = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Glow,
+         burst_color: Some(BURST),
+         burst_glow_softness: 1.0,
+         ..Default::default()
+      };
+
+      // At completion `t = 0`, so the radius is `short x from == short`, the
+      // attenuation is exactly `1.0` and the tint is the burst colour.
+      let (mesh, rect) = glow_burst_after(settings, 0);
+      let short = rect.width().min(rect.height()).max(1.0);
+      let expected = crate::glow::glow_mesh(rect.center(), short, BURST);
+      assert_eq!(
+         mesh, expected,
+         "softness 1.0 must reproduce the shared glow fan vertex for vertex"
+      );
+
+      let softer = HoldSettings {
+         burst_glow_softness: 2.0,
+         ..settings
+      };
+      let (softer_mesh, _) = glow_burst_after(softer, 0);
+      assert_ne!(
+         softer_mesh, expected,
+         "softness 2.0 must reshape the shared glow fan"
+      );
+   }
+
+   #[test]
+   fn the_strike_thickness_and_jitter_reach_the_effect() {
+      /// Thin and thick cores, so the painted stroke widths are unambiguous.
+      const THIN: f32 = 1.0;
+      const THICK: f32 = 8.0;
+      /// A straight trunk's rounding is far below this; a jittered bolt is far
+      /// above it.
+      const STRAIGHT_TOLERANCE: f32 = 1e-3;
+
+      let base = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Lightning,
+         burst_thickness: THIN,
+         burst_jitter: 0.0,
+         ..Default::default()
+      };
+
+      let (_, thin_output, _, _) = complete_hold_sized(base);
+      let thin = polylines(&thin_output);
+      assert!(
+         !thin.is_empty(),
+         "the strike must paint its polylines"
+      );
+      let thin_core = thin.iter().map(|(_, width)| *width).fold(f32::MAX, f32::min);
+      assert!(
+         (thin_core - THIN).abs() < 1e-6,
+         "the thinnest stroke was {thin_core} px, expected the core's {THIN} px"
+      );
+
+      let (_, thick_output, _, _) = complete_hold_sized(HoldSettings {
+         burst_thickness: THICK,
+         ..base
+      });
+      let thick = polylines(&thick_output);
+      let thick_core = thick.iter().map(|(_, width)| *width).fold(f32::MAX, f32::min);
+      assert!(
+         (thick_core - THICK).abs() < 1e-6,
+         "the thinnest stroke was {thick_core} px, expected the core's {THICK} px"
+      );
+      assert!(
+         thick_core > thin_core,
+         "a thicker burst must paint a wider core: {thick_core} px vs {thin_core} px"
+      );
+
+      // `jitter = 0` lays the trunk on a straight line. Only the trunk (the
+      // first polyline) is checked: a branch endpoint clamped to the effect
+      // area can bend even a zero-jitter branch.
+      let trunk = thin
+         .first()
+         .map(|(points, _)| points.as_slice())
+         .expect("the strike must paint a trunk");
+      let straight = max_deviation(trunk);
+      assert!(
+         straight <= STRAIGHT_TOLERANCE,
+         "jitter 0 still deviated by {straight} px"
+      );
+
+      let (_, jittered_output, _, _) = complete_hold_sized(HoldSettings {
+         burst_jitter: 0.6,
+         ..base
+      });
+      let jittered = polylines(&jittered_output);
+      let jittered_trunk = jittered
+         .first()
+         .map(|(points, _)| points.as_slice())
+         .expect("the jittered strike must paint a trunk");
+      let deviated = max_deviation(jittered_trunk);
+      assert!(
+         deviated > STRAIGHT_TOLERANCE,
+         "jitter 0.6 must bend the bolt, but the trunk's largest deviation was {deviated} px"
+      );
+   }
+
+   #[test]
+   fn default_settings_paint_the_previous_burst() {
+      // Lightning: the default settings only switch the kind; the new thickness
+      // and jitter fields keep the effect's own defaults, so the painted
+      // polylines must match a `Lightning` built without those two calls.
+      let settings = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Lightning,
+         ..Default::default()
+      };
+      let (ctx, output, warm, _) = complete_hold(settings);
+      let actual = polylines(&output);
+      assert!(
+         !actual.is_empty(),
+         "the default Lightning burst must paint its polylines"
+      );
+
+      let accent = Theme::current(&ctx).colors.accent;
+      let color = settings.burst_color.unwrap_or(accent);
+      let area = warm.rect;
+      let effect = || {
+         Lightning::new(("hold_burst", warm.id))
+            .color(color)
+            .bolt_count(settings.burst_bolts)
+            .branch_depth(settings.burst_branch_depth)
+            .duration_ms(settings.burst_ms)
+            .flash_intensity(HOLD_BURST_FLASH)
+            .area(area)
+      };
+      let reference_ctx = Context::default();
+      let mut reference = reference_ctx.run_ui(
+         RawInput {
+            screen_rect: Some(screen()),
+            time: Some(f64::from(STEP)),
+            predicted_dt: STEP,
+            ..Default::default()
+         },
+         |ui| {
+            effect().strike(ui.ctx());
+            effect().show(ui.ctx());
+         },
+      );
+      reference.textures_delta.clear();
+      assert_eq!(
+         actual,
+         polylines(&reference),
+         "the default Lightning burst must paint the effect's own default polylines and strokes"
+      );
+
+      // Glow: the default kind, whose default fan is the pre-change fan at
+      // `short x from == short`.
+      let (glow_ctx, glow_output, glow_warm, _) = complete_hold(HoldSettings {
+         seconds: 0.5,
+         ..Default::default()
+      });
+      let mesh = burst_mesh(&glow_output).expect("the default Glow burst must paint a mesh");
+      let short = glow_warm.rect.width().min(glow_warm.rect.height()).max(1.0);
+      let accent = Theme::current(&glow_ctx).colors.accent;
+      assert_eq!(
+         mesh,
+         crate::glow::glow_mesh(glow_warm.rect.center(), short, accent),
+         "the default Glow burst must emit the pre-change fan at short x 1.0"
       );
    }
 
