@@ -57,3 +57,6 @@ name = "light"
 
 [[example]]
 name = "lightning"
+
+[[example]]
+name = "hold_to_confirm"

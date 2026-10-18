@@ -82,8 +82,9 @@ pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Light, LightMotion, LightSettings,
-   Lightning, LightningSettings, Modal, MultiLabel, ParticleLayer, Snow, SnowSettings, Window,
+   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, Label, Light, LightMotion,
+   LightSettings, Lightning, LightningSettings, Modal, MultiLabel, ParticleLayer, Snow,
+   SnowSettings, Window,
 };
 
 #[cfg(feature = "secure-types")]

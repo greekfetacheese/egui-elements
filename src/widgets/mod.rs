@@ -20,7 +20,7 @@ pub mod secure_text_edit;
 pub mod window;
 
 pub use badge::{Badge, BadgeCorner};
-pub use button::Button;
+pub use button::{Button, HoldBurst};
 pub use combo_box::ComboBox;
 pub use frame::Frame;
 pub use label::Label;

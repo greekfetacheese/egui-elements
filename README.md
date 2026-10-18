@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, and corner `Badges` for buttons
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, and hold-to-confirm buttons with a progress sweep
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
@@ -124,6 +124,38 @@ error color; `Badge::dot()` is a plain coloured dot. `.corner(BadgeCorner::TopLe
 
 The badge is an overlay: it is painted on top of the button and never changes
 its size or layout.
+
+### Hold-to-confirm buttons
+
+`Button::hold(seconds)` turns a button into a hold-to-confirm action: it fills a
+left-to-right sweep for `seconds` and only then reports
+[`clicked()`](https://docs.rs/egui/latest/egui/struct.Response.html#method.clicked).
+
+> **`clicked()` means the hold completed.** A plain click — press and release
+> under `seconds` — never reports `clicked()`. Use it for destructive or
+> irreversible actions where a misclick must not fire.
+
+```rust
+use egui_elements::{Button, HoldBurst};
+
+if ui.add(Button::new("Delete vault").hold(1.0)).clicked() {
+    // only reached once the sweep has filled
+}
+
+ui.add(
+    Button::new("Strike")
+        .hold(0.8)
+        .hold_fill(theme.colors.error)          // sweep colour (default: theme accent)
+        .hold_burst(HoldBurst::Lightning),       // default: HoldBurst::Glow
+);
+```
+
+Press and release under the duration resets the sweep and never fires; dragging
+the pointer off the button resets it too. A focused button confirms immediately
+on Enter or Space, matching egui's keyboard activation. `seconds <= 0.0` behaves
+as if `hold` was never called. `HoldBurst::Glow` grows a soft glow at the
+button's centre; `HoldBurst::Lightning` strikes a bolt across it. Both fizzle out
+on their own, and neither requests repaints once idle.
 
 ### Particles: Snow
 
@@ -354,6 +386,12 @@ Interactive lightning with the public settings window and an ambient scheduler:
 
 ```sh
 cargo run --example lightning
+```
+
+Hold-to-confirm buttons with both completion bursts:
+
+```sh
+cargo run --example hold_to_confirm
 ```
 
 ## Built-in themes
