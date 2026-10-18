@@ -44,6 +44,12 @@ pub enum HoldBurst {
 /// Per-button hold-to-confirm state, keyed by the button's response [`Id`].
 #[derive(Clone, Copy, Default)]
 struct HoldState {
+   /// Whether this widget owns the current press.
+   ///
+   /// Latched from egui's hit test at press time, while that test is still
+   /// valid, and kept while the primary button is down so the gesture outlives
+   /// egui's `max_click_duration`.
+   pressing: bool,
    /// Fraction of the hold completed, `0.0..=1.0`.
    progress: f32,
    /// Whether the current hold has already fired (so it fires once).
@@ -348,6 +354,17 @@ impl<'a> Button<'a> {
    /// has been held down on the button for `seconds` — never for a plain click.
    /// A non-positive `seconds` leaves the button as an ordinary click button.
    ///
+   /// The widget tracks the press itself: it latches egui's hit test at press
+   /// time and then follows the raw pointer, so **the hold works for durations
+   /// longer than egui's `max_click_duration`** (0.8 s by default), past the
+   /// point where egui stops treating the press as a potential click. Releasing
+   /// the button, or dragging the pointer further than `max_click_dist` away
+   /// from it, cancels the hold.
+   ///
+   /// Note for touch screens: egui may additionally report a long touch as a
+   /// secondary-click (context menu) once the press passes `max_click_duration`;
+   /// this widget does not consume that.
+   ///
    /// While the hold progresses the frame's fill is replaced by a left-to-right
    /// sweep that grows as the hold completes; when it fills, the button fires
    /// once and plays its [`HoldBurst`]. Pressing Enter or Space on a focused
@@ -429,7 +446,84 @@ impl<'a> Button<'a> {
       let response = if ui.is_rect_visible(prepared.response.rect) {
          let interact_visuals = ui.style().interact_selectable(&prepared.response, selected);
 
-         let is_active = prepared.response.is_pointer_button_down_on(); // Clicked
+         // ---- hold-to-confirm gesture ------------------------------------
+         // egui abandons `is_pointer_button_down_on` once the press outlives
+         // `max_click_duration` (it backs the long-touch context menu there), so
+         // use it only to latch press ownership at press time and track the hold
+         // from the raw pointer afterwards.
+         let mut hold = HoldState::default();
+         let mut fired_now = false;
+         let mut holding = false;
+         if let Some(seconds) = hold_seconds {
+            let id = prepared.response.id;
+            let dt = ui.ctx().input(|i| i.stable_dt).min(HOLD_MAX_DT);
+            let (pointer_pos, primary_down) =
+               ui.ctx().input(|i| (i.pointer.interact_pos(), i.pointer.primary_down()));
+            let max_click_dist = ui.ctx().options(|o| o.input_options.max_click_dist);
+            let rect = prepared.response.rect;
+            hold = ui.ctx().data_mut(|data| {
+               let state = data.get_temp_mut_or_insert_with(id, HoldState::default);
+               if prepared.response.is_pointer_button_down_on() {
+                  state.pressing = true;
+               }
+               let held = state.pressing
+                  && primary_down
+                  && pointer_pos.is_some_and(|p| rect.expand(max_click_dist).contains(p));
+               holding = held;
+               if held {
+                  state.progress = (state.progress + dt / seconds).clamp(0.0, 1.0);
+               } else {
+                  // Release and drag-off both land here.
+                  state.progress = 0.0;
+                  state.fired = false;
+                  if !primary_down {
+                     // The latch must not leak into the next press.
+                     state.pressing = false;
+                  }
+               }
+               if state.progress >= 1.0 && !state.fired {
+                  state.fired = true;
+                  state.burst_age = Some(0.0);
+                  fired_now = true;
+               }
+               let snapshot = *state;
+               // Advance the burst clock for the next frame; the snapshot above
+               // is this frame's age, so the burst paints before it advances.
+               if let Some(age) = state.burst_age.as_mut() {
+                  *age += dt;
+                  if *age >= HOLD_BURST_SECS {
+                     state.burst_age = None;
+                  }
+               }
+               snapshot
+            });
+
+            // A press+release must never report a plain click: only a completed
+            // hold confirms.
+            prepared.response.flags.remove(Flags::CLICKED);
+
+            // A completed hold reports `clicked()` for exactly this frame.
+            if fired_now {
+               prepared.response.flags.insert(Flags::FAKE_PRIMARY_CLICKED);
+            }
+
+            // Queue the lightning once, at completion.
+            if fired_now && matches!(hold_burst, HoldBurst::Lightning) {
+               burst_lightning(
+                  id,
+                  prepared.response.rect.expand(interact_visuals.expansion),
+               )
+               .strike(ui.ctx());
+            }
+         }
+
+         // The button keeps its pressed chrome for the whole hold; egui's own
+         // active flag stops mid-press at `max_click_duration`.
+         let is_active = if hold_seconds.is_some() {
+            holding
+         } else {
+            prepared.response.is_pointer_button_down_on()
+         };
          let is_hovered = prepared.response.hovered();
 
          // Select custom visuals based on state, or fall back to defaults
@@ -483,57 +577,6 @@ impl<'a> Button<'a> {
                .stroke(stroke)
                .corner_radius(corner_radius)
                .shadow(shadow);
-         }
-
-         // ---- hold-to-confirm gesture ------------------------------------
-         let mut hold = HoldState::default();
-         let mut fired_now = false;
-         if let Some(seconds) = hold_seconds {
-            let id = prepared.response.id;
-            let dt = ui.ctx().input(|i| i.stable_dt).min(HOLD_MAX_DT);
-            hold = ui.ctx().data_mut(|data| {
-               let state = data.get_temp_mut_or_insert_with(id, HoldState::default);
-               if prepared.response.is_pointer_button_down_on() {
-                  state.progress = (state.progress + dt / seconds).clamp(0.0, 1.0);
-               } else {
-                  // Release and drag-off both land here.
-                  state.progress = 0.0;
-                  state.fired = false;
-               }
-               if state.progress >= 1.0 && !state.fired {
-                  state.fired = true;
-                  state.burst_age = Some(0.0);
-                  fired_now = true;
-               }
-               let snapshot = *state;
-               // Advance the burst clock for the next frame; the snapshot above
-               // is this frame's age, so the burst paints before it advances.
-               if let Some(age) = state.burst_age.as_mut() {
-                  *age += dt;
-                  if *age >= HOLD_BURST_SECS {
-                     state.burst_age = None;
-                  }
-               }
-               snapshot
-            });
-
-            // A press+release must never report a plain click: only a completed
-            // hold confirms.
-            prepared.response.flags.remove(Flags::CLICKED);
-
-            // A completed hold reports `clicked()` for exactly this frame.
-            if fired_now {
-               prepared.response.flags.insert(Flags::FAKE_PRIMARY_CLICKED);
-            }
-
-            // Queue the lightning once, at completion.
-            if fired_now && matches!(hold_burst, HoldBurst::Lightning) {
-               burst_lightning(
-                  id,
-                  prepared.response.rect.expand(interact_visuals.expansion),
-               )
-               .strike(ui.ctx());
-            }
          }
 
          // ---- sweep + burst painting -------------------------------------
@@ -715,6 +758,12 @@ mod tests {
       ctx.data(|d| d.get_temp::<HoldState>(id))
    }
 
+   /// egui's click ceiling, read from the live context so the tests stay
+   /// meaningful if the default ever changes.
+   fn max_click_duration(ctx: &Context) -> f64 {
+      ctx.options(|o| o.input_options.max_click_duration)
+   }
+
    /// The clipped fill of the sweep shape, as `(clip_width, clip_left)`.
    fn sweep_shape(output: &FullOutput, color: Color32) -> Option<(f32, f32)> {
       output.shapes.iter().find_map(|clipped| match &clipped.shape {
@@ -728,6 +777,22 @@ mod tests {
 
    fn has_mesh(output: &FullOutput) -> bool {
       output.shapes.iter().any(|clipped| matches!(clipped.shape, Shape::Mesh(_)))
+   }
+
+   /// The fill of the button's own base (chrome) rect, picked by matching the
+   /// button's rect so panel backgrounds and the partial sweep are skipped.
+   fn base_fill(output: &FullOutput, rect: Rect) -> Option<Color32> {
+      output.shapes.iter().find_map(|clipped| match &clipped.shape {
+         Shape::Rect(shape)
+            if shape.fill.a() == 255
+               && (shape.rect.width() - rect.width()).abs() < 4.0
+               && (shape.rect.height() - rect.height()).abs() < 4.0
+               && shape.rect.center().distance(rect.center()) < 2.0 =>
+         {
+            Some(shape.fill)
+         }
+         _ => None,
+      })
    }
 
    #[test]
@@ -1094,6 +1159,253 @@ mod tests {
          delay,
          Duration::MAX,
          "the ended burst requested a repaint after {delay:?}"
+      );
+   }
+
+   #[test]
+   fn hold_outlives_egui_max_click_duration() {
+      const SECONDS: f32 = 1.5;
+      let ctx = Context::default();
+      let ceiling = max_click_duration(&ctx);
+      assert!(
+         f64::from(SECONDS) > ceiling,
+         "this test only bites while its {SECONDS}s hold outlives egui's {ceiling}s click ceiling"
+      );
+      let build = || Button::new("Hold").hold(SECONDS);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let id = warm.id;
+      let center = warm.rect.center();
+
+      let mut time = f64::from(STEP);
+      let (_, pressed) = run_pass(&ctx, vec![press(center)], time, build);
+      assert!(!pressed.clicked(), "a fresh press must not click");
+      let press_time = time;
+
+      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
+      let mut completion_time = time;
+      let mut fired = false;
+      for _ in 0..max_frames {
+         time += f64::from(STEP);
+         let (_, frame) = run_pass(&ctx, vec![], time, build);
+         let progress = hold_state(&ctx, id).expect("hold state").progress;
+         if progress < 1.0 {
+            assert!(
+               !frame.clicked(),
+               "the hold clicked while the sweep was only {progress} full"
+            );
+         } else {
+            assert!(
+               frame.clicked(),
+               "the hold must click on the frame its sweep completes"
+            );
+            fired = true;
+            completion_time = time;
+            break;
+         }
+      }
+      assert!(
+         fired,
+         "a {SECONDS}s hold must complete past egui's {ceiling}s click ceiling"
+      );
+      assert!(
+         completion_time - press_time > ceiling,
+         "the hold finished in {}s, inside egui's {ceiling}s click ceiling",
+         completion_time - press_time
+      );
+
+      // Releasing after completion resets the gesture and must not re-fire.
+      time = completion_time + f64::from(STEP);
+      let (_, released) = run_pass(&ctx, vec![release(center)], time, build);
+      assert!(
+         !released.clicked(),
+         "a completed hold must not click again on release"
+      );
+      assert_eq!(
+         hold_state(&ctx, id).expect("hold state").progress,
+         0.0,
+         "a release must reset the completed hold"
+      );
+   }
+
+   #[test]
+   fn the_sweep_keeps_filling_past_egui_max_click_duration() {
+      const SECONDS: f32 = 1.5;
+      let ctx = Context::default();
+      let ceiling = max_click_duration(&ctx);
+      assert!(
+         f64::from(SECONDS) > ceiling,
+         "this test only bites while its {SECONDS}s hold outlives egui's {ceiling}s click ceiling"
+      );
+      let build = || Button::new("Hold").hold(SECONDS).hold_fill(SWEEP);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let center = warm.rect.center();
+      let width = warm.rect.width();
+
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+      let press_time = time;
+
+      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
+      let mut at_ceiling = None;
+      let mut past_ceiling = None;
+      for _ in 0..max_frames {
+         time += f64::from(STEP);
+         let (output, frame) = run_pass(&ctx, vec![], time, build);
+         let elapsed = time - press_time;
+         let sweep = sweep_shape(&output, SWEEP).map(|(clip_width, _)| clip_width);
+         if at_ceiling.is_none() && elapsed >= ceiling {
+            at_ceiling = sweep;
+         } else if past_ceiling.is_none() && elapsed >= ceiling + f64::from(STEP) {
+            past_ceiling = sweep;
+            break;
+         }
+         if frame.clicked() {
+            break;
+         }
+      }
+
+      let at_ceiling = at_ceiling.expect("the sweep must still be painted at egui's click ceiling");
+      let past_ceiling =
+         past_ceiling.expect("the sweep must still be painted past the click ceiling");
+      assert!(
+         past_ceiling > at_ceiling,
+         "the sweep stopped growing past the click ceiling: {at_ceiling} px then {past_ceiling} px"
+      );
+      assert!(
+         past_ceiling < width,
+         "the sweep completed early, before the hold finished: {past_ceiling} of {width} px"
+      );
+   }
+
+   #[test]
+   fn the_chrome_stays_pressed_for_the_whole_hold() {
+      const SECONDS: f32 = 1.5;
+      /// A sample well inside egui's click window.
+      const EARLY: f64 = 0.4;
+      /// How far past the click ceiling the late sample is taken.
+      const PAST_CEILING: f64 = 0.2;
+      /// Distinct test-only chrome fills; the shipped themes alias idle and
+      /// pressed, so pick explicit ones to isolate the pressed selection.
+      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
+      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
+      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
+      let ctx = Context::default();
+      let ceiling = max_click_duration(&ctx);
+      assert!(
+         f64::from(SECONDS) > ceiling + PAST_CEILING,
+         "this test only bites while its {SECONDS}s hold outlives egui's {ceiling}s click ceiling"
+      );
+      let visuals = ButtonVisuals {
+         bg: IDLE,
+         bg_hover: HOVER,
+         bg_click: PRESSED,
+         ..Default::default()
+      };
+      let build = || Button::new("Hold").hold(SECONDS).visuals(visuals);
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let rect = warm.rect;
+      let center = rect.center();
+
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+      let press_time = time;
+
+      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
+      let mut early = None;
+      let mut late = None;
+      for _ in 0..max_frames {
+         time += f64::from(STEP);
+         let (output, frame) = run_pass(&ctx, vec![], time, build);
+         let elapsed = time - press_time;
+         if early.is_none() && elapsed >= EARLY {
+            early = base_fill(&output, rect);
+         } else if late.is_none() && elapsed >= ceiling + PAST_CEILING {
+            late = base_fill(&output, rect);
+            break;
+         }
+         if frame.clicked() {
+            break;
+         }
+      }
+
+      let early = early.expect("the pressed chrome must be painted early in the hold");
+      let late = late.expect("the pressed chrome must still be painted past the click ceiling");
+      assert_eq!(
+         early, late,
+         "the chrome un-pressed at egui's click ceiling: {early:?} then {late:?} (worst case {IDLE:?}/{HOVER:?})"
+      );
+      assert_eq!(
+         early, PRESSED,
+         "the hold must paint its pressed chrome while the pointer is down, got {early:?}"
+      );
+   }
+
+   #[test]
+   fn a_second_press_starts_a_fresh_hold() {
+      const SECONDS: f32 = 1.0;
+      let build = || Button::new("Hold").hold(SECONDS);
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
+      let id = warm.id;
+      let center = warm.rect.center();
+      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
+
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(center)], time, build);
+
+      // First gesture: hold to completion.
+      let mut completion_time = time;
+      let mut first_fired = false;
+      for _ in 0..max_frames {
+         time += f64::from(STEP);
+         let (_, frame) = run_pass(&ctx, vec![], time, build);
+         if frame.clicked() {
+            first_fired = true;
+            completion_time = time;
+            break;
+         }
+      }
+      assert!(first_fired, "the first hold must fire");
+      assert_eq!(
+         hold_state(&ctx, id).expect("hold state").progress,
+         1.0
+      );
+
+      // Release: the latch must clear so the next press starts from zero.
+      time = completion_time + f64::from(STEP);
+      let (_, released) = run_pass(&ctx, vec![release(center)], time, build);
+      assert!(!released.clicked(), "a release must not click");
+      assert_eq!(
+         hold_state(&ctx, id).expect("hold state").progress,
+         0.0,
+         "a release must reset the first hold"
+      );
+
+      // A second press must accumulate from zero and fire on its own.
+      time += f64::from(STEP);
+      let (_, second) = run_pass(&ctx, vec![press(center)], time, build);
+      assert!(
+         !second.clicked(),
+         "the second press must not click immediately"
+      );
+      let second_progress = hold_state(&ctx, id).expect("hold state").progress;
+      assert!(
+         second_progress > 0.0 && second_progress < 1.0,
+         "the second gesture must start from zero, got {second_progress}"
+      );
+
+      let mut second_fired = false;
+      for _ in 0..max_frames {
+         time += f64::from(STEP);
+         let (_, frame) = run_pass(&ctx, vec![], time, build);
+         if frame.clicked() {
+            second_fired = true;
+            break;
+         }
+      }
+      assert!(
+         second_fired,
+         "the second hold must fire on its own"
       );
    }
 }

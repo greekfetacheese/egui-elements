@@ -151,7 +151,10 @@ ui.add(
 ```
 
 Press and release under the duration resets the sweep and never fires; dragging
-the pointer off the button resets it too. A focused button confirms immediately
+the pointer off the button resets it too. The widget tracks the press itself, so
+holds longer than egui's `max_click_duration` (0.8 s by default) still complete;
+on a touch screen egui may also report a long touch as a secondary-click, which
+this widget leaves alone. A focused button confirms immediately
 on Enter or Space, matching egui's keyboard activation. `seconds <= 0.0` behaves
 as if `hold` was never called. `HoldBurst::Glow` grows a soft glow at the
 button's centre; `HoldBurst::Lightning` strikes a bolt across it. Both fizzle out
