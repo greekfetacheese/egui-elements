@@ -1,6 +1,6 @@
 use egui::{
-   Atom, AtomExt as _, AtomKind, AtomLayout, AtomLayoutResponse, Color32, Frame, Id, Image,
-   IntoAtoms, NumExt as _, Pos2, Rect, Response, Sense, Shadow, Shape, Stroke, TextStyle,
+   Align, Align2, Atom, AtomExt as _, AtomKind, AtomLayout, AtomLayoutResponse, Color32, Frame, Id,
+   Image, IntoAtoms, NumExt as _, Pos2, Rect, Response, Sense, Shadow, Shape, Stroke, TextStyle,
    TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, WidgetType, response::Flags,
 };
 
@@ -123,6 +123,7 @@ pub struct Button<'a> {
    small: bool,
    frame_when_inactive: bool,
    min_size: Vec2,
+   label_align: Align,
    selected: bool,
    image_tint_follows_text_color: bool,
    limit_image_size: bool,
@@ -142,6 +143,7 @@ impl<'a> Button<'a> {
          small: false,
          frame_when_inactive: true,
          min_size: Vec2::ZERO,
+         label_align: Align::Min,
          selected: false,
          image_tint_follows_text_color: false,
          limit_image_size: false,
@@ -253,6 +255,26 @@ impl<'a> Button<'a> {
    #[inline]
    pub fn min_size(mut self, min_size: Vec2) -> Self {
       self.min_size = min_size;
+      self
+   }
+
+   /// Align the button's atoms within its [`Self::min_size`] rect.
+   ///
+   /// Defaults to [`Align::Min`], which leaves the atoms where the surrounding
+   /// [`Ui`] layout puts them — the rendering from before this builder existed.
+   ///
+   /// The implementation sets the horizontal component of the atom layout's
+   /// [`AtomLayout::align2`]: it moves the measured block of atoms inside the
+   /// allocated rect. It does **not** use the layout's main-axis justification,
+   /// which would stretch the gap *between* atoms instead of moving the block.
+   ///
+   /// A trailing grow atom — added by [`Self::right_text`] or
+   /// [`Self::shortcut_text`] — makes the atom block fill the rect, so there is
+   /// no leftover space for this alignment to move and the trailing text stays
+   /// pinned to the right edge under every alignment.
+   #[inline]
+   pub fn label_align(mut self, align: Align) -> Self {
+      self.label_align = align;
       self
    }
 
@@ -430,6 +452,7 @@ impl<'a> Button<'a> {
          visuals,
          frame_when_inactive,
          mut min_size,
+         label_align,
          selected,
          image_tint_follows_text_color,
          limit_image_size,
@@ -454,6 +477,15 @@ impl<'a> Button<'a> {
       }
 
       let text = layout.text().map(String::from);
+
+      // Only the horizontal component is overridden: `Align::Min` keeps the
+      // surrounding layout's own alignment, so the default emits the same shapes
+      // as before this knob existed. The vertical component always follows the
+      // layout, exactly as it did when `align2` was left unset.
+      if label_align != Align::Min {
+         let vertical = ui.layout().vertical_align();
+         layout = layout.align2(Align2([label_align, vertical]));
+      }
 
       let has_frame_margin = visuals.is_some() || ui.visuals().button_frame;
       let mut button_padding = if has_frame_margin {
@@ -1042,6 +1074,17 @@ mod tests {
          {
             Some(shape.fill)
          }
+         _ => None,
+      })
+   }
+
+   /// Bounding rect of the painted text whose galley source is `text`.
+   fn text_rect(output: &FullOutput, text: &str) -> Option<Rect> {
+      output.shapes.iter().find_map(|clipped| match &clipped.shape {
+         Shape::Text(shape) if shape.galley.text() == text => Some(Rect::from_min_size(
+            shape.pos,
+            shape.galley.size(),
+         )),
          _ => None,
       })
    }
@@ -2448,5 +2491,91 @@ mod tests {
          sweep_shape(&pressed, SWEEP).is_some(),
          "the widget must use the fill edited in the struct"
       );
+   }
+
+   /// Wide enough that a left, centred and right label land far apart.
+   const WIDE: Vec2 = vec2(240.0, 44.0);
+
+   #[test]
+   fn the_default_label_alignment_is_left() {
+      let ctx = Context::default();
+      let (output, response) = run_pass(&ctx, vec![], 0.0, || {
+         Button::new("Reset").min_size(WIDE)
+      });
+      let text = text_rect(&output, "Reset").expect("the label must be painted");
+      let padding = ctx.style_of(ctx.theme()).spacing.button_padding.x;
+      assert!(
+         (text.left() - (response.rect.left() + padding)).abs() < 1.0,
+         "the default label must start at the button's left edge plus padding: \
+          label left {} vs button left {} plus padding {padding}",
+         text.left(),
+         response.rect.left()
+      );
+      assert!(
+         text.left() < response.rect.center().x,
+         "the default label must sit left of the button's centre"
+      );
+   }
+
+   #[test]
+   fn a_centred_label_sits_in_the_middle() {
+      let ctx = Context::default();
+      let (output, response) = run_pass(&ctx, vec![], 0.0, || {
+         Button::new("Reset").min_size(WIDE).label_align(Align::Center)
+      });
+      let text = text_rect(&output, "Reset").expect("the label must be painted");
+      assert!(
+         (text.center().x - response.rect.center().x).abs() <= 2.0,
+         "the centred label's centre {} must match the button's centre {}",
+         text.center().x,
+         response.rect.center().x
+      );
+   }
+
+   #[test]
+   fn a_right_aligned_label_moves_to_the_end() {
+      let ctx = Context::default();
+      let (output, response) = run_pass(&ctx, vec![], 0.0, || {
+         Button::new("Reset").min_size(WIDE).label_align(Align::Max)
+      });
+      let text = text_rect(&output, "Reset").expect("the label must be painted");
+      let padding = ctx.style_of(ctx.theme()).spacing.button_padding.x;
+      assert!(
+         (text.right() - (response.rect.right() - padding)).abs() <= 2.0,
+         "the right-aligned label's right edge {} must sit near the button's \
+          right edge {} minus padding {padding}",
+         text.right(),
+         response.rect.right()
+      );
+   }
+
+   #[test]
+   fn a_right_text_atom_stays_at_the_right_edge() {
+      let ctx = Context::default();
+      let padding = ctx.style_of(ctx.theme()).spacing.button_padding.x;
+      for align in [Align::Min, Align::Center, Align::Max] {
+         let (output, response) = run_pass(&ctx, vec![], 0.0, || {
+            Button::new("Reset").min_size(WIDE).right_text("\u{2318}K").label_align(align)
+         });
+         let right = text_rect(&output, "\u{2318}K").expect("the right text must be painted");
+         assert!(
+            (right.right() - (response.rect.right() - padding)).abs() <= 2.0,
+            "the right text must stay at the button's right edge under {align:?}: \
+             its right edge {} vs the button's right edge {}",
+            right.right(),
+            response.rect.right()
+         );
+         // `right_text` inserts a trailing grow atom, so the atom block already
+         // fills the rect and the label keeps its left position under every
+         // alignment; only the alignment of grow-free buttons can move.
+         let label = text_rect(&output, "Reset").expect("the label must be painted");
+         assert!(
+            (label.left() - (response.rect.left() + padding)).abs() <= 2.0,
+            "with a trailing grow atom the label must stay left under {align:?}: \
+             its left edge {} vs the button's left edge {} plus padding {padding}",
+            label.left(),
+            response.rect.left()
+         );
+      }
    }
 }
