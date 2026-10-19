@@ -11,6 +11,7 @@ use crate::widgets::particles::shared::{begin_body, settings_window};
 const DEFAULT_GLOW_SOFTNESS: f32 = 1.0;
 
 /// Completion burst drawn when a hold-to-confirm button reaches 100 %.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum HoldBurst {
    /// No completion effect; a completed hold paints nothing extra.
@@ -45,6 +46,17 @@ impl HoldBurst {
 ///
 /// The defaults reproduce the look of a button that configures nothing: a 1 s
 /// hold, the theme's accent colour, and a 300 ms [`HoldBurst::Glow`] burst.
+///
+/// With the `serde` feature enabled the whole struct is serializable, so a host
+/// can persist it as part of its own settings instead of copying each knob.
+/// Deserialization ignores unknown fields (serde's default) and fills missing
+/// ones from [`HoldSettings::default`], so a file written before a knob existed
+/// still loads and that knob takes its default — which is what lets a host
+/// persist this type across crate upgrades. [`Self::open`] is serialized like
+/// every other field; a host that owns the settings window sets it to `false`
+/// after loading.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(default))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HoldSettings {
    /// Settings-window visibility. Default `false` (the example opens it).
@@ -478,5 +490,84 @@ mod tests {
          .burst_visible()
       );
       assert!(HoldSettings::default().burst_visible());
+   }
+
+   #[cfg(feature = "serde")]
+   #[test]
+   fn hold_settings_round_trip() -> Result<(), serde_json::Error> {
+      let settings = HoldSettings {
+         open: true,
+         seconds: 2.5,
+         fill_from: Some(Color32::from_rgb(10, 20, 30)),
+         fill_to: Some(Color32::from_rgb(40, 50, 60)),
+         burst: HoldBurst::Lightning,
+         burst_color: Some(Color32::from_rgb(70, 80, 90)),
+         burst_intensity: 0.35,
+         burst_ms: 750.0,
+         burst_bolts: 3,
+         burst_branch_depth: 2,
+         burst_thickness: 5.5,
+         burst_jitter: 0.42,
+         burst_glow_from: 0.6,
+         burst_glow_to: 3.4,
+         burst_glow_softness: 2.25,
+      };
+
+      let json = serde_json::to_string(&settings)?;
+      let restored: HoldSettings = serde_json::from_str(&json)?;
+
+      assert_eq!(restored, settings);
+      Ok(())
+   }
+
+   #[cfg(feature = "serde")]
+   #[test]
+   fn missing_fields_take_their_defaults() -> Result<(), serde_json::Error> {
+      let restored: HoldSettings = serde_json::from_str(r#"{"seconds": 0.6}"#)?;
+
+      assert_eq!(
+         restored,
+         HoldSettings {
+            seconds: 0.6,
+            ..HoldSettings::default()
+         }
+      );
+      Ok(())
+   }
+
+   #[cfg(feature = "serde")]
+   #[test]
+   fn unknown_fields_are_ignored() -> Result<(), serde_json::Error> {
+      let restored: HoldSettings =
+         serde_json::from_str(r#"{"seconds": 0.6, "some_knob_from_the_future": 3}"#)?;
+
+      assert_eq!(
+         restored,
+         HoldSettings {
+            seconds: 0.6,
+            ..HoldSettings::default()
+         }
+      );
+      Ok(())
+   }
+
+   #[cfg(feature = "serde")]
+   #[test]
+   fn every_burst_kind_round_trips() -> Result<(), serde_json::Error> {
+      for burst in [HoldBurst::Off, HoldBurst::Glow, HoldBurst::Lightning] {
+         let settings = HoldSettings {
+            burst,
+            ..HoldSettings::default()
+         };
+
+         let json = serde_json::to_string(&settings)?;
+         let restored: HoldSettings = serde_json::from_str(&json)?;
+
+         assert_eq!(
+            restored, settings,
+            "burst kind {burst:?} must survive a round trip"
+         );
+      }
+      Ok(())
    }
 }
