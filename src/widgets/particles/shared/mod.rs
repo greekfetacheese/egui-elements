@@ -7,7 +7,7 @@ mod window;
 pub use layer::ParticleLayer;
 pub(super) use layer::resolve_target;
 pub(super) use rng::ParticleRng;
-pub(super) use window::{begin_body, settings_window};
+pub(crate) use window::{begin_body, settings_window};
 
 /// Orders two range endpoints, swapping them when the caller inverted them.
 pub(super) fn ordered(a: f32, b: f32) -> (f32, f32) {

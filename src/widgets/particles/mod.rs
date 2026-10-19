@@ -43,7 +43,7 @@
 
 mod light;
 mod lightning;
-mod shared;
+pub(crate) mod shared;
 mod snow;
 
 pub use light::{Light, LightMotion, LightSettings};

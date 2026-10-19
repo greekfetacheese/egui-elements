@@ -29,7 +29,9 @@
 //! # Modules
 //!
 //! - [`theme`] / [`themes`] — palettes, [`ThemeKind`](crate::theme::ThemeKind), install
-//! - [`widgets`] — [`Button`](crate::widgets::Button), [`Label`](crate::widgets::Label)
+//! - [`widgets`] — [`Button`](crate::widgets::Button) (with
+//!   [`HoldSettings`](crate::widgets::HoldSettings) for configurable hold-to-confirm
+//!   fills and completion bursts), [`Label`](crate::widgets::Label)
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
 //!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
 //!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
@@ -70,6 +72,8 @@
 //! the same names as [`egui::ComboBox`] and [`egui::Window`]. Import this crate's
 //! widgets after `use egui::*`, or alias one of them.
 
+mod glow;
+
 pub mod components;
 pub mod editor;
 pub mod theme;
@@ -80,8 +84,9 @@ pub mod widgets;
 
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, Label, Light, LightMotion, LightSettings,
-   Lightning, LightningSettings, Modal, MultiLabel, ParticleLayer, Snow, SnowSettings, Window,
+   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, HoldSettings, Label, Light, LightMotion,
+   LightSettings, Lightning, LightningSettings, Modal, MultiLabel, ParticleLayer, Snow,
+   SnowSettings, Window,
 };
 
 #[cfg(feature = "secure-types")]
