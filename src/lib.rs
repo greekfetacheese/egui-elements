@@ -23,29 +23,28 @@
 //! ```
 //!
 //! Custom widgets pick up [`visuals`] from the installed
-//! [`Theme`](crate::theme::Theme). You can still override a single widget
+//! [`Theme`]. You can still override a single widget
 //! with `.visuals(...)`.
 //!
 //! # Modules
 //!
-//! - [`theme`] / [`themes`] — palettes, [`ThemeKind`](crate::theme::ThemeKind), install
-//! - [`widgets`] — [`Button`](crate::widgets::Button) (with
-//!   [`HoldSettings`](crate::widgets::HoldSettings) for configurable hold-to-confirm
-//!   fills and completion bursts), [`Label`](crate::widgets::Label)
+//! - [`theme`] / [`themes`] — palettes, [`ThemeKind`], install
+//! - [`widgets`] — [`Button`] (with
+//!   [`HoldSettings`] for configurable hold-to-confirm
+//!   fills and completion bursts), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
-//!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
-//!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
-//!   [`Window`](crate::widgets::Window)
-//! - [`particles`] — [`Snow`](crate::particles::Snow),
-//!   [`Light`](crate::particles::Light) and
-//!   [`Lightning`](crate::particles::Lightning) with themed
-//!   [`SnowSettings`](crate::particles::SnowSettings) /
-//!   [`LightSettings`](crate::particles::LightSettings) /
-//!   [`LightningSettings`](crate::particles::LightningSettings) windows
+//!   [`ComboBox`], [`Modal`],
+//!   [`SecureTextEdit`], [`MultiLabel`],
+//!   [`Window`]
+//! - [`particles`] — [`Snow`],
+//!   [`Light`] and
+//!   [`Lightning`] with themed
+//!   [`SnowSettings`] /
+//!   [`LightSettings`] /
+//!   [`LightningSettings`] windows
 //! - [`components`] — feature-gated composites (`secure-types`, `qr-image`, `qr-scanner`)
 //! - [`editor`] — live [`ThemeEditor`](crate::editor::ThemeEditor)
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
-//! - [`overlay`] — dimming overlay for stacked windows
 //! - [`visuals`] — per-widget chrome (`ButtonVisuals`, `TextEditVisuals`, …)
 //!
 //! # Features
@@ -68,7 +67,7 @@
 //!
 //! See the crate README for system packages required by `qr-scanner`.
 //!
-//! [`ComboBox`](crate::widgets::ComboBox) and [`Window`](crate::widgets::Window) have
+//! [`ComboBox`] and [`Window`] have
 //! the same names as [`egui::ComboBox`] and [`egui::Window`]. Import this crate's
 //! widgets after `use egui::*`, or alias one of them.
 

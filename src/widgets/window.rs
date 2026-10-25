@@ -23,7 +23,7 @@ use egui::{
 /// `widgets.open`.
 ///
 ///
-/// ### This misbehavior is fixed in egui 0.36.2 - https://github.com/emilk/egui/pull/8400
+/// ### This misbehavior is fixed in egui 0.36.2 - <https://github.com/emilk/egui/pull/8400>
 ///
 ///
 /// ```

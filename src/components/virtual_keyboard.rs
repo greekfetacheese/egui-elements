@@ -68,13 +68,13 @@ impl VirtualKeyboard {
       self.active_target = target;
    }
 
-   /// Minimum size of each key button. Default is `[DEFAULT_KEY_SIZE].
+   /// Minimum size of each key button. Default is `30 x 30`.
    pub fn with_key_size(mut self, size: Vec2) -> Self {
       self.key_size = size;
       self
    }
 
-   /// Minimum size of each key button. Default is `[DEFAULT_KEY_SIZE].
+   /// Minimum size of each key button. Default is `30 x 30`.
    pub fn set_key_size(&mut self, size: Vec2) {
       self.key_size = size;
    }
@@ -84,35 +84,35 @@ impl VirtualKeyboard {
       self.key_size
    }
 
-   /// Text size for each key button. Default is `[DEFAULT_TEXT_SIZE].
+   /// Text size for each key button. Default is `16.0`.
    pub fn with_text_size(mut self, size: f32) -> Self {
       self.text_size = size;
       self
    }
 
-   /// Text size for each key button. Default is `[DEFAULT_TEXT_SIZE].
+   /// Text size for each key button. Default is `16.0`.
    pub fn set_text_size(&mut self, size: f32) {
       self.text_size = size;
    }
 
-   /// Spacing between each key button. Default is `[DEFAULT_SPACING].
+   /// Spacing between each key button. Default is `10 x 10`.
    pub fn with_spacing(mut self, spacing: Vec2) -> Self {
       self.spacing = spacing;
       self
    }
 
-   /// Spacing between each key button. Default is `[DEFAULT_SPACING].
+   /// Spacing between each key button. Default is `10 x 10`.
    pub fn set_spacing(&mut self, spacing: Vec2) {
       self.spacing = spacing;
    }
 
-   /// Maximum size of the virtual keyboard. Default is `[DEFAULT_MAX_UI_SIZE].
+   /// Maximum size of the virtual keyboard. Default is `600 x 200`.
    pub fn with_max_ui_size(mut self, size: Vec2) -> Self {
       self.max_ui_size = size;
       self
    }
 
-   /// Maximum size of the virtual keyboard. Default is `[DEFAULT_MAX_UI_SIZE].
+   /// Maximum size of the virtual keyboard. Default is `600 x 200`.
    pub fn set_max_ui_size(&mut self, size: Vec2) {
       self.max_ui_size = size;
    }
@@ -127,13 +127,13 @@ impl VirtualKeyboard {
       self.text_size
    }
 
-   /// Inner padding of each key button. Default is `[DEFAULT_BUTTON_PADDING].
+   /// Inner padding of each key button. Default is `4 x 4`.
    pub fn with_button_padding(mut self, padding: Vec2) -> Self {
       self.button_padding = padding;
       self
    }
 
-   /// Inner padding of each key button. Default is `[DEFAULT_BUTTON_PADDING].
+   /// Inner padding of each key button. Default is `4 x 4`.
    pub fn set_button_padding(&mut self, padding: Vec2) {
       self.button_padding = padding;
    }
