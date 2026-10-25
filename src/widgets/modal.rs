@@ -9,8 +9,8 @@
 
 use egui::{
    Align, Align2, Area, Color32, Context, CornerRadius, Frame, Id, Image, Key, Layout, Margin,
-   Order, Pos2, Rect, Response, RichText, Sense, Shape, Stroke, Ui, UiBuilder, Vec2, WidgetInfo,
-   WidgetText, WidgetType, accesskit, vec2,
+   Order, Pos2, Rect, Response, RichText, Role, Sense, Shape, Stroke, Ui, UiBuilder, Vec2,
+   WidgetInfo, WidgetText, accesskit, vec2,
 };
 
 use super::button::Button;
@@ -99,11 +99,48 @@ impl<'a> std::fmt::Debug for Modal<'a> {
    }
 }
 
+/// Id source accepted by [`Modal::new`].
+///
+/// Reproduces exactly the ids this crate produced against egui 0.36, when
+/// `&str` converted to [`Id`] and the constructor hashed the input a second
+/// time. Implemented for the two forms callers used: an [`Id`] and a string.
+///
+/// The string form is hashed **twice** on purpose: in egui 0.36,
+/// `&str: Into<Id>` already called `Id::new(s)`, and the modal constructor
+/// then called `Id::new` on that id — two hashes. An [`Id`] passes through
+/// `Into<Id>` unchanged, so it is hashed once. "Simplifying" the string
+/// impl to a single hash would move every existing modal to a new id, and
+/// with it all of its persisted state.
+pub trait IntoModalId {
+   fn into_modal_id(self) -> Id;
+}
+
+impl IntoModalId for Id {
+   fn into_modal_id(self) -> Id {
+      Id::unique(self)
+   }
+}
+
+impl IntoModalId for &str {
+   fn into_modal_id(self) -> Id {
+      Id::unique(Id::unique(self))
+   }
+}
+
+impl IntoModalId for String {
+   fn into_modal_id(self) -> Id {
+      Id::unique(Id::unique(self))
+   }
+}
+
 impl<'a> Modal<'a> {
    /// Create a modal keyed by `id_salt` whose visibility is bound to `open`.
-   pub fn new(id: impl Into<Id>, open: &'a mut bool) -> Self {
+   ///
+   /// `id_salt` accepts the same forms callers used before egui 0.37 — see
+   /// [`IntoModalId`], which reproduces the historical ids exactly.
+   pub fn new(id: impl IntoModalId, open: &'a mut bool) -> Self {
       Self {
-         id_salt: Id::new(id.into()),
+         id_salt: id.into_modal_id(),
          heading: None,
          subtitle: None,
          header_icon: None,
@@ -274,7 +311,7 @@ impl<'a> Modal<'a> {
       // focus when the modal closes. Without this the user's focus is
       // visually eclipsed by the modal but structurally remains behind it —
       // Tab would navigate widgets on the underlying page.
-      let focus_storage = Id::new(("elegance_modal_focus", self.id_salt));
+      let focus_storage = Id::unique(("elegance_modal_focus", self.id_salt));
       let mut focus_state: ModalFocusState =
          ctx.data(|d| d.get_temp(focus_storage).unwrap_or_default());
       let is_open = *self.open;
@@ -304,36 +341,57 @@ impl<'a> Modal<'a> {
       let mut close_btn_id: Option<Id> = None;
       let closable = self.closable;
 
+      let window_id = Id::unique("elegance_modal_window").with(self.id_salt);
+      let measure_key = window_id.with("egui_elements_modal_measure");
+      let mut measure: ModalMeasure = ctx.data(|d| d.get_temp(measure_key)).unwrap_or_default();
+      let measuring = self.max_width.is_none() && measure.passes < SHRINK_WRAP_MEASURE_PASSES;
+      let measure_width = if measure.passes == 0 {
+         0.0
+      } else {
+         measure.width
+      };
+
       // --- Backdrop ----------------------------------------------------
       let screen = ctx.content_rect();
-      let backdrop_id = Id::new("elegance_modal_backdrop").with(self.id_salt);
-      let backdrop =
-         Area::new(backdrop_id)
-            .fixed_pos(screen.min)
-            .order(self.backdrop_order)
-            .show(ctx, |ui| {
-               ui.painter().rect_filled(
-                  screen,
-                  CornerRadius::ZERO,
-                  Color32::from_rgba_premultiplied(0, 0, 0, 150),
-               );
-               ui.allocate_rect(screen, Sense::click())
-            });
+      let backdrop_id = Id::unique("elegance_modal_backdrop").with(self.id_salt);
+      let backdrop = Area::new(backdrop_id)
+         .fixed_pos(screen.min)
+         .order(self.backdrop_order)
+         .sizing_pass(measuring)
+         .show(ctx, |ui| {
+            ui.painter().rect_filled(
+               screen,
+               CornerRadius::ZERO,
+               Color32::from_rgba_premultiplied(0, 0, 0, 150),
+            );
+            ui.allocate_rect(screen, Sense::click())
+         });
       if closable && self.close_on_backdrop && backdrop.inner.clicked() {
          should_close = true;
       }
 
       // --- Content -----------------------------------------------------
-      let window_id = Id::new("elegance_modal_window").with(self.id_salt);
       let alert = self.alert;
       let heading_text: Option<String> = self.heading.as_ref().map(|h| h.text().to_string());
       let mut area = Area::new(window_id)
          .order(self.content_order)
          .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
          .pivot(Align2::CENTER_CENTER);
-      // 0 = shrink-wrap the first frame so a missing max_width still
-      // measures true content width; Area re-anchors on the next pass.
-      area = area.default_width(self.max_width.unwrap_or(0.0));
+      // Shrink-wrap (no `max_width`) has to measure the content before it
+      // can anchor, and the first measurement is wrong: egui's own first-pass
+      // sizing pass measures at width 0, where the body wraps into a too-tall
+      // box, so the next pass would anchor to that stale height — the
+      // one-frame off-centre jump. Spend one more invisible sizing pass, at
+      // the width the first pass measured, to get the true height; the pass
+      // after it is the first painted frame and is already centred. The
+      // backdrop is gated on this same flag so the dim overlay cannot appear
+      // a frame before the dialog does.
+      // `max_width(Some(_))` callers keep the single-pass behaviour.
+      area = match self.max_width {
+         Some(w) => area.default_width(w),
+         None if measuring => area.default_width(measure_width).sizing_pass(true),
+         None => area.default_width(0.0),
+      };
       let result = area.show(ctx, |ui| {
          // Upgrade this Ui's accesskit role from `GenericContainer`
          // (set automatically by `Ui::new`) to a dialog role, so
@@ -529,9 +587,19 @@ impl<'a> Modal<'a> {
 
          let card_rect = card.response.rect;
          ui.expand_to_include_rect(card_rect);
+         // Content is laid out and measured: remember it so the next pass
+         // paints instead of taking another (invisible) sizing pass.
+         if measuring {
+            measure.passes += 1;
+            measure.width = card_rect.width();
+            ui.ctx().data_mut(|d| d.insert_temp(measure_key, measure));
+         }
          #[cfg(test)]
          ui.ctx().data_mut(|d| {
-            d.insert_temp(Id::new("egui_elements_test_card_rect"), card_rect);
+            d.insert_temp(
+               Id::unique("egui_elements_test_card_rect"),
+               card_rect,
+            );
          });
 
          // Centered headers skip the in-flow close button so a wide
@@ -605,6 +673,21 @@ struct ModalFocusState {
    prev_focus: Option<Id>,
 }
 
+/// Number of invisible sizing passes a shrink-wrapping modal spends before
+/// its first painted frame: one at width 0 (egui's own first pass measures
+/// there) and one at the width that pass measured, which is the only way to
+/// learn the card's real height before it is anchored.
+const SHRINK_WRAP_MEASURE_PASSES: u32 = 2;
+
+/// Progress of a shrink-wrapping modal through those sizing passes.
+#[derive(Clone, Copy, Default, Debug)]
+struct ModalMeasure {
+   /// How many sizing passes have run so far.
+   passes: u32,
+   /// Card width measured by the last sizing pass.
+   width: f32,
+}
+
 /// Overlay slot for the close button in a centered header. Sized to
 /// fit the 20×20 min button plus theme padding without clipping.
 const HEADER_CLOSE_SLOT: f32 = 48.0;
@@ -628,12 +711,12 @@ fn close_button(ui: &mut Ui, theme: &Theme) -> Response {
    #[cfg(test)]
    ui.ctx().data_mut(|d| {
       d.insert_temp(
-         Id::new("egui_elements_test_close_rect"),
+         Id::unique("egui_elements_test_close_rect"),
          inner.rect,
       );
    });
    let enabled = inner.enabled();
-   inner.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, "Close"));
+   inner.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, "Close"));
    inner
 }
 
@@ -692,10 +775,10 @@ mod tests {
                ui.label("wide body");
             });
          let close: Rect = ctx
-            .data(|d| d.get_temp(Id::new("egui_elements_test_close_rect")))
+            .data(|d| d.get_temp(Id::unique("egui_elements_test_close_rect")))
             .expect("close button rect");
          let card: Rect = ctx
-            .data(|d| d.get_temp(Id::new("egui_elements_test_card_rect")))
+            .data(|d| d.get_temp(Id::unique("egui_elements_test_card_rect")))
             .expect("card rect");
          let gap = card.right() - close.right();
          assert!(
@@ -709,10 +792,12 @@ mod tests {
       });
    }
 
-   fn run_two_passes(mut f: impl FnMut(&Context)) {
+   fn run_until_painted(mut f: impl FnMut(&Context)) {
       let ctx = Context::default();
       ctx.set_fonts(egui::FontDefinitions::empty());
-      for _ in 0..2 {
+      // Three passes: egui's own width-0 sizing pass, our sizing pass at the
+      // measured width, then the first painted frame.
+      for _ in 0..3 {
          ctx.run_ui(Default::default(), |ui| f(ui.ctx())).drop_without_applying_deltas();
       }
    }
@@ -720,14 +805,14 @@ mod tests {
    #[test]
    fn modal_centers_without_max_width() {
       let mut last: Option<(Rect, Rect)> = None;
-      run_two_passes(|ctx| {
+      run_until_painted(|ctx| {
          let mut open = true;
          Modal::new("modal_center", &mut open).heading("Title").show(ctx, |ui| {
             ui.set_min_width(520.0);
             ui.label("wide body");
          });
          let card: Rect = ctx
-            .data(|d| d.get_temp(Id::new("egui_elements_test_card_rect")))
+            .data(|d| d.get_temp(Id::unique("egui_elements_test_card_rect")))
             .expect("card rect");
          last = Some((card, ctx.content_rect()));
       });
@@ -743,7 +828,7 @@ mod tests {
    #[test]
    fn modal_centers_with_max_width() {
       let mut last: Option<(Rect, Rect)> = None;
-      run_two_passes(|ctx| {
+      run_until_painted(|ctx| {
          let mut open = true;
          Modal::new("modal_center_cap", &mut open)
             .heading("Title")
@@ -753,7 +838,7 @@ mod tests {
                ui.label("wide body");
             });
          let card: Rect = ctx
-            .data(|d| d.get_temp(Id::new("egui_elements_test_card_rect")))
+            .data(|d| d.get_temp(Id::unique("egui_elements_test_card_rect")))
             .expect("card rect");
          last = Some((card, ctx.content_rect()));
       });

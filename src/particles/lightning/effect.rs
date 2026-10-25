@@ -207,7 +207,7 @@ impl Lightning {
    /// Creates a new lightning effect with a unique ID.
    pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
       Self {
-         id: Id::new(id_source),
+         id: Id::unique(id_source),
          color: DEFAULT_COLOR,
          bolt_count: DEFAULT_BOLT_COUNT,
          branch_depth: DEFAULT_BRANCH_DEPTH,
@@ -775,7 +775,7 @@ mod tests {
          let area = Rect::from_min_size(Pos2::ZERO, vec2(0.0, 64.0));
          Lightning::new("test_lightning_degenerate").area(area).strike(ctx);
          assert!(
-            ctx.data(|d| d.get_temp::<LightningState>(Id::new("test_lightning_degenerate")))
+            ctx.data(|d| d.get_temp::<LightningState>(Id::unique("test_lightning_degenerate")))
                .is_none(),
             "a degenerate area must not create state"
          );
@@ -789,7 +789,7 @@ mod tests {
          Lightning::new("test_lightning_queue").area(area).strike(ctx);
 
          let state = ctx
-            .data(|d| d.get_temp::<LightningState>(Id::new("test_lightning_queue")))
+            .data(|d| d.get_temp::<LightningState>(Id::unique("test_lightning_queue")))
             .expect("LightningState should exist after strike");
          assert_eq!(state.strikes.len(), 1);
          assert!(!state.strikes[0].polylines.is_empty());
@@ -863,7 +863,7 @@ mod tests {
    fn strike_ends_after_its_duration() {
       __run_test_ctx(|ctx| {
          let area = Rect::from_min_size(Pos2::ZERO, vec2(64.0, 64.0));
-         let id = Id::new("test_lightning_ends");
+         let id = Id::unique("test_lightning_ends");
          Lightning::new("test_lightning_ends").duration_ms(200.0).area(area).strike(ctx);
 
          assert_eq!(

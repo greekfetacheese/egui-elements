@@ -89,8 +89,8 @@ pub use particles::{
 };
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, HoldSettings, Label, Modal, MultiLabel,
-   Window,
+   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal,
+   MultiLabel, Window,
 };
 
 #[cfg(feature = "secure-types")]
