@@ -6,13 +6,13 @@ use egui::{
 
 use crate::visuals::FrameVisuals;
 
-/// A frame around some content: margin, fill ([`Fill`]), stroke, rounding, shadow.
+/// A frame around some content: margin, fill, stroke, rounding, shadow.
 ///
 /// Same geometry as [`egui::Frame`]:
 /// `content_size + inner_margin + 2 * stroke.width + outer_margin`.
 ///
-/// The difference is the fill is a [`Fill`], so it can be a two-stop gradient,
-/// and state colors live on [`FrameVisuals`] like the other widgets.
+/// The difference is that the fill is a plain [`Color32`] and the state colours
+/// live on [`FrameVisuals`] like the other widgets.
 ///
 /// Stroke width is taken from the idle border at `begin`. Changing stroke
 /// width on hover after `begin` does not relayout.

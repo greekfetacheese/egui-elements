@@ -209,7 +209,7 @@ impl QrImage {
    /// Create a new [QrImage] from the given data and uri.
    ///
    /// Uses [`QrEncoding::default`]: error correction `High` into a raster of about
-   /// [`DEFAULT_TARGET_PX`] pixels per side. When the symbol is drawn at a known
+   /// `512` pixels per side. When the symbol is drawn at a known
    /// size, prefer [`QrImage::with_encoding`] and give the raster that size, so
    /// the raster is drawn 1:1 instead of being resampled.
    ///

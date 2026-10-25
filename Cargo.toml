@@ -64,3 +64,6 @@ name = "lightning"
 
 [[example]]
 name = "hold_to_confirm"
+
+[package.metadata.docs.rs]
+all-features = true
