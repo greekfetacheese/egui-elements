@@ -16,7 +16,6 @@ pub mod hold;
 pub mod label;
 pub mod modal;
 pub mod multi_label;
-pub mod particles;
 pub mod secure_text_edit;
 pub mod window;
 
@@ -28,9 +27,5 @@ pub use hold::{HoldBurst, HoldSettings};
 pub use label::Label;
 pub use modal::Modal;
 pub use multi_label::MultiLabel;
-pub use particles::{
-   Light, LightMotion, LightSettings, Lightning, LightningSettings, ParticleLayer, Snow,
-   SnowSettings,
-};
 pub use secure_text_edit::SecureTextEdit;
 pub use window::Window;

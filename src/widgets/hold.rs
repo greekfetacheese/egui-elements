@@ -3,9 +3,9 @@
 
 use egui::{Color32, Context, Slider, Ui};
 
+use crate::particles::LightningSettings;
+use crate::particles::shared::{begin_body, settings_window};
 use crate::widgets::button::{HOLD_GLOW_END, HOLD_GLOW_START};
-use crate::widgets::particles::LightningSettings;
-use crate::widgets::particles::shared::{begin_body, settings_window};
 
 /// Softness that reproduces the shared glow fan exactly.
 const DEFAULT_GLOW_SOFTNESS: f32 = 1.0;
@@ -106,13 +106,13 @@ pub struct HoldSettings {
    /// ignored by the other kinds.
    ///
    /// Default `2.0`, the [`LightningSettings::default`] value (see
-   /// `DEFAULT_THICKNESS` in `widgets/particles/lightning/effect.rs`).
+   /// `DEFAULT_THICKNESS` in `particles/lightning/effect.rs`).
    pub burst_thickness: f32,
    /// Midpoint-displacement jitter of a [`HoldBurst::Lightning`] burst, as a
    /// fraction of each segment's length; ignored by the other kinds.
    ///
    /// Default `0.18`, the [`LightningSettings::default`] value (see
-   /// `DEFAULT_JITTER` in `widgets/particles/lightning/effect.rs`).
+   /// `DEFAULT_JITTER` in `particles/lightning/effect.rs`).
    pub burst_jitter: f32,
    /// Radius of a [`HoldBurst::Glow`] at the start of the burst, as a multiple
    /// of the button's shorter side; ignored by the other kinds.

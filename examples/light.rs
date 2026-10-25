@@ -4,9 +4,9 @@
 //! Run with: `cargo run --example light`
 
 use eframe::egui::*;
+use egui_elements::particles::{Light, LightSettings};
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::widgets::particles::{Light, LightSettings};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {

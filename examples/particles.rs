@@ -4,9 +4,9 @@
 //! Run with: `cargo run --example particles`
 
 use eframe::egui::*;
+use egui_elements::particles::{Snow, SnowSettings};
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::widgets::particles::{Snow, SnowSettings};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
