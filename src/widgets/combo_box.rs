@@ -39,7 +39,7 @@ impl ComboBox {
    /// Create a combo box keyed by `id_salt`, showing `selected_item` on the button.
    pub fn new(id_salt: impl Hash + Debug, selected_item: Label) -> Self {
       Self {
-         id_salt: Id::new(id_salt),
+         id_salt: Id::unique(id_salt),
          visuals: None,
          label: None,
          selected_item,

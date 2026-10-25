@@ -188,7 +188,7 @@ impl Light {
    /// Creates a new light effect with a unique ID.
    pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
       Self {
-         id: Id::new(id_source),
+         id: Id::unique(id_source),
          color: Color32::from_rgb(255, 224, 178),
          density: 48,
          layer_order: Order::Foreground,
@@ -596,7 +596,7 @@ mod tests {
          Light::new("test_light").density(7).area(area).show(ctx);
 
          let state = ctx
-            .data(|d| d.get_temp::<LightState>(Id::new("test_light")))
+            .data(|d| d.get_temp::<LightState>(Id::unique("test_light")))
             .expect("LightState should exist after show");
          assert_eq!(state.motes.len(), 7);
       });
@@ -631,7 +631,7 @@ mod tests {
          }
 
          let state = ctx
-            .data(|d| d.get_temp::<LightState>(Id::new("test_light_large_dt")))
+            .data(|d| d.get_temp::<LightState>(Id::unique("test_light_large_dt")))
             .expect("LightState should exist after show");
          assert_eq!(state.motes.len(), 9);
          for mote in &state.motes {
@@ -659,7 +659,7 @@ mod tests {
    fn large_dt_keeps_rising_motes_contained() {
       __run_test_ctx(|ctx| {
          let area = Rect::from_min_size(Pos2::ZERO, vec2(64.0, 64.0));
-         let id = Id::new("test_light_rise_large_dt");
+         let id = Id::unique("test_light_rise_large_dt");
 
          // Smallest `y` any ember reached. It proves the run actually drove
          // embers into the top edge, and stays above zero only when they are
@@ -725,7 +725,7 @@ mod tests {
          let area = Rect::from_min_size(Pos2::ZERO, vec2(0.0, 64.0));
          Light::new("test_light_degenerate").density(5).area(area).show(ctx);
          assert!(
-            ctx.data(|d| d.get_temp::<LightState>(Id::new("test_light_degenerate")))
+            ctx.data(|d| d.get_temp::<LightState>(Id::unique("test_light_degenerate")))
                .is_none(),
             "a degenerate area must not create state"
          );

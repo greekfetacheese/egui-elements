@@ -62,7 +62,7 @@ impl Snow {
    /// Creates a new snow effect with a unique ID.
    pub fn new(id_source: impl std::hash::Hash + std::fmt::Debug) -> Self {
       Self {
-         id: Id::new(id_source),
+         id: Id::unique(id_source),
          color: Color32::WHITE,
          density: 50,
          layer_order: Order::Foreground,
@@ -345,7 +345,7 @@ mod tests {
          Snow::new("test_snow").density(7).area(area).show(ctx);
 
          let state = ctx
-            .data(|d| d.get_temp::<SnowState>(Id::new("test_snow")))
+            .data(|d| d.get_temp::<SnowState>(Id::unique("test_snow")))
             .expect("SnowState should exist after show");
          assert_eq!(state.flakes.len(), 7);
       });

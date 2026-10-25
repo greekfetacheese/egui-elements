@@ -20,7 +20,7 @@ use elegance::{Palette, Theme as EleganceTheme, Typography as EleganceTypography
 /// Temp-data key used to store the mirrored `egui-elegance` theme.
 #[cfg(feature = "elegance")]
 pub fn elegance_theme_key() -> Id {
-   Id::new("elegance::theme")
+   Id::unique("elegance::theme")
 }
 
 /// Theme colors to convert [Theme] to [EleganceTheme]
@@ -253,23 +253,23 @@ impl Theme {
    }
 
    fn storage_id() -> Id {
-      Id::new("elements::theme")
+      Id::unique("elements::theme")
    }
 
    fn button_visuals_id() -> Id {
-      Id::new("elements::button_visuals")
+      Id::unique("elements::button_visuals")
    }
 
    fn label_visuals_id() -> Id {
-      Id::new("elements::label_visuals")
+      Id::unique("elements::label_visuals")
    }
 
    fn combo_box_visuals_id() -> Id {
-      Id::new("elements::combo_box_visuals")
+      Id::unique("elements::combo_box_visuals")
    }
 
    fn text_edit_visuals_id() -> Id {
-      Id::new("elements::text_edit_visuals")
+      Id::unique("elements::text_edit_visuals")
    }
 
    /// Widget visuals stored by [`Theme::install`], if any.

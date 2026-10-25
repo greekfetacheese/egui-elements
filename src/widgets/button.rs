@@ -1,7 +1,7 @@
 use egui::{
-   Align, Align2, Atom, AtomExt as _, AtomKind, AtomLayout, AtomLayoutResponse, Color32, Frame, Id,
-   Image, IntoAtoms, NumExt as _, Pos2, Rect, Response, Sense, Shadow, Shape, Stroke, TextStyle,
-   TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, WidgetType, response::Flags,
+   Align, Align2, Atom, AtomExt as _, AtomKind, Color32, Frame, Id, Image, IntoAtoms, NumExt as _,
+   Pos2, Rect, Response, Role, Sense, Shadow, Shape, Stroke, TextStyle, TextWrapMode, Ui, Vec2,
+   Widget, WidgetAtom, WidgetAtomResponse, WidgetInfo, WidgetText, response::Flags,
 };
 
 use crate::glow::{GlowProfile, glow_mesh_with, size_attenuation};
@@ -116,7 +116,7 @@ fn paint_burst(
 /// ```
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 pub struct Button<'a> {
-   layout: AtomLayout<'a>,
+   layout: WidgetAtom<'a>,
    visuals: Option<ButtonVisuals>,
    bg_color: Option<Color32>,
    badge: Option<Badge>,
@@ -134,7 +134,7 @@ impl<'a> Button<'a> {
    /// Create a button from atoms (text, images, or a mix).
    pub fn new(atoms: impl IntoAtoms<'a>) -> Self {
       Self {
-         layout: AtomLayout::new(atoms.into_atoms())
+         layout: WidgetAtom::new(atoms.into_atoms())
             .sense(Sense::click())
             .fallback_font(TextStyle::Button),
          visuals: None,
@@ -264,7 +264,7 @@ impl<'a> Button<'a> {
    /// [`Ui`] layout puts them — the rendering from before this builder existed.
    ///
    /// The implementation sets the horizontal component of the atom layout's
-   /// [`AtomLayout::align2`]: it moves the measured block of atoms inside the
+   /// [`WidgetAtom::align2`]: it moves the measured block of atoms inside the
    /// allocated rect. It does **not** use the layout's main-axis justification,
    /// which would stretch the gap *between* atoms instead of moving the block.
    ///
@@ -442,8 +442,8 @@ impl<'a> Button<'a> {
       self
    }
 
-   /// Show the button and return a [`AtomLayoutResponse`] for painting custom contents.
-   pub fn atom_ui(self, ui: &mut Ui) -> AtomLayoutResponse {
+   /// Show the button and return a [`WidgetAtomResponse`] for painting custom contents.
+   pub fn atom_ui(self, ui: &mut Ui) -> WidgetAtomResponse {
       let Button {
          mut layout,
          bg_color,
@@ -730,14 +730,14 @@ impl<'a> Button<'a> {
          }
          painted
       } else {
-         AtomLayoutResponse::empty(prepared.response)
+         WidgetAtomResponse::empty(prepared.response)
       };
 
       response.response.widget_info(|| {
          if let Some(text) = &text {
-            WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), text)
+            WidgetInfo::labeled(Role::Button, ui.is_enabled(), text)
          } else {
-            WidgetInfo::new(WidgetType::Button)
+            WidgetInfo::new(Role::Button)
          }
       });
 

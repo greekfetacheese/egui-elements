@@ -255,7 +255,7 @@ impl<'a> SecureTextEdit<'a> {
 
    /// Extra id salt so two fields in the same `Ui` do not share state.
    pub fn id_salt(mut self, id_salt: impl Hash + Debug) -> Self {
-      self.id_salt = Some(Id::new(id_salt));
+      self.id_salt = Some(Id::unique(id_salt));
       self
    }
 
@@ -1177,7 +1177,7 @@ mod tests {
    #[test]
    fn gnome_wayland_ime_types_forwards_not_in_reverse() {
       let ctx = Context::default();
-      let id = Id::new("secure_ime_gnome");
+      let id = Id::unique("secure_ime_gnome");
       let mut text = String::new();
 
       #[allow(deprecated)]
@@ -1201,7 +1201,7 @@ mod tests {
    #[test]
    fn plain_text_events_type_forwards() {
       let ctx = Context::default();
-      let id = Id::new("secure_text_events");
+      let id = Id::unique("secure_text_events");
       let mut text = String::new();
 
       for ch in ['h', 'e', 'l', 'l', 'o'] {
@@ -1219,7 +1219,7 @@ mod tests {
    #[test]
    fn empty_ime_preedit_without_composition_does_not_reset_cursor() {
       let ctx = Context::default();
-      let id = Id::new("secure_empty_preedit");
+      let id = Id::unique("secure_empty_preedit");
       let mut text = String::new();
 
       run_pass(
@@ -1245,7 +1245,7 @@ mod tests {
    #[test]
    fn ime_composition_updates_replace_preedit_then_commit() {
       let ctx = Context::default();
-      let id = Id::new("secure_ime_compose");
+      let id = Id::unique("secure_ime_compose");
       let mut text = String::new();
 
       run_pass(&ctx, &mut text, id, vec![ime_preedit("n")]);

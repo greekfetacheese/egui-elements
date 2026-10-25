@@ -383,7 +383,7 @@ impl QRScanner {
 
             let painter = ui.ctx().layer_painter(LayerId::new(
                Order::Foreground,
-               egui::Id::new("qr_border_layer"),
+               egui::Id::unique("qr_border_layer"),
             ));
             let color = if capture_is_valid.load(Ordering::Relaxed) {
                Color32::GREEN
@@ -398,7 +398,7 @@ impl QRScanner {
             );
 
             let err = last_error.lock().ok().and_then(|g| g.clone());
-            egui::Area::new("qr_help".into())
+            egui::Area::new(egui::Id::unique("qr_help"))
                .fixed_pos(pos2(screen.min.x + 6.0, screen.min.y + 4.0))
                .show(ui.ctx(), |ui| {
                   ui.set_min_width(HELP_MIN_WIDTH_PT - 20.0);
@@ -543,7 +543,7 @@ impl QRScanner {
             // Draw border using layer painter
             let painter = ui.ctx().layer_painter(LayerId::new(
                Order::Foreground,
-               egui::Id::new("qr_border_layer"),
+               egui::Id::unique("qr_border_layer"),
             ));
 
             let color = if capture_is_valid.load(Ordering::Relaxed) {
@@ -565,7 +565,7 @@ impl QRScanner {
             // pushed the frame onto the top of the box).
             let (pivot, help_pos) = help_placement(rect, ui.ctx().content_rect());
             let err = last_error.lock().ok().and_then(|g| g.clone());
-            egui::Area::new("qr_help".into())
+            egui::Area::new(egui::Id::unique("qr_help"))
                .pivot(pivot)
                .fixed_pos(help_pos)
                // Never let egui clamp the frame back onto the box.

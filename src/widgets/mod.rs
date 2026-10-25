@@ -25,7 +25,7 @@ pub use combo_box::ComboBox;
 pub use frame::Frame;
 pub use hold::{HoldBurst, HoldSettings};
 pub use label::Label;
-pub use modal::Modal;
+pub use modal::{IntoModalId, Modal};
 pub use multi_label::MultiLabel;
 pub use secure_text_edit::SecureTextEdit;
 pub use window::Window;
