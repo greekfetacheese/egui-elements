@@ -341,27 +341,36 @@ impl<'a> Modal<'a> {
       let mut close_btn_id: Option<Id> = None;
       let closable = self.closable;
 
+      let window_id = Id::unique("elegance_modal_window").with(self.id_salt);
+      let measure_key = window_id.with("egui_elements_modal_measure");
+      let mut measure: ModalMeasure = ctx.data(|d| d.get_temp(measure_key)).unwrap_or_default();
+      let measuring = self.max_width.is_none() && measure.passes < SHRINK_WRAP_MEASURE_PASSES;
+      let measure_width = if measure.passes == 0 {
+         0.0
+      } else {
+         measure.width
+      };
+
       // --- Backdrop ----------------------------------------------------
       let screen = ctx.content_rect();
       let backdrop_id = Id::unique("elegance_modal_backdrop").with(self.id_salt);
-      let backdrop =
-         Area::new(backdrop_id)
-            .fixed_pos(screen.min)
-            .order(self.backdrop_order)
-            .show(ctx, |ui| {
-               ui.painter().rect_filled(
-                  screen,
-                  CornerRadius::ZERO,
-                  Color32::from_rgba_premultiplied(0, 0, 0, 150),
-               );
-               ui.allocate_rect(screen, Sense::click())
-            });
+      let backdrop = Area::new(backdrop_id)
+         .fixed_pos(screen.min)
+         .order(self.backdrop_order)
+         .sizing_pass(measuring)
+         .show(ctx, |ui| {
+            ui.painter().rect_filled(
+               screen,
+               CornerRadius::ZERO,
+               Color32::from_rgba_premultiplied(0, 0, 0, 150),
+            );
+            ui.allocate_rect(screen, Sense::click())
+         });
       if closable && self.close_on_backdrop && backdrop.inner.clicked() {
          should_close = true;
       }
 
       // --- Content -----------------------------------------------------
-      let window_id = Id::unique("elegance_modal_window").with(self.id_salt);
       let alert = self.alert;
       let heading_text: Option<String> = self.heading.as_ref().map(|h| h.text().to_string());
       let mut area = Area::new(window_id)
@@ -374,21 +383,13 @@ impl<'a> Modal<'a> {
       // box, so the next pass would anchor to that stale height — the
       // one-frame off-centre jump. Spend one more invisible sizing pass, at
       // the width the first pass measured, to get the true height; the pass
-      // after it is the first painted frame and is already centred.
+      // after it is the first painted frame and is already centred. The
+      // backdrop is gated on this same flag so the dim overlay cannot appear
+      // a frame before the dialog does.
       // `max_width(Some(_))` callers keep the single-pass behaviour.
-      let measure_key = window_id.with("egui_elements_modal_measure");
-      let mut measure: ModalMeasure = ctx.data(|d| d.get_temp(measure_key)).unwrap_or_default();
-      let mut measuring = false;
       area = match self.max_width {
          Some(w) => area.default_width(w),
-         None if measure.passes == 0 => {
-            measuring = true;
-            area.default_width(0.0).sizing_pass(true)
-         }
-         None if measure.passes < SHRINK_WRAP_MEASURE_PASSES => {
-            measuring = true;
-            area.default_width(measure.width).sizing_pass(true)
-         }
+         None if measuring => area.default_width(measure_width).sizing_pass(true),
          None => area.default_width(0.0),
       };
       let result = area.show(ctx, |ui| {
