@@ -36,12 +36,12 @@
 //!   [`ComboBox`](crate::widgets::ComboBox), [`Modal`](crate::widgets::Modal),
 //!   [`SecureTextEdit`](crate::widgets::SecureTextEdit), [`MultiLabel`](crate::widgets::MultiLabel),
 //!   [`Window`](crate::widgets::Window)
-//! - [`widgets::particles`] — [`Snow`](crate::widgets::particles::Snow),
-//!   [`Light`](crate::widgets::particles::Light) and
-//!   [`Lightning`](crate::widgets::particles::Lightning) with themed
-//!   [`SnowSettings`](crate::widgets::particles::SnowSettings) /
-//!   [`LightSettings`](crate::widgets::particles::LightSettings) /
-//!   [`LightningSettings`](crate::widgets::particles::LightningSettings) windows
+//! - [`particles`] — [`Snow`](crate::particles::Snow),
+//!   [`Light`](crate::particles::Light) and
+//!   [`Lightning`](crate::particles::Lightning) with themed
+//!   [`SnowSettings`](crate::particles::SnowSettings) /
+//!   [`LightSettings`](crate::particles::LightSettings) /
+//!   [`LightningSettings`](crate::particles::LightningSettings) windows
 //! - [`components`] — feature-gated composites (`secure-types`, `qr-image`, `qr-scanner`)
 //! - [`editor`] — live [`ThemeEditor`](crate::editor::ThemeEditor)
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
@@ -76,17 +76,21 @@ mod glow;
 
 pub mod components;
 pub mod editor;
+pub mod particles;
 pub mod theme;
 pub mod themes;
 pub mod utils;
 pub mod visuals;
 pub mod widgets;
 
+pub use particles::{
+   Light, LightMotion, LightSettings, Lightning, LightningSettings, ParticleLayer, Snow,
+   SnowSettings,
+};
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, HoldSettings, Label, Light, LightMotion,
-   LightSettings, Lightning, LightningSettings, Modal, MultiLabel, ParticleLayer, Snow,
-   SnowSettings, Window,
+   Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, HoldSettings, Label, Modal, MultiLabel,
+   Window,
 };
 
 #[cfg(feature = "secure-types")]

@@ -16,7 +16,7 @@
 //!
 //! ```no_run
 //! use egui::Ui;
-//! use egui_elements::widgets::particles::{
+//! use egui_elements::particles::{
 //!    Light, LightSettings, Lightning, LightningSettings, Snow, SnowSettings,
 //! };
 //!

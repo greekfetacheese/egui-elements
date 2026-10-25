@@ -4,9 +4,9 @@
 //! Run with: `cargo run --example lightning`
 
 use eframe::egui::*;
+use egui_elements::particles::{Lightning, LightningSettings};
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::widgets::particles::{Lightning, LightningSettings};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {

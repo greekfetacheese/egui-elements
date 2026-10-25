@@ -197,7 +197,7 @@ effect. The effect is ported from [egui-snow](https://github.com/LaVashikk/egui-
 (MIT, © 2025 LaVashikk) and keeps the upstream algorithm and defaults.
 
 ```rust
-use egui_elements::widgets::particles::{Snow, SnowSettings};
+use egui_elements::particles::{Snow, SnowSettings};
 
 let mut settings = SnowSettings::default();
 settings.open = true;
@@ -228,7 +228,7 @@ a configured effect. `LightMotion` picks the behaviour: `Drift` wanders and
 bounces off the area edges, `Rise` floats embers up from the bottom edge.
 
 ```rust
-use egui_elements::widgets::particles::{Light, LightSettings};
+use egui_elements::particles::{Light, LightSettings};
 
 let mut settings = LightSettings::default();
 settings.open = true;
@@ -258,7 +258,7 @@ Trigger a strike yourself with `Lightning::strike`, or set
 window's "Strike now" button uses `LightningSettings::STRIKE_ID`.
 
 ```rust
-use egui_elements::widgets::particles::{Lightning, LightningSettings};
+use egui_elements::particles::{Lightning, LightningSettings};
 
 let mut settings = LightningSettings::default();
 settings.open = true;
