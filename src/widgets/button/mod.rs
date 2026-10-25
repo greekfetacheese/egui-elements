@@ -9,7 +9,10 @@ use crate::particles::Lightning;
 use crate::theme::Theme;
 use crate::visuals::ButtonVisuals;
 use crate::widgets::badge::Badge;
-use crate::widgets::hold::{HoldBurst, HoldSettings};
+
+mod hold;
+
+pub use hold::{HoldBurst, HoldSettings};
 
 /// Longest `stable_dt` the hold accumulation accepts, in seconds (spike guard).
 const HOLD_MAX_DT: f32 = 0.1;

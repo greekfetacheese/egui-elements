@@ -1,11 +1,10 @@
-//! Hold-to-confirm settings: the completion burst and the public knobs for a
-//! [`Button::hold`](crate::widgets::Button::hold) action.
+//! [`HoldSettings`] — public knobs for [`Button`](crate::widgets::Button)'s hold action, plus a themed settings window.
 
 use egui::{Color32, Context, Slider, Ui};
 
+use super::{HOLD_GLOW_END, HOLD_GLOW_START};
 use crate::particles::LightningSettings;
 use crate::particles::shared::{begin_body, settings_window};
-use crate::widgets::button::{HOLD_GLOW_END, HOLD_GLOW_START};
 
 /// Softness that reproduces the shared glow fan exactly.
 const DEFAULT_GLOW_SOFTNESS: f32 = 1.0;
