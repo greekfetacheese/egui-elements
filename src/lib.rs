@@ -44,6 +44,9 @@
 //!   [`LightningSettings`] windows
 //! - [`components`] — feature-gated composites (`secure-types`, `qr-image`, `qr-scanner`)
 //! - [`editor`] — live [`ThemeEditor`](crate::editor::ThemeEditor)
+//! - [`layout`] — the axis solver behind the flex containers
+//!   ([`Axis`](crate::layout::Axis), [`Justify`](crate::layout::Justify),
+//!   [`CrossAlign`](crate::layout::CrossAlign))
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
 //! - [`visuals`] — per-widget chrome (`ButtonVisuals`, `TextEditVisuals`, …)
 //!
@@ -75,6 +78,7 @@ mod glow;
 
 pub mod components;
 pub mod editor;
+pub mod layout;
 pub mod particles;
 pub mod theme;
 pub mod themes;
