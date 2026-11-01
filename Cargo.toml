@@ -57,6 +57,9 @@ name = "email"
 name = "label_sections"
 
 [[example]]
+name = "layout"
+
+[[example]]
 name = "particles"
 
 [[example]]

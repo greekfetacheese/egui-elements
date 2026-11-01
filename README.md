@@ -10,6 +10,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
 - A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, and hold-to-confirm buttons with a configurable progress sweep and completion burst
+- **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items); see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner

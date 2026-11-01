@@ -18,10 +18,12 @@
 //!
 //! # Cross-axis sizing is content-driven
 //!
-//! The container's cross extent is the tallest (row) or widest (column) item,
-//! never the parent's available height. That is deliberate, and it is the bug
-//! this module exists to fix: seeding a row's height from egui's guess makes a
-//! tall button overflow the row or leaves a short row floating in empty space.
+//! A row spans the available width and is as tall as its tallest item; a column
+//! is as tall as its content and spans the available width. Neither takes its
+//! cross extent from the parent's available height unless you ask for it
+//! ([`Flex::fill_main`]). That is deliberate, and it is the bug this module
+//! exists to fix: seeding a row's height from egui's guess makes a tall button
+//! overflow the row or leaves a short row floating in empty space.
 //!
 //! # Out of scope
 //!
