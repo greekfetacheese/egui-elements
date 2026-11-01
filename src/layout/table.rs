@@ -65,11 +65,17 @@ fn cell_layout() -> Layout {
    Layout::left_to_right(Align::Center)
 }
 
-/// The height of the table band: the header, the gap under it, and every row plus the gaps between
-/// them.
-fn band_height(has_header: bool, header_height: f32, heights: &[f32], row_gap: f32) -> f32 {
+/// The height of the table band: the header, the pad under it, the gap under it, and every row plus
+/// the gaps between them.
+fn band_height(
+   has_header: bool,
+   header_height: f32,
+   header_pad: f32,
+   heights: &[f32],
+   row_gap: f32,
+) -> f32 {
    let rows = heights.len();
-   let mut height = header_height;
+   let mut height = header_height + header_pad;
    if has_header && rows > 0 {
       height += row_gap;
    }
@@ -126,7 +132,10 @@ impl<'a, T> Table<'a, T> {
       self
    }
 
-   /// Draw a 1px separator under the header band. Default: `false`.
+   /// Draw a 1px separator at the bottom of the header band. Default: `false`.
+   ///
+   /// The rule reserves one [`egui::Spacing::item_spacing`]`.y` step under the header text and draws
+   /// the line there, so it never touches the text's descenders.
    pub fn header_rule(mut self, header_rule: bool) -> Self {
       self.header_rule = header_rule;
       self
@@ -161,6 +170,11 @@ impl<'a, T> Table<'a, T> {
       let avail = ui.available_size();
       let gap = self.gap.unwrap_or(ui.spacing().item_spacing.x);
       let row_gap = self.row_gap.unwrap_or(ui.spacing().item_spacing.y);
+      let header_pad = if self.header_rule {
+         ui.spacing().item_spacing.y
+      } else {
+         0.0
+      };
 
       let placing = prev.as_ref().is_some_and(|p| {
          p.same_space(avail)
@@ -190,6 +204,7 @@ impl<'a, T> Table<'a, T> {
          gap,
          row_gap,
          header_rule: self.header_rule,
+         header_pad,
          key: self.key,
          avail,
          heights: Vec::new(),
@@ -217,6 +232,9 @@ pub struct TableUi<'a, 'ui, T> {
    gap: f32,
    row_gap: f32,
    header_rule: bool,
+   /// The gap the header rule reserves under the header text: one `item_spacing.y` step when
+   /// `header_rule` is on, `0.0` otherwise.
+   header_pad: f32,
    key: u64,
    avail: Vec2,
    heights: Vec<f32>,
@@ -250,6 +268,7 @@ impl<T> TableUi<'_, '_, T> {
       let height = band_height(
          self.has_header,
          self.header_height,
+         self.header_pad,
          &self.heights,
          self.row_gap,
       );
@@ -278,7 +297,11 @@ impl<T> TableUi<'_, '_, T> {
             }
             if self.header_rule {
                let stroke = self.ui.visuals().widgets.noninteractive.bg_stroke;
-               self.ui.painter().hline(band.x_range(), band.min.y + header_height, stroke);
+               self.ui.painter().hline(
+                  band.x_range(),
+                  band.min.y + header_height + self.header_pad,
+                  stroke,
+               );
             }
             {
                let mut header = TableHeader {
@@ -319,7 +342,7 @@ impl<T> TableUi<'_, '_, T> {
          Mode::Placing => {
             self.ensure_band();
             let band = self.band.as_ref().expect("the band is allocated above").0;
-            let mut y = band.min.y + self.header_height;
+            let mut y = band.min.y + self.header_height + self.header_pad;
             if self.has_header {
                y += self.row_gap;
             }
@@ -387,6 +410,7 @@ impl<T> TableUi<'_, '_, T> {
             let height = band_height(
                self.has_header,
                self.header_height,
+               self.header_pad,
                &self.heights,
                self.row_gap,
             );
@@ -756,6 +780,53 @@ mod tests {
          (rects[0].height() - 44.0).abs() < 0.5,
          "row height {} != 44",
          rects[0].height()
+      );
+   }
+
+   #[test]
+   fn table_header_rule_reserves_space_under_the_header() {
+      let ctx = themed_ctx();
+      let rows = [Row("Deployer", "Swap")];
+      let rects = std::cell::RefCell::new(Vec::new());
+      let spacing_y = std::cell::Cell::new(0.0f32);
+      for _ in 0..2 {
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            rects.borrow_mut().clear();
+            scope(ui, |ui| {
+               spacing_y.set(ui.spacing().item_spacing.y);
+               for (id, rule) in [("rule_off", false), ("rule_on", true)] {
+                  Table::new(id, &rows).columns([Column::Auto]).header_rule(rule).show(
+                     ui,
+                     |table| {
+                        table.header(|header| {
+                           let rect = header.cell(|ui| ui.max_rect()).inner;
+                           rects.borrow_mut().push(rect);
+                        });
+                        table.rows(|row, _item| {
+                           row.cell(|ui| {
+                              ui.add(crate::widgets::Label::new("Swap", None));
+                           });
+                           rects.borrow_mut().push(row.rect());
+                        });
+                     },
+                  );
+               }
+            });
+         }));
+      }
+      let rects = rects.borrow();
+      assert_eq!(rects.len(), 4, "expected two header/row pairs");
+      let spacing = spacing_y.get();
+      let rule_off_gap = rects[1].top() - rects[0].bottom();
+      assert!(
+         (rule_off_gap - spacing).abs() < 0.5,
+         "rule-less gap {rule_off_gap} != row_gap {spacing}"
+      );
+      let rule_on_gap = rects[3].top() - rects[2].bottom();
+      assert!(
+         (rule_on_gap - (spacing + spacing)).abs() < 0.5,
+         "ruled gap {rule_on_gap} != row_gap + item_spacing.y {}",
+         spacing + spacing
       );
    }
 

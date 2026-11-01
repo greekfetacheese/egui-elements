@@ -2,7 +2,9 @@
 
 use std::hash::Hash;
 
-use egui::{Align, Id, InnerResponse, Layout, Pos2, Rect, Response, Sense, Ui, UiBuilder, Vec2};
+use egui::{
+   Align, Id, InnerResponse, Layout, Pos2, Rect, Response, Sense, Ui, UiBuilder, Vec2, pos2, vec2,
+};
 
 use super::solver::{Axis, CrossAlign, ItemSize, ItemSpec, Justify, resolve};
 use super::state::FlexState;
@@ -13,6 +15,7 @@ use super::state::FlexState;
 pub struct Item {
    size: ItemSize,
    align: Option<CrossAlign>,
+   content: CrossAlign,
 }
 
 impl Item {
@@ -21,6 +24,7 @@ impl Item {
       Self {
          size: ItemSize::Auto,
          align: None,
+         content: CrossAlign::Start,
       }
    }
 
@@ -29,6 +33,7 @@ impl Item {
       Self {
          size: ItemSize::Fixed(main),
          align: None,
+         content: CrossAlign::Start,
       }
    }
 
@@ -38,6 +43,7 @@ impl Item {
       Self {
          size: ItemSize::Grow(weight),
          align: None,
+         content: CrossAlign::Start,
       }
    }
 
@@ -47,6 +53,16 @@ impl Item {
          align: Some(align),
          ..self
       }
+   }
+
+   /// Where the item's content sits inside its cell along the main axis when the cell is wider (row) or
+   /// taller (column) than the content. CSS `justify-self` for the cell's own box.
+   ///
+   /// `Start` (the default) is today's behaviour. `Center` is what makes a growing cell look centred
+   /// instead of hugging the item before it. `Stretch` keeps the content box full-size (no effect on the
+   /// widget's own size).
+   pub fn align_content(self, content: CrossAlign) -> Self {
+      Self { content, ..self }
    }
 
    pub(crate) fn spec(self) -> ItemSpec {
@@ -316,11 +332,34 @@ impl FlexUi<'_> {
          if i < prev.sizes.len() && item.spec() == prev.specs[i] {
             let cells = self.cells.as_ref().expect("cells are placed on item 0");
             let cell = cells[i];
+            // row: keep the cell's height, shrink the width to the content and place it per `content`
+            // column: keep the cell's width, shrink the height and place it per `content`
+            let natural = prev.sizes[i];
+            let child_size = match self.axis {
+               Axis::Row => vec2(natural.x.min(cell.width()), cell.height()),
+               Axis::Column => vec2(cell.width(), natural.y.min(cell.height())),
+            };
+            let child_size = match item.content {
+               // `Start` keeps today's full-cell box (and `Stretch` keeps it full-size).
+               CrossAlign::Center | CrossAlign::End => child_size,
+               _ => cell.size(),
+            };
+            let child_min = match (self.axis, item.content) {
+               (Axis::Row, CrossAlign::Center) => {
+                  pos2(cell.center().x - child_size.x / 2.0, cell.top())
+               }
+               (Axis::Row, CrossAlign::End) => pos2(cell.right() - child_size.x, cell.top()),
+               (Axis::Column, CrossAlign::Center) => {
+                  pos2(cell.left(), cell.center().y - child_size.y / 2.0)
+               }
+               (Axis::Column, CrossAlign::End) => pos2(cell.left(), cell.bottom() - child_size.y),
+               _ => cell.min, // Start, and every Stretch case
+            };
             let mut child = self.ui.new_child(
                UiBuilder::new()
                   .max_rect(Rect::from_min_size(
-                     self.origin + cell.min.to_vec2(),
-                     cell.size(),
+                     self.origin + child_min.to_vec2(),
+                     child_size,
                   ))
                   .layout(cell_layout(self.axis)),
             );
@@ -654,6 +693,69 @@ mod tests {
          passes[2], 0,
          "third frame ran a second pass: {:?}",
          passes
+      );
+   }
+
+   #[test]
+   fn item_content_align_centers_a_narrow_widget_in_its_cell() {
+      let ctx = themed_ctx();
+      let rects = std::cell::RefCell::new(Vec::new());
+      for _ in 0..2 {
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            rects.borrow_mut().clear();
+            ui.scope_builder(
+               UiBuilder::new().max_rect(Rect::from_min_size(
+                  egui::Pos2::ZERO,
+                  vec2(500.0, 400.0),
+               )),
+               |ui| {
+                  for (id, item) in [
+                     ("start", Item::fixed(200.0)),
+                     (
+                        "center",
+                        Item::fixed(200.0).align_content(CrossAlign::Center),
+                     ),
+                  ] {
+                     Flex::row(("align_content", id)).gap(8.0).show(ui, |f| {
+                        f.item(item, |ui| {
+                           let cell = ui.max_rect();
+                           let label = ui.add(crate::widgets::Label::new("x", None)).rect;
+                           rects.borrow_mut().push((cell, label));
+                        });
+                        f.item(Item::grow(1.0), |ui| {
+                           ui.add(crate::widgets::Label::new("filler", None));
+                        });
+                     });
+                  }
+               },
+            );
+         }));
+      }
+      let rects = rects.borrow();
+      let (start_cell, start_label) = rects[0];
+      let (center_cell, center_label) = rects[1];
+      assert!(
+         (start_label.min.x - start_cell.min.x).abs() < 0.5,
+         "default Start label min.x {} != cell min.x {}",
+         start_label.min.x,
+         start_cell.min.x
+      );
+      assert!(
+         (center_label.center().x - center_cell.center().x).abs() < 0.5,
+         "Center label center.x {} != cell center.x {}",
+         center_label.center().x,
+         center_cell.center().x
+      );
+      assert!(
+         (center_label.center().y - center_cell.center().y).abs() < 0.5,
+         "Center label center.y {} != cell center.y {}",
+         center_label.center().y,
+         center_cell.center().y
+      );
+      assert!(
+         center_label.width() < 40.0,
+         "Center label was stretched to {}",
+         center_label.width()
       );
    }
 

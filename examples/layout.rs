@@ -225,12 +225,13 @@ fn section_distribution(ui: &mut Ui, theme: &Theme) {
 }
 
 /// D. A card whose body is a column; the column's first item is an
-/// 80 / grow / 80 row. Flex containers nest.
+/// 80 / grow / 80 row, and the growing middle item centres its content
+/// instead of hugging the "Back" button. Flex containers nest.
 fn section_nested(ui: &mut Ui, theme: &Theme) {
    caption(
       ui,
       theme,
-      "D. Nested flex — a column card whose first row is fixed 80 / flex 1 / fixed 80.",
+      "D. Nested flex — a column card whose first row is fixed 80 / flex 1 / fixed 80; the growing middle item centres its content.",
    );
 
    theme.frame1.show(ui, |ui| {
@@ -242,16 +243,19 @@ fn section_nested(ui: &mut Ui, theme: &Theme) {
                   let width = ui.available_width();
                   ui.add(Button::new("Back").min_size(vec2(width, 0.0)));
                });
-               f.item(Item::grow(1.0), |ui| {
-                  ui.add(
-                     Label::new(
-                        RichText::new("A growing middle item between two fixed ones")
-                           .color(theme.colors.text_muted),
-                        None,
-                     )
-                     .wrap(),
-                  );
-               });
+               f.item(
+                  Item::grow(1.0).align_content(CrossAlign::Center),
+                  |ui| {
+                     ui.add(
+                        Label::new(
+                           RichText::new("A growing middle item between two fixed ones")
+                              .color(theme.colors.text_muted),
+                           None,
+                        )
+                        .wrap(),
+                     );
+                  },
+               );
                f.item(Item::fixed(80.0), |ui| {
                   let width = ui.available_width();
                   ui.add(Button::new("Next").min_size(vec2(width, 0.0)));
@@ -369,7 +373,9 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
          Column::Fixed(100.0),
       ])
       .gap(theme.spacing.md)
-      .row_gap(theme.spacing.xs)
+      // 12 pt, not xs: a themed `Button` paints ~6 pt above and below its band, so an `xs` gap
+      // (4) lets the row below touch it.
+      .row_gap(theme.spacing.md)
       .header_rule(true)
       .key(*page)
       .show(ui, |t| {

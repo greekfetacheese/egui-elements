@@ -36,6 +36,7 @@ write the row without reading this module's source.
 | `justify-content` | `.justify(Justify::…)` |
 | `align-items` | `.align_items(CrossAlign::…)` |
 | `align-self` | `Item::…align(CrossAlign::…)` |
+| `justify-self` (content inside a cell) | `Item::align_content(CrossAlign::…)` |
 | `flex: <n>` | `Item::grow(n)` (basis 0) |
 | `width: Npx` | `Item::fixed(N)` |
 | `flex-basis: auto` | `Item::new()` (measured content size) |
@@ -44,6 +45,11 @@ write the row without reading this module's source.
 Gaps come from the theme, never from a literal: `theme.spacing` is `xs` 4, `sm` 8, `md` 12, `lg` 16, `xl` 24.
 With no `.gap(...)`, the container falls back to `ui.spacing().item_spacing` on its own axis, which
 `Theme::install` already sets from the same scale.
+
+`Item::align_content(CrossAlign::…)` is the one builder that is not `align-self`: it places the content
+inside the cell when the cell is wider (row) or taller (column) than the content, so an `Item::grow(1.0)`
+middle item with `.align_content(CrossAlign::Center)` centres its label in the space between two fixed
+buttons instead of hugging the button before it. `Start` is the default; `Stretch` keeps the full cell box.
 
 ---
 
@@ -144,9 +150,17 @@ Table::new("tx_history", &rows).key(page).show(ui, |t| { /* … */ });
 
 ### Row chrome
 
-`header_rule(true)` draws the 1px separator under the header band. For zebra rows or a card band, use the
-row hook: `TableRow::fill(color)` paints the row's full-width band before its cells, and `TableRow::rect()`
-returns that band so a host can draw its own chrome. `TableRow::index()` is the row's index in the slice.
+`header_rule(true)` reserves one `item_spacing.y` step under the header text and draws the 1px separator at
+the bottom of that band, so the rule never touches the header's descenders. For zebra rows or a card band,
+use the row hook: `TableRow::fill(color)` paints the row's full-width band before its cells, and
+`TableRow::rect()` returns that band so a host can draw its own chrome. `TableRow::index()` is the row's
+index in the slice.
+
+**Chrome overhang is the host's to budget.** A cell is a rect, not a clip: a themed `Button` paints about
+6 pt above and below its band, and the table cannot measure painted chrome. A table of buttons therefore
+needs `row_gap >= 2 × the overhang` — 12 pt, which is `theme.spacing.md` or the default
+`item_spacing.y`. `theme.spacing.xs` (4 pt) lets one row's button reach into the next row. This is a
+documented host duty, not something the container can infer.
 
 ### Recipe: the `tx_history` shape
 
@@ -176,7 +190,7 @@ fn tx_history(ui: &mut Ui, theme: &Theme, rows: &[Tx], page: usize) {
          Column::Fixed(100.0),
       ])
       .gap(theme.spacing.md)
-      .row_gap(theme.spacing.xs)
+      .row_gap(theme.spacing.md)
       .header_rule(true)
       .key(page)
       .show(ui, |t| {
