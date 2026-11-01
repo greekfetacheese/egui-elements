@@ -90,7 +90,7 @@ pub mod visuals;
 pub mod widgets;
 
 pub use layout::{Column, Flex, Item, Table};
-pub use motion::{Easing, Lerp, Motion, animate, animate_with};
+pub use motion::{Collapse, Easing, Fade, FadeMode, Lerp, Motion, animate, animate_with};
 pub use particles::{
    Light, LightMotion, LightSettings, Lightning, LightningSettings, ParticleLayer, Snow,
    SnowSettings,

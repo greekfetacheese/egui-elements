@@ -1,6 +1,6 @@
 //! Time, in one place: easing curves and eased value animation.
 //!
-//! [`animate`] drives a value, and `Fade` / `Collapse` (next task) drive a container.
+//! [`animate`] drives a value, and [`Fade`] / [`Collapse`] drive a container.
 //! Durations come from the installed style's `animation_time`, so [`Motion::instant`]
 //! (`duration = 0.0`) is both the reduce-motion answer and the deterministic-test answer.
 //!
@@ -9,10 +9,12 @@
 //! usable in a battery-sensitive host.
 
 mod animate;
+mod containers;
 mod easing;
 mod state;
 
 pub use animate::{Lerp, animate, animate_with};
+pub use containers::{Collapse, Fade, FadeMode};
 pub use easing::Easing;
 
 use egui::Ui;

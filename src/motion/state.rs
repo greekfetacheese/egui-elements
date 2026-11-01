@@ -15,6 +15,13 @@ pub struct AnimState {
    pub target: f32,
 }
 
+/// Where a [`Collapse`](crate::motion::Collapse) is: the body height measured on its last visible frame.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CollapseState {
+   /// `None` until the body has been measured once (first open, or after a host restart).
+   pub natural: Option<f32>,
+}
+
 impl AnimState {
    /// A freshly seen id starts at `0.0`, not at the target: a first open must fade in, which is the
    /// behaviour egui's own `animate_bool` cannot give (an unknown id returns the target immediately).
