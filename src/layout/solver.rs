@@ -153,7 +153,11 @@ pub fn resolve(
       lengths.push(length);
    }
 
-   let line_cross = sizes[..n].iter().map(|s| axis.cross_of(*s)).fold(0.0, f32::max);
+   // The container's cross extent is a floor for the line, so a column can align across its full width.
+   let line_cross = sizes[..n]
+      .iter()
+      .map(|s| axis.cross_of(*s))
+      .fold(axis.cross_of(container).max(0.0), f32::max);
 
    let cross_extent = |i: usize| -> f32 {
       let effective = items[i].align.unwrap_or(align);

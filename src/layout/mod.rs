@@ -29,6 +29,9 @@
 //! percentages, and baseline alignment. [`ItemSize::Grow`] is `flex-basis: 0`,
 //! i.e. CSS `flex: <n>`; there is no `flex-grow` on top of a natural size.
 
+pub mod flex;
 pub mod solver;
+mod state;
 
+pub use flex::{Flex, FlexUi, Item};
 pub use solver::{Axis, CrossAlign, ItemSize, ItemSpec, Justify, LayoutOut, resolve};
