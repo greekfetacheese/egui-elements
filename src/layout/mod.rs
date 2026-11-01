@@ -34,9 +34,11 @@
 pub mod flex;
 pub mod solver;
 mod state;
+pub mod table;
 
 pub use flex::{Flex, FlexUi, Item};
 pub use solver::{
    Axis, Column, ColumnOut, CrossAlign, ItemSize, ItemSpec, Justify, LayoutOut, resolve,
    resolve_columns,
 };
+pub use table::{Table, TableHeader, TableRow, TableUi};

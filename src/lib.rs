@@ -86,7 +86,7 @@ pub mod utils;
 pub mod visuals;
 pub mod widgets;
 
-pub use layout::{Flex, Item};
+pub use layout::{Column, Flex, Item, Table};
 pub use particles::{
    Light, LightMotion, LightSettings, Lightning, LightningSettings, ParticleLayer, Snow,
    SnowSettings,
