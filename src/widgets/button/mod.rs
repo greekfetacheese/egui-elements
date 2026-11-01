@@ -5,6 +5,7 @@ use egui::{
 };
 
 use crate::glow::{GlowProfile, glow_mesh_with, size_attenuation};
+use crate::motion::{InteractT, Motion};
 use crate::particles::Lightning;
 use crate::theme::Theme;
 use crate::visuals::ButtonVisuals;
@@ -597,24 +598,39 @@ impl<'a> Button<'a> {
          };
          let is_hovered = prepared.response.hovered();
 
-         // Select custom visuals based on state, or fall back to defaults
+         // Eased idle → hover → press. `is_active` / `is_hovered` stay the caller's own state selection; only the
+         // colours between states are blended, so a hold gesture keeps its pressed chrome exactly as before.
+         let across = InteractT::of(
+            ui,
+            prepared.response.id,
+            is_hovered,
+            is_active,
+            Motion::from_ui(ui),
+         );
          let (fill, stroke, corner_radius) = if let Some(v) = &visuals {
-            if is_active {
-               (v.bg_click, v.border_click, v.corner_radius)
-            } else if is_hovered {
-               (v.bg_hover, v.border_hover, v.corner_radius)
-            } else {
-               let bg = bg_color.unwrap_or(v.bg);
-               (bg, v.border, v.corner_radius)
-            }
-         } else {
             (
-               interact_visuals.weak_bg_fill,
-               interact_visuals.bg_stroke,
+               across.blend(bg_color.unwrap_or(v.bg), v.bg_hover, v.bg_click),
+               across.blend(v.border, v.border_hover, v.border_click),
+               v.corner_radius,
+            )
+         } else {
+            let widgets = &ui.style().visuals.widgets;
+            (
+               across.blend(
+                  widgets.inactive.weak_bg_fill,
+                  widgets.hovered.weak_bg_fill,
+                  widgets.active.weak_bg_fill,
+               ),
+               across.blend(
+                  widgets.inactive.bg_stroke,
+                  widgets.hovered.bg_stroke,
+                  widgets.active.bg_stroke,
+               ),
                interact_visuals.corner_radius,
             )
          };
 
+         // Selection is instant by design: a selected button changes fill in one step.
          let fill = match selected {
             false => fill,
             true => {
@@ -792,6 +808,19 @@ mod tests {
       }
    }
 
+   fn hover(pos: Pos2) -> Event {
+      Event::PointerMoved(pos)
+   }
+
+   /// A context with a crate theme installed, so widget visuals and the
+   /// animation duration come from the live style.
+   fn themed_ctx() -> Context {
+      let ctx = Context::default();
+      let mut theme = Theme::new(crate::theme::ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      ctx
+   }
+
    fn enter() -> Event {
       Event::Key {
          key: Key::Enter,
@@ -882,7 +911,6 @@ mod tests {
    fn has_mesh(output: &FullOutput) -> bool {
       output.shapes.iter().any(|clipped| matches!(clipped.shape, Shape::Mesh(_)))
    }
-
    /// Highest vertex alpha of any glow mesh in the frame (`0` when none).
    fn mesh_alpha(output: &FullOutput) -> u8 {
       output
@@ -2580,5 +2608,81 @@ mod tests {
             response.rect.left()
          );
       }
+   }
+
+   #[test]
+   fn button_hover_fill_eases_instead_of_jumping() {
+      let ctx = themed_ctx();
+      // The theme's own button visuals, minus the shadow: the shadow paints a
+      // second opaque rect of the same size, which the whole-frame fill reader
+      // would match instead of the button's fill.
+      let visuals = ButtonVisuals {
+         shadow: Shadow::NONE,
+         ..Theme::button_visuals_from_ctx(&ctx).expect("the theme installs button visuals")
+      };
+      let build = || Button::new("Save").visuals(visuals);
+      let (idle, hovered) = (visuals.bg, visuals.bg_hover);
+      assert_ne!(
+         idle, hovered,
+         "the theme must distinguish idle from hover for this test to mean anything"
+      );
+
+      // Frame 1, no pointer: the button exists and we learn where it is.
+      let (_, response) = run_pass(&ctx, Vec::new(), 0.0, build);
+      let centre = response.rect.center();
+
+      // Point at the button: the hover leg starts on this frame, at 0.0.
+      run_pass(&ctx, vec![hover(centre)], 0.15, build);
+
+      // Half of the 0.3 s theme duration after the hover began: the painted
+      // fill must be a blend, not either endpoint.
+      let (output, _) = run_pass(&ctx, vec![hover(centre)], 0.30, build);
+      let fills = rect_fills(&output);
+      assert!(
+         fills.iter().any(|c| *c != idle && *c != hovered),
+         "mid-transition fill should be neither idle nor hover: {fills:?}"
+      );
+
+      // Settled: exactly the themed hover fill.
+      let (output, _) = run_pass(&ctx, vec![hover(centre)], 0.6, build);
+      assert!(
+         rect_fills(&output).contains(&hovered),
+         "settled hover should paint the theme's hover fill exactly"
+      );
+   }
+
+   #[test]
+   fn button_press_fill_snaps_in() {
+      let ctx = themed_ctx();
+      // The shipped themes alias their idle and pressed fills, so sentinels are
+      // needed to tell the two apart.
+      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
+      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
+      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
+      let visuals = ButtonVisuals {
+         bg: IDLE,
+         bg_hover: HOVER,
+         bg_click: PRESSED,
+         shadow: Shadow::NONE,
+         ..Default::default()
+      };
+      let build = || Button::new("Save").visuals(visuals);
+      let (_, response) = run_pass(&ctx, Vec::new(), 0.0, build);
+      let centre = response.rect.center();
+      run_pass(&ctx, vec![hover(centre)], 0.15, build);
+      let (settled, _) = run_pass(&ctx, vec![hover(centre)], 0.6, build); // settle the hover first
+      assert!(
+         rect_fills(&settled).contains(&HOVER),
+         "the hover must be settled before the press, got {:?}",
+         rect_fills(&settled)
+      );
+
+      // The very frame the pointer goes down: already the pressed fill (the
+      // pressed leg runs on `Motion::instant`).
+      let (output, _) = run_pass(&ctx, vec![press(centre)], 0.725, build);
+      assert!(
+         rect_fills(&output).contains(&PRESSED),
+         "a press must paint the pressed fill on the same frame"
+      );
    }
 }

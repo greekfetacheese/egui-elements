@@ -40,7 +40,10 @@ impl AnimState {
 
    /// `(value, progress)` at `now`. `progress` is `1.0` once settled, so callers can stop repainting.
    pub fn sample(&self, now: f64, duration: f32, easing: Easing) -> (f32, f32) {
-      if duration <= 0.0 {
+      // A leg with nothing to travel is already finished. Without this, a widget that never changes state (an idle
+      // button) spends the whole duration requesting repaints, and a caller that holds `input.time` constant never
+      // sees it settle.
+      if duration <= 0.0 || self.from == self.to {
          return (self.to, 1.0);
       }
       let t = (((now - self.start) as f32) / duration).clamp(0.0, 1.0);

@@ -268,6 +268,29 @@ mod tests {
    }
 
    #[test]
+   fn a_zero_distance_leg_settles_without_a_repaint() {
+      let ctx = themed_ctx();
+      let mut v = -1.0_f32;
+      // Two warm-up frames absorb egui's own first-frame repaint.
+      frame_at(&ctx, 10.0, |ui| {
+         v = animate_with(ui, "at_rest", 0.0, Motion::new(0.2))
+      });
+      frame_at(&ctx, 10.0, |ui| {
+         v = animate_with(ui, "at_rest", 0.0, Motion::new(0.2))
+      });
+      assert_eq!(v, 0.0);
+
+      frame_at(&ctx, 10.1, |ui| {
+         v = animate_with(ui, "at_rest", 0.0, Motion::new(0.2));
+         assert!(
+            !ui.ctx().has_requested_repaint(),
+            "an animation with nothing to travel must not keep the frame loop awake"
+         );
+      });
+      assert_eq!(v, 0.0);
+   }
+
+   #[test]
    fn color_lerp_mixes_channels() {
       let a = Color32::BLACK;
       assert_eq!(a.lerp(Color32::WHITE, 0.0), Color32::BLACK);

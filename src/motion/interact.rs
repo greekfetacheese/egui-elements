@@ -29,13 +29,15 @@ impl InteractT {
          if hovered { 1.0 } else { 0.0 },
          motion,
       );
-      // Press snaps in and eases out: a press that fades in reads as lag on the click.
-      let press_motion = if pressed { Motion::instant() } else { motion };
+      // Press snaps in and out. The release has to land on the frame the gesture ends: a hold-to-confirm button
+      // drops its pressed chrome the frame it fires, so an eased release would paint PRESSED for another 300 ms
+      // after a completed hold (`the_chrome_releases_when_the_hold_completes`). Hover is ambience; a press is a
+      // state flag.
       let press = animate_with(
          ui,
          id.with("press_t"),
          if pressed { 1.0 } else { 0.0 },
-         press_motion,
+         Motion::instant(),
       );
       Self { hover, press }
    }
@@ -113,30 +115,29 @@ mod tests {
    }
 
    #[test]
-   fn interact_t_snaps_the_press_in_and_eases_it_out() {
+   fn interact_t_snaps_the_press_both_ways() {
       let ctx = themed_ctx();
+      let id = Id::unique("press");
       let motion = Motion::new(0.2);
-      let mut pressed = Vec::new();
-      let mut released = Vec::new();
+      let mut t = InteractT::default();
+
       frame_at(&ctx, 10.0, |ui| {
-         pressed.push(InteractT::of(ui, Id::unique("p"), false, true, motion).press);
+         t = InteractT::of(ui, id, false, true, motion)
       });
-      frame_at(&ctx, 10.1, |ui| {
-         released.push(InteractT::of(ui, Id::unique("p"), false, false, motion).press);
-      });
-      frame_at(&ctx, 10.2, |ui| {
-         released.push(InteractT::of(ui, Id::unique("p"), false, false, motion).press);
-      });
-      assert_eq!(pressed[0], 1.0, "press must snap in");
       assert!(
-         (released[0] - 1.0).abs() < 1e-4,
-         "release frame: {}",
-         released[0]
+         (t.press - 1.0).abs() < 1e-4,
+         "press must land on the down frame: {}",
+         t.press
       );
+
+      // The up frame must land too: a hold-to-confirm button releases its pressed chrome on the frame it fires.
+      frame_at(&ctx, 10.1, |ui| {
+         t = InteractT::of(ui, id, false, false, motion)
+      });
       assert!(
-         (released[1] - 0.125).abs() < 0.01,
-         "release: {}",
-         released[1]
+         t.press.abs() < 1e-4,
+         "release must land on the up frame: {}",
+         t.press
       );
    }
 
