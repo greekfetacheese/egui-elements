@@ -32,6 +32,7 @@ sequencer.
 | an `opacity` transition | `Fade` |
 | a `max-height` reveal | `Collapse` |
 | interpolating two `Color32`s | `Lerp` |
+| a `transition` on a hover state | `InteractT` (built into the widgets) |
 
 Durations come from the installed style: `Motion::from_ui(ui)` reads `Style::animation_time`, which every crate
 theme sets to `0.3`. A host that already tunes `animation_time` does not configure motion twice. `Motion::new`
@@ -73,9 +74,30 @@ host either accepts constant speed or writes the curve and the clock itself.
 in on its own, with no closed-frame ticking, and every curve in `Easing` is available to a value as well as to a
 container.
 
-egui's own widgets still swap visual sets instantly through `Style::interact(&response)` — hover and active
-states jump rather than transition. **Widget-level transitions are not in this module yet**; `motion` animates
-values and container reveals, and nothing here changes how a `Button` paints.
+egui's own widgets still swap visual sets instantly through `Style::interact(&response)` — hover and active states
+jump rather than transition, and that is the third gap. Every widget in this crate that paints an interaction state
+(`Button`, `Frame`, `ComboBox`, `MultiLabel`, `SecureTextEdit`) now blends between them instead, through
+[`InteractT`](crate::motion::InteractT):
+
+- **Hover eases** over the `Motion` duration, so the chrome ramps instead of switching.
+- **Press snaps** in *and* out. A press is a state flag, not ambience: a hold-to-confirm button has to drop its pressed
+  chrome on the frame the gesture fires, and a press that fades in reads as lag on the click.
+- **Selection is instant** by design: a selected button changes fill in one step.
+- Each widget keeps its own condition pair — a `Frame` counts `contains_pointer()` as hover, a text edit opens on hover
+  *or* focus — so *which* state applies is unchanged; only the transition between states animates.
+
+A host that paints its own widget can use the same three calls:
+
+```rust
+use egui_elements::motion::{InteractT, Motion};
+
+let across = InteractT::of(ui, response.id, hovered, pressed, Motion::from_ui(ui));
+let fill = across.blend(idle, hover, press);
+let stroke = across.blend(idle_stroke, hover_stroke, press_stroke);
+```
+
+`Motion::instant()` makes every one of them snap, which is the reduce-motion switch and the reason the tests can
+assert settled colours deterministically.
 
 ---
 
@@ -162,7 +184,7 @@ animated band and advances the cursor by that band, so all four pieces go.
 cargo run --example motion
 ```
 
-Five sections, one claim each:
+Six sections, one claim each:
 
 - **A. Value animation** — `animate` eases a number toward a target; the number in the caption is the value on
   screen and stops changing without repaints.
@@ -172,3 +194,5 @@ Five sections, one claim each:
   heights and moves while a band animates.
 - **E. Timing** — duration and easing controls retime every section above, including `Instant` (duration `0.0`,
   no repaint).
+- **F. Widget transitions** — hover one of the three buttons, the interactive frame and the `MultiLabel`: the chrome
+  ramps, and `Instant` in section E makes it snap.

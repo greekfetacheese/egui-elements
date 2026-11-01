@@ -1,7 +1,8 @@
-//! Proof for the `motion` module: five sections, each a value or a container a
-//! host used to hand-roll with a height cache, a clip rect and a sleep loop.
+//! Proof for the `motion` module: six sections, each a value, a container or a
+//! widget transition a host used to hand-roll with a height cache, a clip rect
+//! and a sleep loop.
 //!
-//! Sections A–E read the same `Motion` built once per frame, so the timing
+//! Sections A–F read the same `Motion` built once per frame, so the timing
 //! controls at the bottom retime every animation above them.
 //!
 //! Run with: `cargo run --example motion`
@@ -10,7 +11,7 @@ use eframe::egui::*;
 use egui_elements::layout::{Flex, Item};
 use egui_elements::motion::{Collapse, Easing, Fade, FadeMode, Lerp, Motion, animate_with};
 use egui_elements::theme::{Theme, ThemeKind};
-use egui_elements::widgets::{Button, Label};
+use egui_elements::widgets::{Button, Frame as Frame2, Label, MultiLabel};
 
 /// One line: the collapse band is this body's measured height.
 const SHORT_BODY: &str =
@@ -101,6 +102,7 @@ impl eframe::App for MotionApp {
                   section_fade(ui, theme, motion, &mut open);
                   section_collapse(ui, theme, motion, &mut section_open);
                   section_timing(ui, theme, &mut duration, &mut easing);
+                  section_transitions(ui, theme, motion);
                });
          });
 
@@ -361,5 +363,60 @@ fn section_timing(ui: &mut Ui, theme: &Theme, duration: &mut f32, easing: &mut E
       ui,
       theme,
       "Motion::instant() is duration 0 — every container above lands immediately and requests no repaint.",
+   );
+}
+
+/// F. The widget layer: hover and press blend instead of jumping.
+fn section_transitions(ui: &mut Ui, theme: &Theme, motion: Motion) {
+   // The widgets time themselves from the installed style, so hand them the
+   // section's `Motion` and the duration control in E retimes them too.
+   ui.style_mut().animation_time = motion.duration;
+
+   heading(ui, theme, "F. Widget transitions");
+   caption(
+      ui,
+      theme,
+      "Every crate widget that paints an interaction state now eases between idle, hover and press through InteractT. Hover the items below: the chrome ramps, it does not switch. Press snaps in and out, so a click still feels immediate.",
+   );
+
+   // Buttons: idle -> hover -> press, plus one selected.
+   Flex::row("transition_buttons").gap(theme.spacing.sm).show(ui, |f| {
+      for (i, text) in ["Primary", "Secondary", "Selected"].into_iter().enumerate() {
+         f.item(Item::new(), |ui| {
+            ui.add(Button::new(text).selected(i == 2));
+         });
+      }
+   });
+
+   // An interactive frame: the card highlights while the pointer is inside it.
+   ui.add_space(theme.spacing.sm);
+   Frame2::new()
+      .interactive(true)
+      .visuals(theme.frame2_visuals())
+      .inner_margin(theme.spacing.margin(theme.spacing.md))
+      .show(ui, |ui| {
+         ui.label("An interactive Frame — hover me");
+      });
+
+   // MultiLabel fades its background in from transparent.
+   ui.add_space(theme.spacing.sm);
+   ui.add(
+      MultiLabel::new(vec![
+         Label::new(
+            RichText::new("MultiLabel").size(theme.typography.normal),
+            None,
+         ),
+         Label::new(
+            RichText::new("with a hover background").size(theme.typography.normal),
+            None,
+         ),
+      ])
+      .sense(Sense::click()),
+   );
+
+   caption(
+      ui,
+      theme,
+      "Set the duration to Instant in section E and the same widgets snap: Motion::instant() is what a reduce-motion host hands them.",
    );
 }
