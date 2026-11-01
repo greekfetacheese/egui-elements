@@ -1,5 +1,8 @@
 use super::label::Label;
-use egui::{Pos2, Rect, Response, Sense, StrokeKind, Ui, Vec2, Widget, epaint::RectShape};
+use crate::motion::{InteractT, Motion};
+use egui::{
+   Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, Widget, epaint::RectShape,
+};
 
 /// A widget that displays multiple [`Label`]s in a single horizontal line,
 /// with consistent vertical alignment (centered) and optional spacing between them.
@@ -72,15 +75,33 @@ impl Widget for MultiLabel {
 
          // Paint Background
          let is_interactive = self.sense.is_some();
-         if is_interactive
-            && (response.hovered() || response.is_pointer_button_down_on() || response.has_focus())
-         {
+         let across = if is_interactive {
+            InteractT::of(
+               ui,
+               response.id,
+               response.hovered() || response.highlighted(),
+               response.is_pointer_button_down_on() || response.clicked() || response.has_focus(),
+               Motion::from_ui(ui),
+            )
+         } else {
+            InteractT::default()
+         };
+         if is_interactive && (across.hover > 0.0 || across.press > 0.0) {
+            let widgets = &ui.style().visuals.widgets;
             let background_rect = rect.expand(visuals.expansion);
             ui.painter().add(RectShape::new(
                background_rect,
                visuals.corner_radius,
-               visuals.weak_bg_fill,
-               visuals.bg_stroke,
+               across.blend(
+                  Color32::TRANSPARENT,
+                  widgets.hovered.weak_bg_fill,
+                  widgets.active.weak_bg_fill,
+               ),
+               across.blend(
+                  Stroke::NONE,
+                  widgets.hovered.bg_stroke,
+                  widgets.active.bg_stroke,
+               ),
                StrokeKind::Inside,
             ));
          }

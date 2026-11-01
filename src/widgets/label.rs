@@ -1,3 +1,4 @@
+use crate::motion::{InteractT, Lerp, Motion};
 use crate::theme::Theme;
 use crate::visuals::LabelVisuals;
 use egui::{
@@ -409,26 +410,39 @@ impl Widget for Label {
          let visuals = ui.style().interact_selectable(&response, self.selected);
          let label_visuals = self.visuals.or_else(|| Theme::label_visuals_from_ctx(ui.ctx()));
 
+         // An interactive label eases its hover chrome in; selection stays instant, and a non-interactive label keeps
+         // its weights at zero so the same expression paints exactly what it painted before.
+         let across = if self.interactive {
+            InteractT::of(
+               ui,
+               response.id,
+               response.hovered() || response.has_focus(),
+               response.is_pointer_button_down_on(),
+               Motion::from_ui(ui),
+            )
+         } else {
+            InteractT::default()
+         };
+         // One weight, not three colours: a label has never painted a pressed face, and pressing implies hovering.
+         let hot = across.hover.max(across.press);
+
+         let idle_fill = label_visuals.as_ref().map(|v| v.bg).unwrap_or(Color32::TRANSPARENT);
+         let hover_fill =
+            label_visuals.as_ref().map(|v| v.bg_hover).unwrap_or(visuals.weak_bg_fill);
+         let idle_stroke = label_visuals.as_ref().map(|v| v.border).unwrap_or(Stroke::NONE);
+         let hover_stroke =
+            label_visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke);
+
          let fill = if self.selected {
             label_visuals.as_ref().map(|v| v.bg_selected).unwrap_or(visuals.bg_fill)
-         } else if response.hovered() || response.has_focus() {
-            match self.interactive {
-               true => label_visuals.as_ref().map(|v| v.bg_hover).unwrap_or(visuals.weak_bg_fill),
-               false => Color32::TRANSPARENT,
-            }
          } else {
-            label_visuals.as_ref().map(|v| v.bg).unwrap_or(Color32::TRANSPARENT)
+            idle_fill.lerp(hover_fill, hot)
          };
 
          let stroke = if self.selected {
             label_visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke)
-         } else if response.hovered() || response.has_focus() {
-            match self.interactive {
-               true => label_visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke),
-               false => Stroke::new(0.0, Color32::TRANSPARENT),
-            }
          } else {
-            label_visuals.as_ref().map(|v| v.border).unwrap_or(Stroke::NONE)
+            idle_stroke.lerp(hover_stroke, hot)
          };
 
          let expansion = self.expansion.unwrap_or(visuals.expansion);
@@ -475,6 +489,143 @@ impl Widget for Label {
 #[cfg(test)]
 mod tests {
    use super::*;
+   use crate::theme::{Theme, ThemeKind};
+   use egui::{Context, Event, FullOutput, RawInput, Shape, vec2};
+
+   fn screen() -> Rect {
+      Rect::from_min_size(Pos2::ZERO, vec2(320.0, 200.0))
+   }
+
+   /// A context with a crate theme installed, so the animation duration comes
+   /// from the live style (`0.3` in every theme).
+   fn themed_ctx() -> Context {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      ctx
+   }
+
+   fn hover_visuals() -> LabelVisuals {
+      LabelVisuals {
+         bg: Color32::from_rgb(10, 20, 30),
+         bg_hover: Color32::from_rgb(40, 50, 60),
+         bg_selected: Color32::from_rgb(10, 20, 30),
+         border: Stroke::NONE,
+         border_hover: Stroke::NONE,
+         ..Default::default()
+      }
+   }
+
+   /// Runs one pass, adding exactly one interactive `Label` with sentinel state
+   /// colours and returning the label's output plus its [`Response`].
+   fn run_pass(ctx: &Context, events: Vec<Event>, time: f64) -> (FullOutput, Response) {
+      let mut response = None;
+      let mut output = ctx.run_ui(
+         RawInput {
+            events,
+            screen_rect: Some(screen()),
+            time: Some(time),
+            predicted_dt: 0.125,
+            ..Default::default()
+         },
+         |ui| {
+            let label = Label::new("Hover me", None).interactive(true).visuals(hover_visuals());
+            response = Some(ui.add(label));
+         },
+      );
+      // The tests inspect `shapes`; the font-atlas delta is never applied.
+      output.textures_delta.clear();
+      (output, response.expect("the label must be shown"))
+   }
+
+   /// Every `RectShape` fill in paint order, flattening nested [`Shape::Vec`]s.
+   fn rect_fills(output: &FullOutput) -> Vec<Color32> {
+      fn collect(shape: &Shape, fills: &mut Vec<Color32>) {
+         match shape {
+            Shape::Rect(rect) => fills.push(rect.fill),
+            Shape::Vec(shapes) => {
+               for shape in shapes {
+                  collect(shape, fills);
+               }
+            }
+            _ => {}
+         }
+      }
+      let mut fills = Vec::new();
+      for clipped in &output.shapes {
+         collect(&clipped.shape, &mut fills);
+      }
+      fills
+   }
+
+   #[test]
+   fn interactive_label_hover_fill_eases_in() {
+      let ctx = themed_ctx();
+      let idle = Color32::from_rgb(10, 20, 30);
+      let hover = Color32::from_rgb(40, 50, 60);
+      // The theme's duration, read through a pass so `ui.style()` is the live one.
+      let mut duration = 0.0_f32;
+      let mut warm = ctx.run_ui(
+         RawInput {
+            screen_rect: Some(screen()),
+            ..Default::default()
+         },
+         |ui| duration = Motion::from_ui(ui).duration,
+      );
+      warm.textures_delta.clear();
+      let duration = f64::from(duration);
+      assert!(
+         duration > 0.0,
+         "the theme must animate: {duration}"
+      );
+
+      // Frame 1 (no pointer): the idle fill, and a rect to hover.
+      let (idle_output, idled) = run_pass(&ctx, vec![], 0.0);
+      assert!(
+         rect_fills(&idle_output).contains(&idle),
+         "idle label paints its idle fill"
+      );
+      let at = idled.rect.center();
+
+      // Frame 2 (pointer arrives): the hover leg starts from the value on screen.
+      run_pass(&ctx, vec![Event::PointerMoved(at)], 1.0);
+
+      // Frame 3: half the duration into the hover leg.
+      let (mid_output, _) = run_pass(
+         &ctx,
+         vec![Event::PointerMoved(at)],
+         1.0 + duration * 0.5,
+      );
+      let mid = rect_fills(&mid_output)
+         .into_iter()
+         .find(|fill| *fill != idle && *fill != hover)
+         .unwrap_or_else(|| {
+            panic!(
+               "mid-transition label must paint a fill that is neither endpoint, got {:?}",
+               rect_fills(&mid_output)
+            )
+         });
+      assert!(
+         mid != idle && mid != hover,
+         "mid-transition fill must be neither endpoint, got {mid:?}"
+      );
+
+      // Frame 4: same pointer, well past the duration.
+      let (settled_output, _) = run_pass(
+         &ctx,
+         vec![Event::PointerMoved(at)],
+         1.0 + 2.0 * duration,
+      );
+      let fills = rect_fills(&settled_output);
+      assert!(
+         fills.contains(&hover),
+         "settled hover fill must be the hover sentinel, got {fills:?}"
+      );
+      assert!(
+         !fills.contains(&idle),
+         "settled hover label must not still paint the idle fill, got {fills:?}"
+      );
+   }
 
    #[test]
    fn sections_keep_distinct_formats_and_wrap() {

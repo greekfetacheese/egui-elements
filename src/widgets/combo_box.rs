@@ -1,4 +1,5 @@
 use super::label::Label;
+use crate::motion::{InteractT, Motion};
 use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use egui::{
@@ -225,13 +226,40 @@ fn combo_box_with_image_button(
       let background_rect = rect.expand(visuals.expansion);
       let corner = combo_box_visuals.map(|v| v.corner_radius).unwrap_or(visuals.corner_radius);
 
+      let across = InteractT::of(
+         ui,
+         response.id,
+         response.hovered() || response.highlighted(),
+         response.is_pointer_button_down_on() || response.clicked() || response.has_focus(),
+         Motion::from_ui(ui),
+      );
+      // The popup being open outranks hover/press: it is a state, not a transition.
+      let open = if is_popup_open { 1.0 } else { across.press };
+      let weights = InteractT {
+         hover: across.hover,
+         press: open,
+      };
+
+      let widgets = &ui.style().visuals.widgets;
       let fill = combo_box_visuals
-         .map(|v| v.bg_from_res(&response))
-         .unwrap_or(visuals.weak_bg_fill);
+         .map(|v| weights.blend(v.bg, v.bg_hover, v.bg_open))
+         .unwrap_or_else(|| {
+            weights.blend(
+               widgets.inactive.weak_bg_fill,
+               widgets.hovered.weak_bg_fill,
+               widgets.open.weak_bg_fill,
+            )
+         });
 
       let stroke = combo_box_visuals
-         .map(|v| v.border_from_res(&response))
-         .unwrap_or(visuals.bg_stroke);
+         .map(|v| weights.blend(v.border, v.border_hover, v.border_open))
+         .unwrap_or_else(|| {
+            weights.blend(
+               widgets.inactive.bg_stroke,
+               widgets.hovered.bg_stroke,
+               widgets.open.bg_stroke,
+            )
+         });
 
       if let Some(vis) = combo_box_visuals {
          let shadow_shape = vis.shadow.as_shape(background_rect, corner);

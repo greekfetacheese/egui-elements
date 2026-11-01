@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use egui::{Color32, Id, Pos2, Rect, Ui, Vec2};
+use egui::{Color32, Id, Pos2, Rect, Stroke, Ui, Vec2};
 
 use super::{Motion, state::AnimState};
 
@@ -44,6 +44,15 @@ impl Lerp for Color32 {
    }
 }
 
+impl Lerp for Stroke {
+   fn lerp(self, to: Self, t: f32) -> Self {
+      Self {
+         width: self.width.lerp(to.width, t),
+         color: self.color.lerp(to.color, t),
+      }
+   }
+}
+
 /// Eased `0..=1` progress toward `target`, timed by the installed style's `animation_time`.
 ///
 /// Registers per-`Id` state in `ctx.data`: a first sight of `id` starts at `0.0`, a changed target retargets
@@ -62,13 +71,17 @@ pub fn animate_with(ui: &Ui, id: impl Hash + std::fmt::Debug, target: f32, motio
       let state: &mut AnimState =
          data.get_temp_mut_or_insert_with(key, || AnimState::new(target, now));
       if state.target != target {
-         // Start the new leg from whatever is on screen right now, not from the previous leg's origin.
-         state.from = state.sample(now, motion.duration, motion.easing).0;
+         // Start the new leg from the value that was on screen, not from the previous leg's origin: an instant leg
+         // (duration 0.0) displays `to` while leaving `from` at 0.0, and re-sampling the old leg with the incoming
+         // motion would invent a value that was never painted.
+         state.from = state.last;
          state.to = target;
          state.start = now;
          state.target = target;
       }
-      state.sample(now, motion.duration, motion.easing)
+      let (value, progress) = state.sample(now, motion.duration, motion.easing);
+      state.last = value;
+      (value, progress)
    });
 
    if progress < 1.0 {
@@ -174,6 +187,38 @@ mod tests {
    }
 
    #[test]
+   fn retarget_after_an_instant_leg_starts_from_the_value_on_screen() {
+      let ctx = themed_ctx();
+      let mut v = 0.0_f32;
+
+      frame_at(&ctx, 10.0, |ui| {
+         v = animate_with(ui, "instant_leg", 1.0, Motion::instant())
+      });
+      assert!(
+         (v - 1.0).abs() < 1e-4,
+         "instant leg should land on its target: {v}"
+      );
+
+      // The release re-uses the same id with a real duration. It must start from 1.0 (what was painted), not from the
+      // instant leg's origin, and must not re-sample the old leg with the new motion.
+      frame_at(&ctx, 10.1, |ui| {
+         v = animate_with(ui, "instant_leg", 0.0, Motion::new(0.2))
+      });
+      assert!(
+         (v - 1.0).abs() < 1e-3,
+         "release frame should still be 1.0: {v}"
+      );
+
+      frame_at(&ctx, 10.2, |ui| {
+         v = animate_with(ui, "instant_leg", 0.0, Motion::new(0.2))
+      });
+      assert!(
+         (v - 0.125).abs() < 0.01,
+         "half a leg from 1.0 to 0.0 is 0.125: {v}"
+      );
+   }
+
+   #[test]
    fn settled_animation_requests_no_repaint() {
       let ctx = themed_ctx();
       let motion = Motion::new(0.2);
@@ -220,6 +265,29 @@ mod tests {
       });
       assert_eq!(value, 42.0);
       assert!(idle, "instant motion must not request a repaint");
+   }
+
+   #[test]
+   fn a_zero_distance_leg_settles_without_a_repaint() {
+      let ctx = themed_ctx();
+      let mut v = -1.0_f32;
+      // Two warm-up frames absorb egui's own first-frame repaint.
+      frame_at(&ctx, 10.0, |ui| {
+         v = animate_with(ui, "at_rest", 0.0, Motion::new(0.2))
+      });
+      frame_at(&ctx, 10.0, |ui| {
+         v = animate_with(ui, "at_rest", 0.0, Motion::new(0.2))
+      });
+      assert_eq!(v, 0.0);
+
+      frame_at(&ctx, 10.1, |ui| {
+         v = animate_with(ui, "at_rest", 0.0, Motion::new(0.2));
+         assert!(
+            !ui.ctx().has_requested_repaint(),
+            "an animation with nothing to travel must not keep the frame loop awake"
+         );
+      });
+      assert_eq!(v, 0.0);
    }
 
    #[test]
