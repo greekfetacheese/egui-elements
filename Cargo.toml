@@ -48,10 +48,16 @@ name = "demo"
 required-features = ["full"]
 
 [[example]]
+name = "demo2"
+
+[[example]]
 name = "email"
 
 [[example]]
 name = "label_sections"
+
+[[example]]
+name = "layout"
 
 [[example]]
 name = "particles"
