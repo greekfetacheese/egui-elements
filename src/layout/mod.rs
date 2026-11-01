@@ -36,4 +36,7 @@ pub mod solver;
 mod state;
 
 pub use flex::{Flex, FlexUi, Item};
-pub use solver::{Axis, CrossAlign, ItemSize, ItemSpec, Justify, LayoutOut, resolve};
+pub use solver::{
+   Axis, Column, ColumnOut, CrossAlign, ItemSize, ItemSpec, Justify, LayoutOut, resolve,
+   resolve_columns,
+};

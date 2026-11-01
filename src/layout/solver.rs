@@ -209,6 +209,94 @@ pub fn resolve(
    }
 }
 
+/// One column of a table: a CSS width.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Column {
+   /// `width: Npx` — keeps its width.
+   Fixed(f32),
+   /// `width: max-content` — the widest measured cell in the column.
+   Auto,
+   /// `grid-template-columns: Nfr` — shares the space left over by `Fixed` and `Auto`, by weight.
+   Fr(f32),
+}
+
+/// The resolved columns: their widths and the table's total width (widths + gaps).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColumnOut {
+   pub widths: Vec<f32>,
+   pub total: f32,
+}
+
+/// Resolve column widths for a table of `avail` points.
+///
+/// `natural[i]` is the measured content width of column `i` (used by [`Column::Auto`], ignored by the
+/// others). With no [`Column::Fr`] in `columns` the table is narrower than `avail` and left-aligned,
+/// which is CSS `width: auto`.
+pub fn resolve_columns(columns: &[Column], natural: &[f32], avail: f32, gap: f32) -> ColumnOut {
+   let n = columns.len().min(natural.len());
+   debug_assert_eq!(columns.len(), natural.len());
+   if n == 0 {
+      return ColumnOut {
+         widths: vec![],
+         total: 0.0,
+      };
+   }
+
+   let gap = gap.max(0.0);
+   let gaps = gap * (n - 1) as f32;
+   let avail = avail.max(0.0);
+
+   let mut fixed_total = 0.0;
+   let mut weight_total = 0.0;
+   let mut fr_count = 0usize;
+   let mut last_fr = None;
+   for (i, column) in columns.iter().take(n).enumerate() {
+      match *column {
+         Column::Fixed(w) => fixed_total += w.max(0.0),
+         Column::Auto => fixed_total += natural[i].max(0.0),
+         Column::Fr(w) => {
+            weight_total += w.max(0.0);
+            fr_count += 1;
+            last_fr = Some(i);
+         }
+      }
+   }
+
+   let free = (avail - fixed_total - gaps).max(0.0);
+
+   let mut widths = Vec::with_capacity(n);
+   let mut assigned = 0.0;
+   for (i, column) in columns.iter().take(n).enumerate() {
+      let width = match *column {
+         Column::Fixed(w) => w.max(0.0),
+         Column::Auto => natural[i].max(0.0),
+         Column::Fr(w) => {
+            if last_fr == Some(i) {
+               (free - assigned).max(0.0)
+            } else {
+               let share = if weight_total > 0.0 {
+                  free * w.max(0.0) / weight_total
+               } else {
+                  free / fr_count as f32
+               };
+               assigned += share;
+               share
+            }
+         }
+      };
+      widths.push(width);
+   }
+
+   let has_fr = columns[..n].iter().any(|c| matches!(c, Column::Fr(_)));
+   let total = if has_fr {
+      fixed_total + free + gaps
+   } else {
+      fixed_total + gaps
+   };
+
+   ColumnOut { widths, total }
+}
+
 #[cfg(test)]
 mod tests {
    use super::*;
@@ -431,5 +519,71 @@ mod tests {
       );
 
       assert!(close(out.rects[2].width(), 0.0));
+   }
+
+   #[test]
+   fn columns_fr_share_the_free_space_by_weight() {
+      let out = resolve_columns(
+         &[Column::Fr(2.0), Column::Fr(1.0)],
+         &[0.0, 0.0],
+         300.0,
+         10.0,
+      );
+      assert!(close(out.widths[0], 193.33));
+      assert!(close(out.widths[1], 96.67));
+      assert_eq!(out.total, 300.0);
+   }
+
+   #[test]
+   fn columns_auto_use_the_measured_width() {
+      let out = resolve_columns(
+         &[Column::Auto, Column::Auto],
+         &[80.0, 40.0],
+         500.0,
+         10.0,
+      );
+      assert!(close(out.widths[0], 80.0));
+      assert!(close(out.widths[1], 40.0));
+      assert_eq!(out.total, 130.0);
+   }
+
+   #[test]
+   fn columns_fixed_keeps_its_width_with_fr_present() {
+      let out = resolve_columns(
+         &[Column::Fr(1.0), Column::Fixed(100.0)],
+         &[0.0, 0.0],
+         300.0,
+         0.0,
+      );
+      assert!(close(out.widths[0], 200.0));
+      assert!(close(out.widths[1], 100.0));
+      assert_eq!(out.total, 300.0);
+   }
+
+   #[test]
+   fn columns_overflow_collapses_fr_to_zero() {
+      let out = resolve_columns(
+         &[Column::Fixed(200.0), Column::Fixed(200.0), Column::Fr(1.0)],
+         &[0.0, 0.0, 0.0],
+         300.0,
+         0.0,
+      );
+      assert!(close(out.widths[0], 200.0));
+      assert!(close(out.widths[1], 200.0));
+      assert_eq!(out.widths[2], 0.0);
+      assert_eq!(out.total, 400.0);
+   }
+
+   #[test]
+   fn columns_mix_auto_and_fr() {
+      let out = resolve_columns(
+         &[Column::Auto, Column::Fr(1.0)],
+         &[120.0, 0.0],
+         400.0,
+         0.0,
+      );
+      assert!(close(out.widths[0], 120.0));
+      assert!(close(out.widths[1], 280.0));
+      assert_eq!(out.total, 400.0);
    }
 }
