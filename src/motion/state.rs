@@ -13,6 +13,9 @@ pub struct AnimState {
    pub start: f64,
    /// The target last seen; a different target means "retarget from where we are".
    pub target: f32,
+   /// The value displayed on the previous frame. A retarget starts from **this**, not from `from`: an instant leg
+   /// (`duration == 0.0`) never advances `from`, so `from` alone loses the value the user actually saw.
+   pub last: f32,
 }
 
 /// Where a [`Collapse`](crate::motion::Collapse) is: the body height measured on its last visible frame.
@@ -31,6 +34,7 @@ impl AnimState {
          to: target,
          start: now,
          target,
+         last: 0.0,
       }
    }
 
