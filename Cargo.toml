@@ -60,6 +60,9 @@ name = "label_sections"
 name = "layout"
 
 [[example]]
+name = "motion"
+
+[[example]]
 name = "particles"
 
 [[example]]
