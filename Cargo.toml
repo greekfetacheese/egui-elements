@@ -48,6 +48,9 @@ name = "demo"
 required-features = ["full"]
 
 [[example]]
+name = "demo2"
+
+[[example]]
 name = "email"
 
 [[example]]
