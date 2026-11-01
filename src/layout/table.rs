@@ -257,7 +257,8 @@ impl<T> TableUi<'_, '_, T> {
       self.band = Some((rect, response));
    }
 
-   /// Add the header line. The `i`-th [`TableHeader::cell`] call is column `i`.
+   /// Add the header line. The `i`-th [`TableHeader::cell`] call is column `i`. Add it before
+   /// [`TableUi::rows`]: the table band is allocated on the first of those two calls.
    pub fn header(&mut self, add: impl FnOnce(&mut TableHeader<'_>)) {
       self.has_header = true;
       match self.mode {

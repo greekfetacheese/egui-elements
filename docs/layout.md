@@ -96,7 +96,133 @@ top-level one — nesting does not namespace anything.
 
 ---
 
-## 6. Recipes
+## 6. Tables
+
+`Table` is the grid sibling of `Flex`: one header line and one body row per item, with the same column
+extents used by every line. It is data-driven — `Table::new(id, &rows)` takes the slice and iterates it
+inside `show`, instead of asking the host to emit a row at a time.
+
+### The column map
+
+| CSS | here |
+|-----|------|
+| `width: Npx` | `Column::Fixed(n)` |
+| `width: max-content` | `Column::Auto` |
+| `grid-template-columns: Nfr` | `Column::Fr(n)` |
+| `width: auto` (no `fr`) | the table is as wide as its columns, left-aligned |
+
+The last row is the one that surprises people: the table is 100% wide **only** when it has an `Fr` column.
+With no `Fr`, `resolve_columns` has nothing to grow, so the table is exactly its fixed columns plus its auto
+columns plus the gaps — CSS `width: auto`. Add one `Fr` column when the table should fill its parent.
+
+### Why data-driven
+
+An `auto` column needs every cell of the page measured before the first one is placed: its extent is the
+widest cell, and a row that streams into place cannot know that until it has seen the rest. A streaming
+`row()` API could only settle over frames, widening on every repaint as a longer cell arrives. Taking the
+slice up front lets the table measure all rows in the same sizing pass and place them all in one frame.
+
+### The measure-pass contract
+
+The same contract as `Flex` (§3): on a measuring frame the cell and row closures run **twice** — once
+invisibly to measure, once to place. Interactions are inert during the measuring pass, but a closure that
+mutates host state outside a widget response applies twice.
+
+**The header must be added before the rows.** The table allocates its whole band — header plus every row —
+on the first `header()` or `rows()` call, because the `Auto` column widths are only known after the measure
+pass and the header's height feeds the band. Adding the header after `rows()` leaves its cells unplaced.
+
+### `Table::key`
+
+The size cache sees the table id and the **row count**, not the row content. Swap ten rows for ten other
+rows and the cached `Auto` width sticks. Pass something derived from the content — a page index, a filter
+hash, a sort order — to `.key(..)` and the table measures again on the frame that value changes:
+
+```rust
+Table::new("tx_history", &rows).key(page).show(ui, |t| { /* … */ });
+```
+
+### Row chrome
+
+`header_rule(true)` draws the 1px separator under the header band. For zebra rows or a card band, use the
+row hook: `TableRow::fill(color)` paints the row's full-width band before its cells, and `TableRow::rect()`
+returns that band so a host can draw its own chrome. `TableRow::index()` is the row's index in the slice.
+
+### Recipe: the `tx_history` shape
+
+Five columns (`fr / fr / fr / auto / fixed`), a header with a cell per column — including the empty one over
+the Details column — and zebra rows:
+
+```rust
+use eframe::egui::*;
+use egui_elements::layout::{Column, Table};
+use egui_elements::widgets::{Button, Label};
+use egui_elements::Theme;
+
+struct Tx {
+   wallet: &'static str,
+   chain: &'static str,
+   action: &'static str,
+   age: &'static str,
+}
+
+fn tx_history(ui: &mut Ui, theme: &Theme, rows: &[Tx], page: usize) {
+   Table::new("tx_history", rows)
+      .columns([
+         Column::Fr(2.2),
+         Column::Fr(1.6),
+         Column::Fr(4.0),
+         Column::Auto,
+         Column::Fixed(100.0),
+      ])
+      .gap(theme.spacing.md)
+      .row_gap(theme.spacing.xs)
+      .header_rule(true)
+      .key(page)
+      .show(ui, |t| {
+         t.header(|h| {
+            for text in ["Wallet", "Chain", "Action", "Age", ""] {
+               h.cell(|ui| {
+                  ui.add(Label::new(
+                     RichText::new(text)
+                        .size(theme.typography.normal)
+                        .strong()
+                        .color(theme.colors.text),
+                     None,
+                  ));
+               });
+            }
+         });
+         t.rows(|r, tx| {
+            if r.index() % 2 == 1 {
+               r.fill(theme.colors.widget_bg);
+            }
+            for text in [tx.wallet, tx.chain, tx.action, tx.age] {
+               r.cell(|ui| {
+                  ui.add(Label::new(
+                     RichText::new(text)
+                        .size(theme.typography.normal)
+                        .color(theme.colors.text),
+                     None,
+                  ));
+               });
+            }
+            r.cell(|ui| {
+               ui.add(Button::new("Details"));
+            });
+         });
+      });
+}
+```
+
+The `Action` column is the one that needs truncation in a real host — `Label::new(..)
+.wrap_mode(TextWrapMode::Truncate)` keeps a long action name inside its `Fr` cell. Gaps come from
+`theme.spacing`, sizes from `theme.typography`; no literal pixel values are needed above the `fixed` column
+itself.
+
+---
+
+## 7. Recipes
 
 ### Equal-width button row
 
@@ -187,7 +313,7 @@ between them.
 
 ---
 
-## 7. Known limits
+## 8. Known limits
 
 - **Cells are not clipped.** A cell is a rect, not a clip rect. `Button`'s hover expansion and `Badge`
   overlays paint outside their widget's rect, so they can reach into the gap. Keep gaps at
