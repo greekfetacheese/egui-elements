@@ -10,7 +10,7 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Label, Modal, SecureTextEdit, Window,
+   Badge, BadgeCorner, Button, ComboBox, Label, Modal, SecureTextEdit, Spinner, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -598,6 +598,17 @@ impl DemoApp {
                ui.spacing_mut().button_padding.x += 12.0;
                ui.add(btn);
             });
+         }
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 12.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+
+         for size in [20.0, 32.0, 44.0] {
+            ui.add(Spinner::new().size(size));
          }
       });
 
