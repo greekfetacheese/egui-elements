@@ -776,7 +776,7 @@ impl ThemeEditor {
 
       ui.label("Popup Border Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("9", visuals.popup_border.color, &colors, ui);
+         let color = self.color_select("10", visuals.popup_border.color, &colors, ui);
          if let Some(color) = color {
             visuals.popup_border.color = color.color32();
          }
