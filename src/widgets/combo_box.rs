@@ -1,10 +1,11 @@
 use super::label::Label;
-use crate::motion::{InteractT, Motion};
+use crate::motion::{InteractT, Motion, animate_with};
 use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use egui::{
-   Align2, Frame, Id, InnerResponse, NumExt, Painter, Popup, PopupCloseBehavior, PopupKind, Rect,
-   Response, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
+   Align2, Frame, Id, InnerResponse, NumExt, Painter, Popup, PopupCloseBehavior, PopupKind, Pos2,
+   Rect, Response, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
+   emath::Rot2,
    epaint::{RectShape, Shape, StrokeKind},
    style::WidgetVisuals,
 };
@@ -164,7 +165,7 @@ impl ComboBox {
          &self.selected_item,
          self.icon,
          self.wrap_mode,
-         (self.width, None),
+         self.width,
       );
 
       // Popup Handling
@@ -219,13 +220,13 @@ impl ComboBox {
 
 fn combo_box_with_image_button(
    ui: &mut Ui,
-   _id: Id,
+   id: Id,
    is_popup_open: bool,
    combo_box_visuals: Option<&ComboBoxVisuals>,
    selected_item: &Label,
    icon_painter: Option<Box<dyn FnOnce(&Ui, Rect, &WidgetVisuals, bool)>>,
    wrap_mode_override: Option<TextWrapMode>,
-   (width_override, _): (Option<f32>, Option<f32>),
+   width_override: Option<f32>,
 ) -> Response {
    let button_padding = ui.spacing().button_padding;
    let icon_width = ui.spacing().icon_width;
@@ -267,6 +268,15 @@ fn combo_box_with_image_button(
 
    // Allocation & Interaction
    let (rect, response) = ui.allocate_exact_size(button_size, Sense::click());
+
+   // The open flag is a state, not a transition: only the chevron eases, so it lands facing
+   // up while the chrome has already switched.
+   let arrow = animate_with(
+      ui,
+      id.with("arrow"),
+      if is_popup_open { 1.0 } else { 0.0 },
+      Motion::from_ui(ui),
+   );
 
    // Painting
    if ui.is_rect_visible(rect) {
@@ -356,6 +366,7 @@ fn combo_box_with_image_button(
             icon_rect,
             combo_box_visuals,
             &visuals,
+            arrow,
          );
       }
    }
@@ -370,24 +381,27 @@ fn popup_frame(ui: &Ui, visuals: &ComboBoxVisuals) -> Frame {
    Frame::popup(ui.style()).fill(visuals.popup_bg).stroke(visuals.popup_border)
 }
 
+/// The disclosure chevron: a stroked `∨` in the theme's icon colour that rotates to point up
+/// as `open` goes `0.0 → 1.0`, so opening and closing are one continuous motion.
 fn paint_default_icon(
    painter: &Painter,
    rect: Rect,
    combo_box_visuals: Option<&ComboBoxVisuals>,
    visuals: &WidgetVisuals,
+   open: f32,
 ) {
-   // Always draw a downward-pointing triangle, matching egui 0.35: the popup's open
-   // direction is now handled automatically by `Popup` (it flips above/below as needed),
-   // and the icon no longer reflects placement.
-   let rect = Rect::from_center_size(
-      rect.center(),
-      Vec2::new(rect.width() * 0.7, rect.height() * 0.45),
-   );
-
-   let points = vec![rect.left_top(), rect.right_top(), rect.center_bottom()];
-
-   let fill = combo_box_visuals.map(|v| v.icon).unwrap_or(visuals.fg_stroke.color);
-   painter.add(Shape::convex_polygon(points, fill, Stroke::NONE));
+   let colour = combo_box_visuals.map(|v| v.icon).unwrap_or(visuals.fg_stroke.color);
+   let half = Vec2::new(rect.width() * 0.28, rect.height() * 0.14);
+   let rot = Rot2::from_angle(open * std::f32::consts::PI);
+   let centre = rect.center();
+   // Closed pose: the middle vertex hangs below its two ends.
+   let closed = [
+      Vec2::new(-half.x, -half.y),
+      Vec2::new(0.0, half.y),
+      Vec2::new(half.x, -half.y),
+   ];
+   let points: Vec<Pos2> = closed.iter().map(|v| centre + rot * *v).collect();
+   painter.add(Shape::line(points, Stroke::new(1.5, colour)));
 }
 
 #[cfg(test)]
@@ -616,6 +630,130 @@ mod tests {
       assert!(
          !fills.contains(&visuals.bg),
          "an open combo box must not fall back to its idle fill, painted {fills:?}"
+      );
+   }
+
+   /// The three points of the disclosure chevron, in paint order.
+   fn chevron(output: &FullOutput) -> Option<Vec<Pos2>> {
+      output.shapes.iter().find_map(|clipped| match &clipped.shape {
+         Shape::Path(path) if path.points.len() == 3 => Some(path.points.clone()),
+         _ => None,
+      })
+   }
+
+   /// The y of the chevron's middle vertex — below its ends when closed, above when open.
+   fn chevron_y(output: &FullOutput) -> f32 {
+      let points = chevron(output).expect("the combo box paints its chevron");
+      assert_eq!(points.len(), 3);
+      points[1].y
+   }
+
+   fn closed_combo(salt: &'static str) -> impl FnMut(&mut Ui) {
+      move |ui: &mut Ui| {
+         ComboBox::new(salt, Label::new("Pick", None)).width(160.0).show_ui(ui, one_row);
+      }
+   }
+
+   #[test]
+   fn the_chevron_points_down_when_closed() {
+      let ctx = themed_ctx();
+      let mut build = closed_combo("arrow_closed");
+
+      for time in [10.0, 10.1, 10.2] {
+         let output = run_frame(&ctx, Vec::new(), time, &mut build);
+         let points = chevron(&output).expect("the closed combo box paints its chevron");
+         assert!(
+            points[1].y > points[0].y && points[1].y > points[2].y,
+            "a closed chevron points down, got {points:?}"
+         );
+      }
+   }
+
+   #[test]
+   fn the_chevron_rotates_when_the_popup_opens() {
+      let ctx = themed_ctx();
+      let mut build = closed_combo("arrow_open");
+
+      let idle = run_frame(&ctx, Vec::new(), 10.0, &mut build);
+      let button = rect_with_fill(&idle, combo_visuals(&ctx).bg, -10.0)
+         .map(|(rect, _)| rect)
+         .expect("the idle button paints `bg`");
+      let centre = button.center();
+
+      // press (10.1), release (10.2, the click opens the popup), 10.3 is the frame the
+      // chevron's target flips, so 10.35 is a fifth of the way into the 0.3 s leg.
+      run_frame(
+         &ctx,
+         vec![Event::PointerMoved(centre), press(centre, true)],
+         10.1,
+         &mut build,
+      );
+      run_frame(&ctx, vec![press(centre, false)], 10.2, &mut build);
+      run_frame(&ctx, Vec::new(), 10.3, &mut build);
+      let mid = run_frame(&ctx, Vec::new(), 10.35, &mut build);
+      let settled = run_frame(&ctx, Vec::new(), 10.75, &mut build);
+
+      let down = chevron_y(&idle);
+      let between = chevron_y(&mid);
+      let up = chevron_y(&settled);
+
+      assert!(
+         (down - up).abs() > 1.0,
+         "the chevron must actually swing: closed {down}, open {up}"
+      );
+      assert!(
+         up < between && between < down,
+         "10.35 is mid-rotation: {between} must sit strictly between {up} and {down}"
+      );
+   }
+
+   #[test]
+   fn the_chevron_rotates_back_when_the_popup_closes() {
+      let ctx = themed_ctx();
+      let mut build = closed_combo("arrow_close");
+
+      let idle = run_frame(&ctx, Vec::new(), 10.0, &mut build);
+      let button = rect_with_fill(&idle, combo_visuals(&ctx).bg, -10.0)
+         .map(|(rect, _)| rect)
+         .expect("the idle button paints `bg`");
+      let centre = button.center();
+
+      run_frame(
+         &ctx,
+         vec![Event::PointerMoved(centre), press(centre, true)],
+         10.1,
+         &mut build,
+      );
+      run_frame(&ctx, vec![press(centre, false)], 10.2, &mut build);
+      // The popup reports open one frame after the release (as in the opening test), and a
+      // first sight of the arrow id starts at 0.0, so the leg needs that frame to exist
+      // before 10.9 can be a settled open chevron.
+      run_frame(&ctx, Vec::new(), 10.3, &mut build);
+      let open = run_frame(&ctx, Vec::new(), 10.9, &mut build);
+
+      // Click again: the popup closes on 11.0, so the chevron starts back down there.
+      run_frame(
+         &ctx,
+         vec![Event::PointerMoved(centre), press(centre, true)],
+         10.95,
+         &mut build,
+      );
+      run_frame(&ctx, vec![press(centre, false)], 11.0, &mut build);
+      run_frame(&ctx, Vec::new(), 11.1, &mut build);
+      let mid = run_frame(&ctx, Vec::new(), 11.15, &mut build);
+      let settled = run_frame(&ctx, Vec::new(), 11.55, &mut build);
+
+      let up = chevron_y(&open);
+      let between = chevron_y(&mid);
+      let down = chevron_y(&settled);
+
+      assert!(
+         (down - up).abs() > 1.0,
+         "the chevron must swing back: open {up}, closed {down}"
+      );
+      assert!(
+         up < between && between < down,
+         "11.15 is mid-rotation: {between} must sit strictly between {up} and {down}"
       );
    }
 }
