@@ -29,8 +29,8 @@
 //! [`ThemeColors::bg`]: crate::theme::ThemeColors::bg
 //! [`ThemeColors::border`]: crate::theme::ThemeColors::border
 
-use super::toggle::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row, ToggleVisuals};
-pub use super::toggle::{ToggleShadow as CheckboxShadow, ToggleVisuals as CheckboxVisuals};
+use super::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row, ToggleVisuals};
+pub use super::{ToggleShadow as CheckboxShadow, ToggleVisuals as CheckboxVisuals};
 
 use egui::{Response, Role, Ui, Widget, WidgetInfo, WidgetText};
 

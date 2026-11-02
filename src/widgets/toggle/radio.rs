@@ -8,8 +8,7 @@
 //! [`Radio::visuals`] and [`Radio::shadow`] take the same `ToggleVisuals` / `ToggleShadow` the checkbox
 //! uses, and [`Radio::motion`] overrides the style's clock.
 
-use super::ToggleShadow;
-use super::toggle::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row, ToggleVisuals};
+use super::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row, ToggleShadow, ToggleVisuals};
 
 use egui::{Response, Role, Ui, Widget, WidgetInfo, WidgetText};
 

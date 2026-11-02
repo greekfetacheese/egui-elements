@@ -1,15 +1,21 @@
-//! The shared core of a plate-style toggle: a rounded plate with a glyph, a label and one clickable row.
+//! The toggle family: the shared plate with its glyphs, and the two widgets built on them.
 //!
-//! [`Checkbox`](crate::widgets::Checkbox) and [`Radio`](crate::widgets::Radio) are both built on it, so
-//! everything that is not the glyph lives here: the row allocation, the interaction weights, the press
-//! scale and the lift. The plate itself is crate-private; the two visual knobs it exposes,
+//! The plate is a rounded box with a glyph, a label and one clickable row; everything that is not the
+//! glyph lives here: the row allocation, the interaction weights, the press scale and the lift.
+//! [`Checkbox`] is a rounded box with a tick, and
+//! [`Radio`] is a circle with a dot — same row, clock and palette, only the
+//! outline and the mark differ. The plate itself is crate-private; the public knobs it exposes,
 //! [`ToggleVisuals`] and [`ToggleShadow`], are re-exported at the crate root, and
-//! [`Checkbox`](crate::widgets::Checkbox) keeps `CheckboxVisuals`/`CheckboxShadow` as aliases.
+//! [`Checkbox`] keeps its historic `CheckboxVisuals`/`CheckboxShadow` aliases.
 
+mod checkbox;
 mod glyph;
 mod plate;
+mod radio;
 
+pub use checkbox::{Checkbox, CheckboxShadow, CheckboxVisuals};
 pub(crate) use plate::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row};
+pub use radio::Radio;
 
 use egui::{Color32, Shadow};
 
