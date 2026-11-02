@@ -10,6 +10,7 @@
 
 pub mod badge;
 pub mod button;
+pub mod checkbox;
 pub mod combo_box;
 pub mod frame;
 pub mod label;
@@ -21,6 +22,7 @@ pub mod window;
 
 pub use badge::{Badge, BadgeCorner};
 pub use button::{Button, HoldBurst, HoldSettings};
+pub use checkbox::{Checkbox, CheckboxShadow, CheckboxVisuals};
 pub use combo_box::ComboBox;
 pub use frame::Frame;
 pub use label::Label;
