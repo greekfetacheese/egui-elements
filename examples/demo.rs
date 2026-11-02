@@ -10,7 +10,8 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
-   Badge, BadgeCorner, Button, Checkbox, ComboBox, Label, Modal, SecureTextEdit, Spinner, Window,
+   Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox, Label, Modal, SecureTextEdit,
+   Spinner, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -603,6 +604,37 @@ impl DemoApp {
                ui.add(btn);
             });
          }
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 12.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+
+         let colors = self.theme.colors;
+         let chips = [
+            ("Jedi", "0", colors.success),
+            ("Sith", "2", colors.error),
+            ("Chosen", "1", colors.info),
+            ("Episodes", "6", colors.warning),
+         ];
+
+         for (label, count, fill) in chips {
+            let badge = Badge::new(count).color(fill).straddle();
+            ui.add(
+               Button::new(RichText::new(label).size(size).color(text_color))
+                  .badge(badge)
+                  .min_size(button_size),
+            );
+         }
+
+         // One pulsing badge, so the gallery shows the halo on every surface.
+         ui.add(
+            Button::new(RichText::new("Pulse").size(size).color(text_color))
+               .badge(Badge::new("3").color(colors.error).straddle().pulse(BadgePulse::new()))
+               .min_size(button_size),
+         );
       });
 
       ui.add_space(8.0);

@@ -99,8 +99,9 @@ pub use particles::{
 };
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
-   Badge, BadgeCorner, Button, Checkbox, CheckboxShadow, CheckboxVisuals, ComboBox, Frame,
-   HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel, Spinner, SpinnerShadow, Window,
+   Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner, BadgePulse, Button, Checkbox,
+   CheckboxShadow, CheckboxVisuals, ComboBox, Frame, HoldBurst, HoldSettings, IntoModalId, Label,
+   Modal, MultiLabel, Spinner, SpinnerShadow, Window,
 };
 
 #[cfg(feature = "secure-types")]

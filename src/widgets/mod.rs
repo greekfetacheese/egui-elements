@@ -20,7 +20,7 @@ pub mod secure_text_edit;
 pub mod spinner;
 pub mod window;
 
-pub use badge::{Badge, BadgeCorner};
+pub use badge::{Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner, BadgePulse};
 pub use button::{Button, HoldBurst, HoldSettings};
 pub use checkbox::{Checkbox, CheckboxShadow, CheckboxVisuals};
 pub use combo_box::ComboBox;

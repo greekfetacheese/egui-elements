@@ -210,3 +210,33 @@ Six sections, one claim each:
   no repaint).
 - **F. Widget transitions** — hover one of the three buttons, the interactive frame and the `MultiLabel`: the chrome
   ramps, and `Instant` in section E makes it snap.
+
+---
+
+## 9. A loop is not a leg
+
+Two animations in this crate do not fit `animate`'s "ease a value toward a target" shape, and the difference
+decides where their state lives.
+
+A **leg** has a target: the hop a `Badge` plays when its count changes runs once, from `0` to `1`, then it is
+settled and asks for no repaint. Its trigger is an enum — the badge's text changing (`OnChange`), the host
+raising it by name (`Manual`, via `Badge::bounce_now`), or a period (`Loop`) — and the state that remembers
+"this badge was showing 2, now it shows 3" lives in `ctx` temp data keyed on the badge's id, exactly like
+`AnimState`. First sight never hops: a badge that appears already showing `3` must be still.
+
+A **loop** has no target: the badge's pulse grows a copy of its circle from `1.0` to `1.9 x` and fades it, once
+per period. It keeps no state at all — the phase is `input.time / period`, so the same frame paints the same
+picture, and a restart of the host's clock does not restart the animation. A loop is never settled, so it
+requests a repaint for every visible frame it paints; that is the one place in this crate where an
+unconditional `request_repaint` is correct.
+
+| | the hop | the pulse |
+|---|---|---|
+| progress | one eased leg | `input.time / period`, wrapped |
+| state | `ctx` temp data, keyed on the badge id | none |
+| repaint | while `q < 1`, and always for `Loop` | every visible frame |
+| measured ratios | `amplitude = 0.5 x d` | `scale = 1.9`, `alpha = 0.50`, `period 1.5 s` |
+
+Prove it: `cargo run --example badge` — the second badge in "The reference" loops while the `Loop` badge in
+"Triggers" hops every 2.2 s. A 30 fps capture of that window measures the halo at 1.90 x the diameter holding
+alpha 0.51, and the hop peaking 7.5 px up on a 16 pt badge configured for 8.
