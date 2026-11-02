@@ -80,5 +80,8 @@ name = "hold_to_confirm"
 [[example]]
 name = "spinner"
 
+[[example]]
+name = "checkbox"
+
 [package.metadata.docs.rs]
 all-features = true

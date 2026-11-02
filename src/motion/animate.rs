@@ -90,6 +90,42 @@ pub fn animate_with(ui: &Ui, id: impl Hash + std::fmt::Debug, target: f32, motio
    value
 }
 
+/// [`animate_with`] with an explicit starting value on first sight.
+///
+/// `initial` is used **only** while this id has no state yet; afterwards the value on screen wins and a
+/// changed target retargets from it exactly as [`animate_with`] does. Pass `target` for "no entrance
+/// animation" (a toggle) and a value like `0.0` for an entrance.
+pub fn animate_from(
+   ui: &Ui,
+   id: impl Hash + std::fmt::Debug,
+   target: f32,
+   initial: f32,
+   motion: Motion,
+) -> f32 {
+   let ctx = ui.ctx();
+   let now = ctx.input(|i| i.time);
+   let key = Id::unique(("motion", id));
+
+   let (value, progress) = ctx.data_mut(|data| {
+      let state: &mut AnimState =
+         data.get_temp_mut_or_insert_with(key, || AnimState::new_from(initial, target, now));
+      if state.target != target {
+         state.from = state.last;
+         state.to = target;
+         state.start = now;
+         state.target = target;
+      }
+      let (value, progress) = state.sample(now, motion.duration, motion.easing);
+      state.last = value;
+      (value, progress)
+   });
+
+   if progress < 1.0 {
+      ctx.request_repaint();
+   }
+   value
+}
+
 #[cfg(test)]
 mod tests {
    use super::*;
@@ -146,6 +182,60 @@ mod tests {
       });
       // egui's `animate_bool` returns `1.0` here, which is why hosts hand-roll fade-ins.
       assert!(value < 0.001, "first sight: {value}");
+   }
+
+   #[test]
+   fn seeded_first_sight_lands_on_the_target() {
+      let ctx = themed_ctx();
+      let mut value = -1.0;
+      let mut idle = false;
+      // Two warm-up frames absorb egui's own first-frame repaint request.
+      frame_at(&ctx, 9.8, |_ui| {});
+      frame_at(&ctx, 9.9, |_ui| {});
+      frame_at(&ctx, 10.0, |ui| {
+         value = animate_from(ui, "seeded", 1.0, 1.0, Motion::new(0.2));
+         idle = !ui.ctx().has_requested_repaint();
+      });
+      assert_eq!(
+         value, 1.0,
+         "a seeded first sight must land on the target"
+      );
+      assert!(
+         idle,
+         "a seeded first sight must not request a repaint"
+      );
+   }
+
+   #[test]
+   fn seeded_animation_retargets_from_the_seed() {
+      let ctx = themed_ctx();
+      let motion = Motion::new(0.2);
+      let mut values = Vec::new();
+      frame_at(&ctx, 10.0, |ui| {
+         values.push(animate_from(ui, "seeded_leg", 1.0, 1.0, motion));
+      });
+      // On the frame it retargets the leg starts from the seeded value that is on screen.
+      frame_at(&ctx, 10.1, |ui| {
+         values.push(animate_from(ui, "seeded_leg", 0.0, 1.0, motion));
+      });
+      frame_at(&ctx, 10.2, |ui| {
+         values.push(animate_from(ui, "seeded_leg", 0.0, 1.0, motion));
+      });
+      assert!(
+         (values[0] - 1.0).abs() < 1e-4,
+         "seed: {}",
+         values[0]
+      );
+      assert!(
+         (values[1] - 1.0).abs() < 1e-4,
+         "retarget frame starts at the seed: {}",
+         values[1]
+      );
+      assert!(
+         (values[2] - 0.125).abs() < 0.01,
+         "one leg in, 1.0 -> 0.0 is 0.125: {}",
+         values[2]
+      );
    }
 
    #[test]

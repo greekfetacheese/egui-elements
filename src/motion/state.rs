@@ -38,6 +38,18 @@ impl AnimState {
       }
    }
 
+   /// A freshly seen id that starts at `initial`, for widgets where first sight is a *state* and not an
+   /// entrance: a checkbox created checked must be checked, not animate itself on.
+   pub fn new_from(initial: f32, target: f32, now: f64) -> Self {
+      Self {
+         from: initial,
+         to: target,
+         start: now,
+         target,
+         last: initial,
+      }
+   }
+
    /// `(value, progress)` at `now`. `progress` is `1.0` once settled, so callers can stop repainting.
    pub fn sample(&self, now: f64, duration: f32, easing: Easing) -> (f32, f32) {
       // A leg with nothing to travel is already finished. Without this, a widget that never changes state (an idle

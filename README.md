@@ -9,14 +9,14 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, and hold-to-confirm buttons with a configurable progress sweep and completion burst
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, and an animated checkbox
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
-`Button`, `ComboBox`, `Window` and `Spinner` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
+`Button`, `ComboBox`, `Window`, `Spinner` and `Checkbox` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
 
 ## Installation
 
@@ -155,6 +155,36 @@ tail to a full-strength head (`0.0` paints a flat arc), `.thickness()` overrides
 the stroke (default 10 % of the size, clamped 2–6 pt), and
 `paint_at(&Ui, Rect)` draws it inside another widget. As with any shadow, the glow
 spills past the allocated square by `blur_ratio · size`.
+
+### Checkboxes
+
+`Checkbox` is a themed checkbox whose fill, border, tick and shadow animate on
+toggle. Geometry follows the reference (a 16 px box): a 0.17·size corner radius,
+a 1 pt border and a three-point tick with round caps — all ratios of one size, so
+`.size()` scales the whole widget.
+
+```rust
+use egui_elements::motion::Motion;
+use egui_elements::widgets::{Checkbox, CheckboxShadow, CheckboxVisuals};
+
+ui.add(Checkbox::new(&mut two_factor, "SMS verification"));
+ui.add(Checkbox::without_text(&mut flag));              // box only, for a table cell
+ui.add(Checkbox::new(&mut flag, "Large").size(28.0));   // every ratio scales
+ui.add(Checkbox::new(&mut flag, "Flat").shadow(CheckboxShadow::NONE));
+ui.add(Checkbox::new(&mut flag, "Instant").motion(Motion::instant()));
+```
+
+Every colour derives from the installed theme: the checked fill is `colors.accent`,
+the tick is `colors.bg`, and the idle box is `colors.border` over a transparent
+fill, so the same widget reads on `bg`, `frame1` and `window`. On a click the
+fill, the border and the shadow's alpha follow one clock while the tick pops in
+with a slight overshoot, and a press scales the box to 0.93. The duration is the
+style's `animation_time`; `.motion(..)` overrides it and `Motion::instant()` snaps.
+
+`.visuals(CheckboxVisuals { .. })` replaces the colours for one widget — start from
+`CheckboxVisuals::from_theme(theme.colors)` to keep the rest. A click reports
+`Response::changed`, Space/Enter work while the box is focused, and
+`ui.add_enabled(false, Checkbox::new(..))` mutes the whole row.
 
 ### Hold-to-confirm buttons
 

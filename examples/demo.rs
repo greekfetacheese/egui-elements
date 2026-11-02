@@ -10,7 +10,7 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
-   Badge, BadgeCorner, Button, ComboBox, Label, Modal, SecureTextEdit, Spinner, Window,
+   Badge, BadgeCorner, Button, Checkbox, ComboBox, Label, Modal, SecureTextEdit, Spinner, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -112,6 +112,8 @@ struct DemoApp {
    vk_button_padding_x: f32,
    vk_button_padding_y: f32,
    check: bool,
+   check_on: bool,
+   check_off: bool,
    slider: f32,
    items: Items,
    text_single: String,
@@ -151,6 +153,8 @@ impl DemoApp {
          vk_button_padding_x: 4.0,
          vk_button_padding_y: 4.0,
          check: true,
+         check_on: true,
+         check_off: false,
          slider: 42.0,
          items: Items::default(),
          text_single: String::from("Single-line text"),
@@ -610,6 +614,22 @@ impl DemoApp {
          for size in [20.0, 32.0, 44.0] {
             ui.add(Spinner::new().size(size));
          }
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 18.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+         ui.add(Checkbox::new(
+            &mut self.check_on,
+            RichText::new("Checkbox (themed)").size(size).color(text_color),
+         ));
+         ui.add(Checkbox::new(
+            &mut self.check_off,
+            RichText::new("Unchecked").size(size).color(text_color),
+         ));
+         ui.add(Checkbox::without_text(&mut self.check_off));
       });
 
       ui.add_space(8.0);
