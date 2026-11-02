@@ -135,10 +135,9 @@ mod tests {
    }
 
    #[test]
-   #[allow(deprecated)] // `Id::new` is the documented constructor for this crate's egui 0.37.
    fn phase_is_deterministic_and_off_zero_for_a_real_id() {
-      let a = BadgePulse::phase(Id::new("inbox"));
-      assert_eq!(a, BadgePulse::phase(Id::new("inbox")));
+      let a = BadgePulse::phase(Id::unique("inbox"));
+      assert_eq!(a, BadgePulse::phase(Id::unique("inbox")));
       assert!((0.0..1.0).contains(&a));
    }
 }

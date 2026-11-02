@@ -272,9 +272,8 @@ impl Badge {
    /// Start a hop on the badge carrying `id`, for [`BadgeBounceTrigger::Manual`].
    ///
    /// Call it before the badge paints this frame. `id` is the value passed to [`Badge::id`].
-   #[allow(deprecated)] // `Id::new` is the documented constructor for this crate's egui 0.37.
    pub fn bounce_now(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug) {
-      bounce::start_now(ctx, Id::new(id));
+      bounce::start_now(ctx, Id::unique(id));
    }
 
    /// Stable id for this badge's animation state.
@@ -282,9 +281,8 @@ impl Badge {
    /// Defaults to the host's id — the `Response::id` of the widget the badge is painted on. Set it when
    /// a host wants [`Badge::bounce_now`] to reach this badge by name.
    #[inline]
-   #[allow(deprecated)] // `Id::new` is the documented constructor for this crate's egui 0.37.
    pub fn id(mut self, id: impl std::hash::Hash + std::fmt::Debug) -> Self {
-      self.id = Some(Id::new(id));
+      self.id = Some(Id::unique(id));
       self
    }
 
@@ -313,13 +311,12 @@ impl Badge {
    ///
    /// Public so any widget can host a badge without re-implementing the placement and text metrics.
    pub fn paint_at(&self, ui: &Ui, widget_rect: Rect) {
-      #[allow(deprecated)]
-      self.paint_at_id(ui, widget_rect, ui.id().with("badge"));
+      self.paint_at_id(ui, widget_rect, ui.scope_id().with("badge"));
    }
 
    /// [`Badge::paint_at`] with the host's id, which keys the hop state.
    ///
-   /// Two badges hosted by two widgets in the same `Ui` share `ui.id()`, so a host with more than one
+   /// Two badges hosted by two widgets in the same `Ui` share `ui.scope_id()`, so a host with more than one
    /// badge passes its own `Response::id` — otherwise one changing count hops every badge in the row.
    pub fn paint_at_id(&self, ui: &Ui, widget_rect: Rect, host_id: Id) {
       let galley = self.galley(ui);
@@ -409,13 +406,11 @@ impl Badge {
          .max(self.min_diameter);
       let (rect, response) = ui.allocate_exact_size(Vec2::splat(diameter), egui::Sense::hover());
       let circle = Rect::from_center_size(rect.center(), Vec2::splat(diameter));
-      #[allow(deprecated)]
-      // `Ui::id` is this crate's egui 0.37 spelling; `scope_id` is its rename.
       self.paint_circle(
          ui,
          circle,
          &galley,
-         self.id.unwrap_or_else(|| ui.id().with("badge-widget")),
+         self.id.unwrap_or_else(|| ui.scope_id().with("badge-widget")),
       );
       response
          .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, ui.is_enabled(), &label));
@@ -652,7 +647,6 @@ mod tests {
    }
 
    #[test]
-   #[allow(deprecated)] // `Id::new` is the documented constructor for this crate's egui 0.37.
    fn a_badge_hops_when_its_text_changes() {
       let ctx = egui::Context::default();
       let host = Rect::from_min_size(Pos2::new(60.0, 60.0), vec2(60.0, 40.0));
@@ -669,7 +663,7 @@ mod tests {
                .color(Color32::RED)
                .id("inbox")
                .bounce(BadgeBounce::new())
-               .paint_at_id(ui, host, Id::new("host"));
+               .paint_at_id(ui, host, Id::unique("host"));
          });
          out.textures_delta.clear();
          shapes(&out)
