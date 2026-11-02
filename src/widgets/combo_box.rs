@@ -1,15 +1,16 @@
 use super::label::Label;
-use crate::motion::{InteractT, Motion};
+use crate::motion::{InteractT, Motion, animate_with};
 use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use egui::{
-   Align2, Id, InnerResponse, NumExt, Painter, Popup, PopupCloseBehavior, PopupKind, Rect,
-   Response, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
+   Align2, Frame, Id, InnerResponse, NumExt, Painter, Popup, PopupCloseBehavior, PopupKind, Pos2,
+   Rect, Response, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
+   emath::Rot2,
    epaint::{RectShape, Shape, StrokeKind},
    style::WidgetVisuals,
 };
 
-use std::{fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash, ops::Range};
 
 /// Dropdown whose closed face is a [`Label`] (text and/or image).
 ///
@@ -31,6 +32,10 @@ pub struct ComboBox {
    selected_item: Label,
    width: Option<f32>,
    popup_max_height: Option<f32>,
+   /// Gap between the button and the popup. `None` → `ThemeSpacing::xs`.
+   popup_gap: Option<f32>,
+   /// Padding between the popup card and its rows. Default `5.0`.
+   popup_content_margin: Option<f32>,
    icon: Option<Box<dyn FnOnce(&Ui, Rect, &WidgetVisuals, bool)>>,
    wrap_mode: Option<TextWrapMode>,
    close_behavior: Option<PopupCloseBehavior>,
@@ -46,6 +51,8 @@ impl ComboBox {
          selected_item,
          width: None,
          popup_max_height: None,
+         popup_gap: None,
+         popup_content_margin: None,
          icon: None,
          wrap_mode: None,
          close_behavior: None,
@@ -78,6 +85,18 @@ impl ComboBox {
       self
    }
 
+   /// Gap between the button and the popup, in points. Default: `ThemeSpacing::xs`.
+   pub fn popup_gap(mut self, gap: f32) -> Self {
+      self.popup_gap = Some(gap);
+      self
+   }
+
+   /// Padding between the popup card and its rows, in points. Default: `5.0`.
+   pub fn popup_content_margin(mut self, margin: f32) -> Self {
+      self.popup_content_margin = Some(margin);
+      self
+   }
+
    /// Replace the default disclosure triangle with a custom painter.
    ///
    /// The `bool` argument is `true` while the popup is open.
@@ -105,6 +124,32 @@ impl ComboBox {
       ui: &mut Ui,
       menu_contents: impl FnOnce(&mut Ui) -> R,
    ) -> Option<InnerResponse<R>> {
+      self.show_popup(ui, None, |ui, _| menu_contents(ui))
+   }
+
+   /// Same as [`Self::show_ui`], but only the rows inside the viewport are built
+   /// ([`ScrollArea::show_rows`]), so a long option list costs the visible rows and
+   /// not the whole list.
+   ///
+   /// `row_height` is a row's height **without** `item_spacing.y` — egui adds that
+   /// itself — so every row the closure emits must lay out at exactly that height.
+   /// `total_rows` is the full count, not the number of rows the closure sees.
+   pub fn show_rows_ui<R>(
+      self,
+      ui: &mut Ui,
+      row_height: f32,
+      total_rows: usize,
+      rows: impl FnOnce(&mut Ui, Range<usize>) -> R,
+   ) -> Option<InnerResponse<R>> {
+      self.show_popup(ui, Some((row_height, total_rows)), rows)
+   }
+
+   fn show_popup<R>(
+      self,
+      ui: &mut Ui,
+      virtual_rows: Option<(f32, usize)>,
+      contents: impl FnOnce(&mut Ui, Range<usize>) -> R,
+   ) -> Option<InnerResponse<R>> {
       let button_id = ui.make_persistent_id(self.id_salt);
       let popup_id = button_id.with("popup");
 
@@ -120,58 +165,68 @@ impl ComboBox {
          &self.selected_item,
          self.icon,
          self.wrap_mode,
-         (self.width, None),
+         self.width,
       );
-
-      // Interaction
-      if button_response.clicked() {
-         Popup::toggle_id(ui.ctx(), popup_id);
-      }
 
       // Popup Handling
       let popup_max_h = self.popup_max_height.unwrap_or_else(|| ui.spacing().combo_height);
       let popup_max_w = self.width.unwrap_or(ui.available_width());
       let close_behavior = self.close_behavior.unwrap_or(PopupCloseBehavior::CloseOnClick);
+      let gap = self.popup_gap.unwrap_or(Theme::current(ui.ctx()).spacing.xs);
+      let content_margin = self.popup_content_margin.unwrap_or(5.0);
 
-      let popup = Popup::menu(&button_response)
+      // `Popup::menu` owns the open state and toggles it from the button's click, so the
+      // popup id has to be the one this widget reads back above — and it must not be
+      // toggled a second time here, or the popup opens and closes in the same frame.
+      let mut popup = Popup::menu(&button_response)
+         .id(popup_id)
          .close_behavior(close_behavior)
-         .kind(PopupKind::Tooltip);
+         .kind(PopupKind::Tooltip)
+         .gap(gap);
+      if let Some(vis) = visuals {
+         popup = popup.frame(popup_frame(ui, &vis));
+      }
 
-      let inner = popup.show(|ui| {
-         ScrollArea::vertical()
+      popup.show(|ui| {
+         let scroll = ScrollArea::vertical()
             .max_height(popup_max_h)
             .max_width(popup_max_w)
-            .show(ui, |ui| {
-               ui.set_width(
-                  ui.available_width()
-                     .max(button_response.rect.width() - ui.spacing().button_padding.x * 2.0),
-               );
-               ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
-               // Menu items often use Label::expand() which paints outside the
-               // allocated rect. The scroll-area clip would otherwise shave the
-               // first/last row highlight (selected looks smaller than hovered).
-               let item_expand_pad = 4.0;
-               ui.add_space(item_expand_pad);
-               let inner = menu_contents(ui);
-               ui.add_space(item_expand_pad);
-               inner
-            })
-            .inner
-      });
+            .content_margin(content_margin);
+         let min_width = button_response.rect.width() - ui.spacing().button_padding.x * 2.0;
 
-      inner
+         match virtual_rows {
+            Some((row_height, total_rows)) => {
+               scroll
+                  .show_rows(ui, row_height, total_rows, |ui, range| {
+                     ui.set_width(ui.available_width().max(min_width));
+                     ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+                     contents(ui, range)
+                  })
+                  .inner
+            }
+            None => {
+               scroll
+                  .show(ui, |ui| {
+                     ui.set_width(ui.available_width().max(min_width));
+                     ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+                     contents(ui, 0..0)
+                  })
+                  .inner
+            }
+         }
+      })
    }
 }
 
 fn combo_box_with_image_button(
    ui: &mut Ui,
-   _id: Id,
+   id: Id,
    is_popup_open: bool,
    combo_box_visuals: Option<&ComboBoxVisuals>,
    selected_item: &Label,
    icon_painter: Option<Box<dyn FnOnce(&Ui, Rect, &WidgetVisuals, bool)>>,
    wrap_mode_override: Option<TextWrapMode>,
-   (width_override, _): (Option<f32>, Option<f32>),
+   width_override: Option<f32>,
 ) -> Response {
    let button_padding = ui.spacing().button_padding;
    let icon_width = ui.spacing().icon_width;
@@ -213,6 +268,15 @@ fn combo_box_with_image_button(
 
    // Allocation & Interaction
    let (rect, response) = ui.allocate_exact_size(button_size, Sense::click());
+
+   // The open flag is a state, not a transition: only the chevron eases, so it lands facing
+   // up while the chrome has already switched.
+   let arrow = animate_with(
+      ui,
+      id.with("arrow"),
+      if is_popup_open { 1.0 } else { 0.0 },
+      Motion::from_ui(ui),
+   );
 
    // Painting
    if ui.is_rect_visible(rect) {
@@ -302,6 +366,7 @@ fn combo_box_with_image_button(
             icon_rect,
             combo_box_visuals,
             &visuals,
+            arrow,
          );
       }
    }
@@ -309,22 +374,423 @@ fn combo_box_with_image_button(
    response
 }
 
+/// The popup card: the stock popup chrome (menu margin, menu corner radius, `popup_shadow`)
+/// with the theme's elevated surface instead of `Visuals::window_fill`, which every palette
+/// aliases to the page background.
+fn popup_frame(ui: &Ui, visuals: &ComboBoxVisuals) -> Frame {
+   Frame::popup(ui.style()).fill(visuals.popup_bg).stroke(visuals.popup_border)
+}
+
+/// The disclosure chevron: a stroked `∨` in the theme's icon colour that rotates to point up
+/// as `open` goes `0.0 → 1.0`, so opening and closing are one continuous motion.
 fn paint_default_icon(
    painter: &Painter,
    rect: Rect,
    combo_box_visuals: Option<&ComboBoxVisuals>,
    visuals: &WidgetVisuals,
+   open: f32,
 ) {
-   // Always draw a downward-pointing triangle, matching egui 0.35: the popup's open
-   // direction is now handled automatically by `Popup` (it flips above/below as needed),
-   // and the icon no longer reflects placement.
-   let rect = Rect::from_center_size(
-      rect.center(),
-      Vec2::new(rect.width() * 0.7, rect.height() * 0.45),
-   );
+   let colour = combo_box_visuals.map(|v| v.icon).unwrap_or(visuals.fg_stroke.color);
+   let half = Vec2::new(rect.width() * 0.28, rect.height() * 0.14);
+   let rot = Rot2::from_angle(open * std::f32::consts::PI);
+   let centre = rect.center();
+   // Closed pose: the middle vertex hangs below its two ends.
+   let closed = [
+      Vec2::new(-half.x, -half.y),
+      Vec2::new(0.0, half.y),
+      Vec2::new(half.x, -half.y),
+   ];
+   let points: Vec<Pos2> = closed.iter().map(|v| centre + rot * *v).collect();
+   painter.add(Shape::line(points, Stroke::new(1.5, colour)));
+}
 
-   let points = vec![rect.left_top(), rect.right_top(), rect.center_bottom()];
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use crate::theme::{Theme, ThemeKind};
+   use egui::{Context, Event, FullOutput, Modifiers, PointerButton, Pos2, RawInput};
+   use std::cell::Cell;
 
-   let fill = combo_box_visuals.map(|v| v.icon).unwrap_or(visuals.fg_stroke.color);
-   painter.add(Shape::convex_polygon(points, fill, Stroke::NONE));
+   fn themed_ctx() -> Context {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      ctx
+   }
+
+   fn screen() -> Rect {
+      Rect::from_min_size(Pos2::ZERO, Vec2::new(420.0, 420.0))
+   }
+
+   fn run_frame(
+      ctx: &Context,
+      events: Vec<Event>,
+      time: f64,
+      body: impl FnMut(&mut Ui),
+   ) -> FullOutput {
+      let mut output = ctx.run_ui(
+         RawInput {
+            events,
+            screen_rect: Some(screen()),
+            time: Some(time),
+            predicted_dt: 0.1,
+            ..Default::default()
+         },
+         body,
+      );
+      output.textures_delta.clear();
+      output
+   }
+
+   fn press(pos: Pos2, pressed: bool) -> Event {
+      Event::PointerButton {
+         pos,
+         button: PointerButton::Primary,
+         pressed,
+         modifiers: Modifiers::NONE,
+      }
+   }
+
+   /// Clicks the combo box open with a real press/release, parks the pointer away from the
+   /// button (so only the open state can paint its chrome), settles the hover animation and
+   /// returns the settled frame plus the button rect measured on the idle frame.
+   fn open_popup(ctx: &Context, mut build: impl FnMut(&mut Ui)) -> (FullOutput, Rect) {
+      // The idle button is the only rect painted with `bg` on a bare screen, so the frame
+      // itself supplies the rect to click — never assume the ui starts at the origin.
+      let idle = run_frame(ctx, Vec::new(), 10.0, &mut build);
+      let button = rect_with_fill(&idle, combo_visuals(ctx).bg, -10.0)
+         .map(|(rect, _)| rect)
+         .expect("the idle button paints `bg`");
+
+      let centre = button.center();
+      run_frame(
+         ctx,
+         vec![Event::PointerMoved(centre), press(centre, true)],
+         10.1,
+         &mut build,
+      );
+      run_frame(ctx, vec![press(centre, false)], 10.2, &mut build);
+      run_frame(
+         ctx,
+         vec![Event::PointerMoved(Pos2::new(400.0, 400.0))],
+         10.3,
+         &mut build,
+      );
+      run_frame(ctx, Vec::new(), 10.6, &mut build);
+      let output = run_frame(ctx, Vec::new(), 10.9, &mut build);
+      (output, button)
+   }
+
+   fn combo_visuals(ctx: &Context) -> ComboBoxVisuals {
+      Theme::combo_box_visuals_from_ctx(ctx).expect("the test installs a theme")
+   }
+
+   /// The painted rect carrying `fill`, restricted to cards at or below `above`.
+   ///
+   /// A `Frame`'s card and shadow are painted as one `Shape::Vec`, so the walk descends.
+   fn rect_with_fill(
+      output: &FullOutput,
+      fill: egui::Color32,
+      above: f32,
+   ) -> Option<(Rect, Stroke)> {
+      fn find(shape: &Shape, fill: egui::Color32, above: f32) -> Option<(Rect, Stroke)> {
+         match shape {
+            Shape::Rect(rect) if rect.fill == fill && rect.rect.min.y >= above - 1.0 => {
+               Some((rect.rect, rect.stroke))
+            }
+            Shape::Vec(shapes) => shapes.iter().find_map(|shape| find(shape, fill, above)),
+            _ => None,
+         }
+      }
+      output.shapes.iter().find_map(|clipped| find(&clipped.shape, fill, above))
+   }
+
+   /// Every fill painted at `centre` (a card's shadow and its body share one rect).
+   fn fills_at(output: &FullOutput, centre: Pos2) -> Vec<egui::Color32> {
+      fn collect(shape: &Shape, centre: Pos2, fills: &mut Vec<egui::Color32>) {
+         match shape {
+            Shape::Rect(rect) if (rect.rect.center() - centre).length() < 0.5 => {
+               fills.push(rect.fill);
+            }
+            Shape::Vec(shapes) => shapes.iter().for_each(|shape| collect(shape, centre, fills)),
+            _ => {}
+         }
+      }
+      let mut fills = Vec::new();
+      output
+         .shapes
+         .iter()
+         .for_each(|clipped| collect(&clipped.shape, centre, &mut fills));
+      fills
+   }
+
+   fn one_row(ui: &mut Ui) {
+      ui.add(Label::new("Alpha", None));
+   }
+
+   #[test]
+   fn the_popup_paints_the_elevated_surface() {
+      let ctx = themed_ctx();
+      let visuals = combo_visuals(&ctx);
+      let (output, button) = open_popup(&ctx, |ui| {
+         ComboBox::new("surface", Label::new("Pick", None))
+            .width(160.0)
+            .show_ui(ui, one_row);
+      });
+
+      let (rect, stroke) = rect_with_fill(&output, visuals.popup_bg, button.max.y)
+         .expect("the popup card must be painted with `popup_bg`, not `Visuals::window_fill`");
+      assert!(rect.min.y >= button.max.y, "popup {rect:?}");
+      assert_eq!(
+         stroke, visuals.popup_border,
+         "the card keeps the theme border"
+      );
+   }
+
+   #[test]
+   fn the_popup_sits_a_gap_below_the_button() {
+      let ctx = themed_ctx();
+      let visuals = combo_visuals(&ctx);
+      let (output, button) = open_popup(&ctx, |ui| {
+         ComboBox::new("gap_default", Label::new("Pick", None))
+            .width(160.0)
+            .show_ui(ui, one_row);
+      });
+      let (rect, _) = rect_with_fill(&output, visuals.popup_bg, button.max.y).expect("popup card");
+      let default_gap = rect.min.y - button.max.y;
+      assert!(
+         (default_gap - 4.0).abs() < 1.5,
+         "the default gap is ThemeSpacing::xs (4), measured {default_gap}"
+      );
+
+      let ctx = themed_ctx();
+      let (output, button) = open_popup(&ctx, |ui| {
+         ComboBox::new("gap_twelve", Label::new("Pick", None))
+            .width(160.0)
+            .popup_gap(12.0)
+            .show_ui(ui, one_row);
+      });
+      let (rect, _) = rect_with_fill(&output, visuals.popup_bg, button.max.y).expect("popup card");
+      let custom_gap = rect.min.y - button.max.y;
+      assert!(
+         (custom_gap - 12.0).abs() < 1.5,
+         "popup_gap(12) must move the card, measured {custom_gap}"
+      );
+   }
+
+   #[test]
+   fn the_popup_content_margin_is_adjustable() {
+      let offset_with = |margin: Option<f32>| {
+         let ctx = themed_ctx();
+         let visuals = combo_visuals(&ctx);
+         let row = Cell::new(Rect::NOTHING);
+         let (output, button) = open_popup(&ctx, |ui| {
+            let mut combo = ComboBox::new("margin", Label::new("Pick", None)).width(160.0);
+            if let Some(margin) = margin {
+               combo = combo.popup_content_margin(margin);
+            }
+            combo.show_ui(ui, |ui| {
+               row.set(ui.add(Label::new("Alpha", None)).rect);
+            });
+         });
+         let (rect, _) =
+            rect_with_fill(&output, visuals.popup_bg, button.max.y).expect("popup card");
+         row.get().min.y - rect.min.y
+      };
+
+      let default_offset = offset_with(None);
+      assert!(
+         default_offset >= 10.0,
+         "menu margin (6) + the 5 pt content margin, measured {default_offset}"
+      );
+
+      let wide = offset_with(Some(20.0));
+      assert!(
+         wide - default_offset >= 14.0,
+         "content margin 5 -> 20 must move the row by ~15, measured {}",
+         wide - default_offset
+      );
+   }
+
+   #[test]
+   fn an_open_button_paints_the_open_chrome() {
+      let ctx = themed_ctx();
+      let visuals = combo_visuals(&ctx);
+      let (output, button) = open_popup(&ctx, |ui| {
+         ComboBox::new("open_chrome", Label::new("Pick", None))
+            .width(160.0)
+            .show_ui(ui, one_row);
+      });
+
+      let fills = fills_at(&output, button.center());
+      assert!(
+         fills.contains(&visuals.bg_open),
+         "an open combo box paints `bg_open` while the pointer is elsewhere, painted {fills:?}"
+      );
+      assert!(
+         !fills.contains(&visuals.bg),
+         "an open combo box must not fall back to its idle fill, painted {fills:?}"
+      );
+   }
+
+   /// The three points of the disclosure chevron, in paint order.
+   fn chevron(output: &FullOutput) -> Option<Vec<Pos2>> {
+      output.shapes.iter().find_map(|clipped| match &clipped.shape {
+         Shape::Path(path) if path.points.len() == 3 => Some(path.points.clone()),
+         _ => None,
+      })
+   }
+
+   /// The y of the chevron's middle vertex — below its ends when closed, above when open.
+   fn chevron_y(output: &FullOutput) -> f32 {
+      let points = chevron(output).expect("the combo box paints its chevron");
+      assert_eq!(points.len(), 3);
+      points[1].y
+   }
+
+   fn closed_combo(salt: &'static str) -> impl FnMut(&mut Ui) {
+      move |ui: &mut Ui| {
+         ComboBox::new(salt, Label::new("Pick", None)).width(160.0).show_ui(ui, one_row);
+      }
+   }
+
+   #[test]
+   fn the_chevron_points_down_when_closed() {
+      let ctx = themed_ctx();
+      let mut build = closed_combo("arrow_closed");
+
+      for time in [10.0, 10.1, 10.2] {
+         let output = run_frame(&ctx, Vec::new(), time, &mut build);
+         let points = chevron(&output).expect("the closed combo box paints its chevron");
+         assert!(
+            points[1].y > points[0].y && points[1].y > points[2].y,
+            "a closed chevron points down, got {points:?}"
+         );
+      }
+   }
+
+   #[test]
+   fn the_chevron_rotates_when_the_popup_opens() {
+      let ctx = themed_ctx();
+      let mut build = closed_combo("arrow_open");
+
+      let idle = run_frame(&ctx, Vec::new(), 10.0, &mut build);
+      let button = rect_with_fill(&idle, combo_visuals(&ctx).bg, -10.0)
+         .map(|(rect, _)| rect)
+         .expect("the idle button paints `bg`");
+      let centre = button.center();
+
+      // press (10.1), release (10.2, the click opens the popup), 10.3 is the frame the
+      // chevron's target flips, so 10.35 is a fifth of the way into the 0.3 s leg.
+      run_frame(
+         &ctx,
+         vec![Event::PointerMoved(centre), press(centre, true)],
+         10.1,
+         &mut build,
+      );
+      run_frame(&ctx, vec![press(centre, false)], 10.2, &mut build);
+      run_frame(&ctx, Vec::new(), 10.3, &mut build);
+      let mid = run_frame(&ctx, Vec::new(), 10.35, &mut build);
+      let settled = run_frame(&ctx, Vec::new(), 10.75, &mut build);
+
+      let down = chevron_y(&idle);
+      let between = chevron_y(&mid);
+      let up = chevron_y(&settled);
+
+      assert!(
+         (down - up).abs() > 1.0,
+         "the chevron must actually swing: closed {down}, open {up}"
+      );
+      assert!(
+         up < between && between < down,
+         "10.35 is mid-rotation: {between} must sit strictly between {up} and {down}"
+      );
+   }
+
+   #[test]
+   fn the_chevron_rotates_back_when_the_popup_closes() {
+      let ctx = themed_ctx();
+      let mut build = closed_combo("arrow_close");
+
+      let idle = run_frame(&ctx, Vec::new(), 10.0, &mut build);
+      let button = rect_with_fill(&idle, combo_visuals(&ctx).bg, -10.0)
+         .map(|(rect, _)| rect)
+         .expect("the idle button paints `bg`");
+      let centre = button.center();
+
+      run_frame(
+         &ctx,
+         vec![Event::PointerMoved(centre), press(centre, true)],
+         10.1,
+         &mut build,
+      );
+      run_frame(&ctx, vec![press(centre, false)], 10.2, &mut build);
+      // The popup reports open one frame after the release (as in the opening test), and a
+      // first sight of the arrow id starts at 0.0, so the leg needs that frame to exist
+      // before 10.9 can be a settled open chevron.
+      run_frame(&ctx, Vec::new(), 10.3, &mut build);
+      let open = run_frame(&ctx, Vec::new(), 10.9, &mut build);
+
+      // Click again: the popup closes on 11.0, so the chevron starts back down there.
+      run_frame(
+         &ctx,
+         vec![Event::PointerMoved(centre), press(centre, true)],
+         10.95,
+         &mut build,
+      );
+      run_frame(&ctx, vec![press(centre, false)], 11.0, &mut build);
+      run_frame(&ctx, Vec::new(), 11.1, &mut build);
+      let mid = run_frame(&ctx, Vec::new(), 11.15, &mut build);
+      let settled = run_frame(&ctx, Vec::new(), 11.55, &mut build);
+
+      let up = chevron_y(&open);
+      let between = chevron_y(&mid);
+      let down = chevron_y(&settled);
+
+      assert!(
+         (down - up).abs() > 1.0,
+         "the chevron must swing back: open {up}, closed {down}"
+      );
+      assert!(
+         up < between && between < down,
+         "11.15 is mid-rotation: {between} must sit strictly between {up} and {down}"
+      );
+   }
+
+   #[test]
+   fn show_rows_builds_only_the_visible_rows() {
+      const ROW_H: f32 = 24.0;
+      const ROWS: usize = 10_000;
+
+      let ctx = themed_ctx();
+      let built = Cell::new(0usize);
+      let (output, _) = open_popup(&ctx, |ui| {
+         ComboBox::new("virtual", Label::new("Pick", None)).width(160.0).show_rows_ui(
+            ui,
+            ROW_H,
+            ROWS,
+            |ui, range| {
+               built.set(built.get() + range.len());
+               for index in range {
+                  ui.label(format!("Row {index}"));
+               }
+            },
+         );
+      });
+
+      assert!(
+         !output.shapes.is_empty(),
+         "the popup must have painted something"
+      );
+
+      let built = built.get();
+      assert!(
+         built > 0,
+         "the visible rows must be built, built {built} of {ROWS}"
+      );
+      assert!(
+         built < 200,
+         "only the viewport is built — six frames over {ROWS} rows built {built}"
+      );
+   }
 }

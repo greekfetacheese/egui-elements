@@ -719,6 +719,16 @@ impl ThemeEditor {
          self.hsla_edit_button.show("bg_hover1", ui, &mut visuals.bg_hover);
       });
 
+      ui.label("Background Open Color");
+      ui.horizontal(|ui| {
+         let color = self.color_select("7", visuals.bg_open, &colors, ui);
+         if let Some(color) = color {
+            visuals.bg_open = color.color32();
+         }
+
+         self.hsla_edit_button.show("bg_open1", ui, &mut visuals.bg_open);
+      });
+
       ui.label("Border Color");
       ui.horizontal(|ui| {
          let color = self.color_select("4", visuals.border.color, &colors, ui);
@@ -752,6 +762,30 @@ impl ThemeEditor {
          }
 
          self.hsla_edit_button.show("border_open1", ui, &mut visuals.border_open.color);
+      });
+
+      ui.label("Popup Background Color");
+      ui.horizontal(|ui| {
+         let color = self.color_select("8", visuals.popup_bg, &colors, ui);
+         if let Some(color) = color {
+            visuals.popup_bg = color.color32();
+         }
+
+         self.hsla_edit_button.show("popup_bg1", ui, &mut visuals.popup_bg);
+      });
+
+      ui.label("Popup Border Color");
+      ui.horizontal(|ui| {
+         let color = self.color_select("10", visuals.popup_border.color, &colors, ui);
+         if let Some(color) = color {
+            visuals.popup_border.color = color.color32();
+         }
+
+         self.hsla_edit_button.show(
+            "popup_border1",
+            ui,
+            &mut visuals.popup_border.color,
+         );
       });
 
       ui.label("Corner Radius");

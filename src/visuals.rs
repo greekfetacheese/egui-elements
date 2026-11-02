@@ -135,6 +135,13 @@ pub struct ComboBoxVisuals {
    pub bg_hover: Color32,
    /// Fill while the popup is open.
    pub bg_open: Color32,
+   /// Popup surface fill. Distinct from `bg` (which every palette aliases to the page),
+   /// so the menu reads as a raised layer even before its shadow lands.
+   #[cfg_attr(feature = "serde", serde(default))]
+   pub popup_bg: Color32,
+   /// Popup border.
+   #[cfg_attr(feature = "serde", serde(default))]
+   pub popup_border: Stroke,
    /// Idle border.
    pub border: Stroke,
    /// Border while hovered.
@@ -151,6 +158,8 @@ impl PartialEq for ComboBoxVisuals {
          && self.icon == other.icon
          && self.bg_hover == other.bg_hover
          && self.bg_open == other.bg_open
+         && self.popup_bg == other.popup_bg
+         && self.popup_border == other.popup_border
          && self.border == other.border
          && self.border_hover == other.border_hover
          && self.border_open == other.border_open
