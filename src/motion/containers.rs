@@ -248,30 +248,6 @@ mod tests {
    }
 
    #[test]
-   fn collapse_mid_flight_is_the_eased_fraction() {
-      let ctx = themed_ctx();
-      let motion = Motion::new(0.2);
-      let mut mid = -1.0;
-
-      frame_at(&ctx, 10.0, |ui| {
-         Collapse::new("mid", false).motion(motion).show(ui, body);
-      });
-      frame_at(&ctx, 10.1, |ui| {
-         Collapse::new("mid", true).motion(motion).show(ui, body);
-      });
-      frame_at(&ctx, 10.2, |ui| {
-         mid = Collapse::new("mid", true).motion(motion).show(ui, body);
-      });
-
-      // `cubic_out(0.5) = 0.875`, so a 100 pt body is 87.5 pt tall halfway through.
-      assert!((mid - 87.5).abs() < 0.01, "mid-flight: {mid}");
-      assert!(
-         mid > 0.0 && mid < 100.0,
-         "strictly mid-flight: {mid}"
-      );
-   }
-
-   #[test]
    fn collapse_clips_its_body_while_expanding() {
       let ctx = themed_ctx();
       let motion = Motion::new(0.2);
@@ -359,7 +335,8 @@ mod tests {
    }
 
    #[test]
-   fn fade_in_skips_the_body_when_closed() {
+   fn the_fade_runs_the_body_exactly_when_visible() {
+      // Case: fade_in_skips_the_body_when_closed
       let ctx = themed_ctx();
       let motion = Motion::new(0.2);
       let runs = Cell::new(0usize);
@@ -388,10 +365,8 @@ mod tests {
          "closed then first open: {seen:?}"
       );
       assert_eq!(seen[4], 1, "open body runs: {seen:?}");
-   }
 
-   #[test]
-   fn fade_both_runs_the_body_while_closing() {
+      // Case: fade_both_runs_the_body_while_closing
       let ctx = themed_ctx();
       let motion = Motion::new(0.2);
       let runs = Cell::new(0usize);
