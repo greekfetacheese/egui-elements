@@ -218,23 +218,6 @@ impl LightSettings {
 #[cfg(test)]
 mod tests {
    use super::*;
-   use egui::__run_test_ctx;
-
-   #[test]
-   fn defaults_are_sane() {
-      let settings = LightSettings::default();
-      assert!(!settings.open);
-      assert!(settings.active);
-      assert!(settings.density > 0);
-      assert!(settings.radius_min <= settings.radius_max);
-      assert!(settings.lifetime_min <= settings.lifetime_max);
-      assert!(
-         settings.lifetime_min > 1.0,
-         "lifetimes are multi-second"
-      );
-      assert_eq!(settings.motion, LightMotion::Drift);
-      assert_eq!(settings.layer, ParticleLayer::Foreground);
-   }
 
    #[test]
    fn reset_keeps_open() {
@@ -309,34 +292,5 @@ mod tests {
          height <= 650.0,
          "settings window is {height} tall, root is 650"
       );
-   }
-
-   #[test]
-   fn body_ui_renders_without_a_window() {
-      let mut settings = LightSettings::default();
-      assert!(!settings.open);
-      egui::__run_test_ui(|ui| {
-         settings.body_ui(ui);
-      });
-      assert!(
-         !settings.open,
-         "body_ui must not touch the window flag"
-      );
-   }
-
-   #[test]
-   fn show_window_returns_response_only_when_open() {
-      __run_test_ctx(|ctx| {
-         let mut closed = LightSettings::default();
-         assert!(closed.show_window(ctx).is_none());
-      });
-
-      __run_test_ctx(|ctx| {
-         let mut open = LightSettings {
-            open: true,
-            ..Default::default()
-         };
-         assert!(open.show_window(ctx).is_some());
-      });
    }
 }

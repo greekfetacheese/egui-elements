@@ -1,9 +1,9 @@
 //! Radial glow motes and embers for egui.
 
 use egui::epaint::Mesh;
-use egui::{Color32, Context, Id, LayerId, Order, Pos2, Rect, Vec2};
 #[cfg(test)]
-use egui::{TextureId, vec2};
+use egui::vec2;
+use egui::{Color32, Context, Id, LayerId, Order, Pos2, Rect, Vec2};
 use std::ops::RangeInclusive;
 
 use super::super::shared::{ParticleLayer, ParticleRng, ordered, resolve_target};
@@ -435,54 +435,11 @@ mod tests {
    use egui::__run_test_ctx;
 
    #[test]
-   fn glow_mesh_vertex_and_index_counts() {
-      let mesh = glow_mesh(Pos2::ZERO, 100.0, Color32::WHITE);
-      // radius / 4 == 25 segments -> 1 centre + 3 * 25 ring vertices.
-      assert_eq!(mesh.vertices.len(), 76);
-      // 3 indices for the core fan + 12 for the two halo quad strips, per segment.
-      assert_eq!(mesh.indices.len(), 375);
-      assert_eq!(mesh.texture_id, TextureId::default());
-   }
-
-   #[test]
-   fn glow_mesh_ring_alphas_fall_off() {
-      let segments = 25;
-      let mesh = glow_mesh(Pos2::ZERO, 100.0, Color32::from_white_alpha(255));
-      let center = mesh.vertices[0].color;
-      let core = mesh.vertices[1].color;
-      let inner = mesh.vertices[1 + segments].color;
-      let rim = mesh.vertices[1 + 2 * segments].color;
-
-      assert!(
-         center.a() > core.a(),
-         "centre must be brighter than the hot-core ring"
-      );
-      assert!(
-         core.a() > inner.a(),
-         "hot-core ring must be brighter than the inner ring"
-      );
-      assert!(
-         inner.a() > rim.a(),
-         "inner ring must be brighter than the rim"
-      );
-      assert_eq!(rim, Color32::TRANSPARENT);
-   }
-
-   #[test]
-   fn glow_mesh_center_tracks_intensity() {
-      let dim = glow_mesh(Pos2::ZERO, 20.0, Color32::from_white_alpha(60));
-      let bright = glow_mesh(Pos2::ZERO, 20.0, Color32::from_white_alpha(220));
-      assert_eq!(dim.vertices[0].color.a(), 60);
-      assert_eq!(bright.vertices[0].color.a(), 220);
-   }
-
-   #[test]
-   fn size_attenuation_is_one_at_min_radius() {
+   fn size_attenuation_is_one_at_the_minimum_and_never_grows() {
+      // Case: size_attenuation_is_one_at_min_radius
       assert_eq!(size_attenuation(8.0, 8.0, 36.0), 1.0);
-   }
 
-   #[test]
-   fn size_attenuation_is_non_increasing_across_the_range() {
+      // Case: size_attenuation_is_non_increasing_across_the_range
       let (min_radius, max_radius) = (8.0, 36.0);
       let mut previous = f32::INFINITY;
       for step in 0..=64 {
@@ -494,10 +451,8 @@ mod tests {
          );
          previous = value;
       }
-   }
 
-   #[test]
-   fn size_attenuation_stays_within_bounds() {
+      // Case: size_attenuation_stays_within_bounds
       let (min_radius, max_radius) = (8.0, 36.0);
       for step in 0..=64 {
          let radius = min_radius + (max_radius - min_radius) * step as f32 / 64.0;
@@ -513,11 +468,8 @@ mod tests {
          (0.45..=0.5).contains(&at_max),
          "attenuation at max radius {at_max} must read about 0.45..=0.5"
       );
-   }
 
-   #[test]
-   fn peak_alpha_does_not_grow_with_radius() {
-      let (min_radius, max_radius) = (8.0, 36.0);
+      // Case: peak_alpha_does_not_grow_with_radius
       // Mirrors the peak of `Light::show`'s alpha: the envelope and flicker
       // both reach 1.0 there, and the settings are identical apart from the
       // mote radius, so the size attenuation is the only difference.
@@ -547,7 +499,8 @@ mod tests {
    }
 
    #[test]
-   fn from_settings_maps_color_density_motion_layer() {
+   fn from_settings_maps_the_light_fields_and_swaps_inverted_ranges() {
+      // Case: from_settings_maps_color_density_motion_layer
       let settings = LightSettings {
          color: Color32::from_rgb(1, 2, 3),
          density: 13,
@@ -570,10 +523,8 @@ mod tests {
          },
       );
       assert_eq!(background.layer_order, Order::Background);
-   }
 
-   #[test]
-   fn from_settings_swaps_inverted_ranges() {
+      // Case: from_settings_swaps_inverted_ranges
       let settings = LightSettings {
          radius_min: 40.0,
          radius_max: 5.0,

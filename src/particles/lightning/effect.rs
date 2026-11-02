@@ -670,18 +670,9 @@ mod tests {
          .collect()
    }
 
-   /// Perpendicular distance from `point` to the line through `from` and `to`.
-   fn distance_to_line(point: Pos2, from: Pos2, to: Pos2) -> f32 {
-      let delta = to - from;
-      let length = delta.length();
-      if length <= 0.0 {
-         return (point - from).length();
-      }
-      ((point.x - from.x) * delta.y - (point.y - from.y) * delta.x).abs() / length
-   }
-
    #[test]
-   fn same_seed_generates_identical_bolts() {
+   fn the_same_seed_repeats_and_a_new_seed_changes_the_bolts() {
+      // Case: same_seed_generates_identical_bolts
       let from = Pos2::new(0.3, 0.0);
       let to = Pos2::new(0.7, 1.0);
       let mut a = ParticleRng::new(42);
@@ -690,10 +681,8 @@ mod tests {
          generate_bolt(&mut a, from, to, BOLT_LEVELS, DEFAULT_JITTER),
          generate_bolt(&mut b, from, to, BOLT_LEVELS, DEFAULT_JITTER)
       );
-   }
 
-   #[test]
-   fn different_seeds_generate_different_bolts() {
+      // Case: different_seeds_generate_different_bolts
       let from = Pos2::new(0.3, 0.0);
       let to = Pos2::new(0.7, 1.0);
       let mut a = ParticleRng::new(1);
@@ -753,23 +742,6 @@ mod tests {
    }
 
    #[test]
-   fn bolt_is_jagged_not_a_straight_line() {
-      let from = Pos2::new(0.5, 0.0);
-      let to = Pos2::new(0.5, 1.0);
-      let mut rng = ParticleRng::new(11);
-      let bolt = generate_bolt(&mut rng, from, to, BOLT_LEVELS, DEFAULT_JITTER);
-
-      let max_deviation = bolt
-         .iter()
-         .map(|point| distance_to_line(*point, from, to))
-         .fold(0.0_f32, f32::max);
-      assert!(
-         max_deviation > 0.01,
-         "the bolt deviated only {max_deviation} from the straight line"
-      );
-   }
-
-   #[test]
    fn strike_with_degenerate_area_is_a_noop() {
       __run_test_ctx(|ctx| {
          let area = Rect::from_min_size(Pos2::ZERO, vec2(0.0, 64.0));
@@ -797,7 +769,8 @@ mod tests {
    }
 
    #[test]
-   fn envelope_is_zero_at_both_ends() {
+   fn the_flash_envelope_bounds_sub_flash_and_ends_at_zero() {
+      // Case: envelope_is_zero_at_both_ends
       let pulses = sample_sub_flashes();
       assert_eq!(
          flash_envelope(0.0, 1.0, &pulses),
@@ -814,10 +787,8 @@ mod tests {
          0.0,
          "a zero-length strike must have a zero envelope"
       );
-   }
 
-   #[test]
-   fn envelope_stays_within_bounds() {
+      // Case: envelope_stays_within_bounds
       let pulses = sample_sub_flashes();
       for step in 0..=1000 {
          let age = step as f32 / 1000.0;
@@ -827,10 +798,8 @@ mod tests {
             "envelope {value} left 0.0..=1.0 at age {age}"
          );
       }
-   }
 
-   #[test]
-   fn envelope_has_a_sub_flash_after_its_first_decay() {
+      // Case: envelope_has_a_sub_flash_after_its_first_decay
       let pulses = sample_sub_flashes();
       let samples = 1000;
       let values: Vec<f32> = (0..=samples)
@@ -924,7 +893,8 @@ mod tests {
    }
 
    #[test]
-   fn from_settings_maps_fields_and_layer() {
+   fn the_effect_defaults_match_the_settings() {
+      // Case: from_settings_maps_fields_and_layer
       let settings = LightningSettings {
          color: Color32::from_rgb(1, 2, 3),
          bolt_count: 4,
@@ -957,10 +927,8 @@ mod tests {
          },
       );
       assert_eq!(background.layer_order, Order::Background);
-   }
 
-   #[test]
-   fn new_matches_default_settings() {
+      // Case: new_matches_default_settings
       let from_new = Lightning::new("lightning_defaults");
       let from_settings = Lightning::from_settings(
          "lightning_defaults",

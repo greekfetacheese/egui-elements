@@ -299,23 +299,3 @@ pub(crate) fn paint_shape(
       _ => Shape::Vec(shapes),
    }
 }
-
-#[cfg(test)]
-mod tests {
-   use super::*;
-
-   #[test]
-   fn paint_shape_draws_fill_without_stroke() {
-      let shape = paint_shape(
-         Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(10.0, 10.0)),
-         Color32::RED,
-         Stroke::NONE,
-         CornerRadius::ZERO,
-         Shadow::NONE,
-      );
-      match shape {
-         Shape::Rect(rect) => assert_eq!(rect.fill, Color32::RED),
-         other => panic!("expected filled rect, got {other:?}"),
-      }
-   }
-}

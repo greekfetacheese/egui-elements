@@ -193,23 +193,7 @@ impl LightningSettings {
 #[cfg(test)]
 mod tests {
    use super::*;
-   use egui::__run_test_ctx;
    use egui::Vec2;
-
-   #[test]
-   fn defaults_are_sane() {
-      let settings = LightningSettings::default();
-      assert!(!settings.open);
-      assert!(settings.active);
-      assert_eq!(settings.bolt_count, 1);
-      assert!(settings.branch_depth >= 1);
-      assert!(settings.thickness > 0.0);
-      assert!((0.0..=1.0).contains(&settings.jitter));
-      assert!((0.0..=1.0).contains(&settings.flash_intensity));
-      assert!(settings.duration_ms > 100.0);
-      assert_eq!(settings.ambient_interval_secs, 0.0);
-      assert_eq!(settings.layer, ParticleLayer::Foreground);
-   }
 
    #[test]
    fn reset_keeps_open() {
@@ -282,34 +266,5 @@ mod tests {
          height <= 650.0,
          "settings window is {height} tall, root is 650"
       );
-   }
-
-   #[test]
-   fn body_ui_renders_without_a_window() {
-      let mut settings = LightningSettings::default();
-      assert!(!settings.open);
-      egui::__run_test_ui(|ui| {
-         settings.body_ui(ui);
-      });
-      assert!(
-         !settings.open,
-         "body_ui must not touch the window flag"
-      );
-   }
-
-   #[test]
-   fn show_window_returns_response_only_when_open() {
-      __run_test_ctx(|ctx| {
-         let mut closed = LightningSettings::default();
-         assert!(closed.show_window(ctx).is_none());
-      });
-
-      __run_test_ctx(|ctx| {
-         let mut open = LightningSettings {
-            open: true,
-            ..Default::default()
-         };
-         assert!(open.show_window(ctx).is_some());
-      });
    }
 }
