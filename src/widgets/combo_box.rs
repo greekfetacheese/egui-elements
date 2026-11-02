@@ -172,7 +172,7 @@ impl ComboBox {
       let popup_max_h = self.popup_max_height.unwrap_or_else(|| ui.spacing().combo_height);
       let popup_max_w = self.width.unwrap_or(ui.available_width());
       let close_behavior = self.close_behavior.unwrap_or(PopupCloseBehavior::CloseOnClick);
-      let gap = self.popup_gap.unwrap_or(Theme::current(ui.ctx()).spacing.xs);
+      let gap = self.popup_gap.unwrap_or(Theme::spacing_from_ctx(ui.ctx()).xs);
       let content_margin = self.popup_content_margin.unwrap_or(5.0);
 
       // `Popup::menu` owns the open state and toggles it from the button's click, so the

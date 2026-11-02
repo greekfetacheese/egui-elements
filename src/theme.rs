@@ -272,6 +272,14 @@ impl Theme {
       Id::unique("elements::text_edit_visuals")
    }
 
+   fn theme_colors_id() -> Id {
+      Id::unique("elements::theme_colors")
+   }
+
+   fn spacing_id() -> Id {
+      Id::unique("elements::spacing")
+   }
+
    /// Widget visuals stored by [`Theme::install`], if any.
    ///
    /// Widgets resolve in this order: `self.visuals` → context → [`egui::Style`].
@@ -294,13 +302,30 @@ impl Theme {
       ctx.data(|d| d.get_temp(Self::text_edit_visuals_id()))
    }
 
+   pub fn colors_from_ctx(ctx: &Context) -> ThemeColors {
+      let c = ctx.data(|d| d.get_temp(Self::theme_colors_id()));
+      c.unwrap_or_else(|| Theme::new(ThemeKind::TokyoNight).colors)
+   }
+
+   pub fn spacing_from_ctx(ctx: &Context) -> ThemeSpacing {
+      let sp = ctx.data(|d| d.get_temp(Self::spacing_id()));
+      sp.unwrap_or_default()
+   }
+
    /// Install this theme into the given egui context.
    ///
    /// Widgets then pick up their visuals from `ctx` automatically.
+   ///
+   /// # Keep in mind
+   ///
+   /// If you don't call this on app creation or whenever you change the theme
+   /// widgets will pick up `default/outdated` values
    pub fn install(&mut self, ctx: &Context) {
       #[cfg(feature = "elegance")]
       self.install_elegance_theme(ctx);
 
+      let spacing = self.spacing;
+      let colors = self.colors;
       let button_visuals = self.button_visuals();
       let label_visuals = self.label_visuals();
       let combo_box_visuals = self.combo_box_visuals();
@@ -312,6 +337,8 @@ impl Theme {
       ctx.set_global_style(style);
       ctx.data_mut(|d| d.insert_temp(Self::storage_id(), theme));
 
+      ctx.data_mut(|d| d.insert_temp(Self::spacing_id(), spacing));
+      ctx.data_mut(|d| d.insert_temp(Self::theme_colors_id(), colors));
       ctx.data_mut(|d| d.insert_temp(Self::button_visuals_id(), button_visuals));
       ctx.data_mut(|d| d.insert_temp(Self::label_visuals_id(), label_visuals));
       ctx.data_mut(|d| d.insert_temp(Self::combo_box_visuals_id(), combo_box_visuals));

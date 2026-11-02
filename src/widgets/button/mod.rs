@@ -507,6 +507,7 @@ impl<'a> Button<'a> {
 
       let response = if ui.is_rect_visible(prepared.response.rect) {
          let interact_visuals = ui.style().interact_selectable(&prepared.response, selected);
+         let colors = Theme::colors_from_ctx(ui.ctx());
 
          // ---- hold-to-confirm gesture ------------------------------------
          // egui abandons `is_pointer_button_down_on` once the press outlives
@@ -574,7 +575,7 @@ impl<'a> Button<'a> {
 
             // Queue the lightning once, at completion.
             if fired_now && settings.burst == HoldBurst::Lightning && settings.burst_visible() {
-               let accent = Theme::current(ui.ctx()).colors.accent;
+               let accent = colors.accent;
                let fill = settings.fill_color(accent, 1.0);
                let color = settings.burst_color.unwrap_or(fill);
                burst_lightning(
@@ -671,7 +672,7 @@ impl<'a> Button<'a> {
          let sweep_active = hold.progress > 0.0 && !hold.fired;
          let burst_active = hold.burst_age.is_some();
          let hold_color = hold_settings.filter(|_| sweep_active || burst_active).map(|settings| {
-            let accent = Theme::current(ui.ctx()).colors.accent;
+            let accent = colors.accent;
             settings.fill_color(accent, hold.progress)
          });
 

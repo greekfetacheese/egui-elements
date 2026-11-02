@@ -197,9 +197,9 @@ impl Badge {
          return;
       }
 
-      let theme = Theme::current(ui.ctx());
-      let fill = self.color.unwrap_or(theme.colors.error);
-      let text_color = self.text_color.unwrap_or(theme.colors.bg);
+      let colors = Theme::colors_from_ctx(ui.ctx());
+      let fill = self.color.unwrap_or(colors.error);
+      let text_color = self.text_color.unwrap_or(colors.bg);
 
       let galley = self.text.clone().into_galley(
          ui,
