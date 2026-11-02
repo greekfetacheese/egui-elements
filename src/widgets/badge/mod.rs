@@ -22,11 +22,12 @@
 //! [`ThemeColors::error`](crate::theme::ThemeColors::error) and the text to
 //! [`ThemeColors::bg`](crate::theme::ThemeColors::bg), matching the theme rule
 //! that chromatic fills carry `bg`-colored glyphs.
+//!
+//! A badge may straddle its host's corner with `.straddle()`, putting the
+//! circle's centre on the corner point. Each effect it paints (the pulse, the
+//! hop, a later task) spills outside the host rect without changing layout.
 
-use egui::{Align2, Color32, Rect, Stroke, TextStyle, TextWrapMode, Ui, Vec2, WidgetText};
-
-#[cfg(test)]
-use egui::Pos2;
+use egui::{Align2, Color32, Pos2, Rect, Stroke, TextStyle, TextWrapMode, Ui, Vec2, WidgetText};
 
 use crate::theme::Theme;
 
@@ -77,6 +78,44 @@ impl BadgeCorner {
          Self::BottomRight,
       ]
    }
+
+   /// Outward direction of this corner; each component is `-1.0` or `1.0`.
+   pub const fn sign(self) -> Vec2 {
+      match self {
+         Self::TopLeft => Vec2::new(-1.0, -1.0),
+         Self::TopRight => Vec2::new(1.0, -1.0),
+         Self::BottomLeft => Vec2::new(-1.0, 1.0),
+         Self::BottomRight => Vec2::new(1.0, 1.0),
+      }
+   }
+
+   /// The corner point itself, in `rect`'s coordinates.
+   pub fn point(self, rect: Rect) -> Pos2 {
+      let sign = self.sign();
+      Pos2::new(
+         if sign.x > 0.0 {
+            rect.right()
+         } else {
+            rect.left()
+         },
+         if sign.y > 0.0 {
+            rect.bottom()
+         } else {
+            rect.top()
+         },
+      )
+   }
+}
+
+/// Where the circle hangs relative to the host's corner.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BadgeAnchor {
+   /// The circle sits inside the host rect; `inset` points inward. The default.
+   #[default]
+   Inside,
+   /// The circle's centre sits on the host's corner point; `inset` then points outward.
+   Corner,
 }
 
 /// A notification circle painted in a corner of a widget.
@@ -92,9 +131,10 @@ pub struct Badge {
    text: WidgetText,
    color: Option<Color32>,
    corner: BadgeCorner,
+   anchor: BadgeAnchor,
    text_color: Option<Color32>,
    min_diameter: f32,
-   inset: f32,
+   inset: Option<f32>,
    padding: f32,
    outline: Option<Stroke>,
 }
@@ -107,9 +147,10 @@ impl Badge {
          text: text.into(),
          color: None,
          corner: BadgeCorner::default(),
+         anchor: BadgeAnchor::default(),
          text_color: None,
          min_diameter: DEFAULT_MIN_DIAMETER,
-         inset: DEFAULT_INSET,
+         inset: None,
          padding: DEFAULT_PADDING,
          outline: None,
       }
@@ -134,6 +175,22 @@ impl Badge {
       self
    }
 
+   /// Where the circle hangs relative to the host's corner. Default: [`BadgeAnchor::Inside`].
+   #[inline]
+   pub fn anchor(mut self, anchor: BadgeAnchor) -> Self {
+      self.anchor = anchor;
+      self
+   }
+
+   /// Put the circle's **centre** on the host's corner, so it straddles the edge.
+   ///
+   /// Equivalent to `.anchor(BadgeAnchor::Corner)` with no explicit inset; `.inset(..)` afterwards
+   /// pushes it further out.
+   #[inline]
+   pub fn straddle(self) -> Self {
+      self.anchor(BadgeAnchor::Corner)
+   }
+
    /// Colour of the badge text. Defaults to
    /// [`ThemeColors::bg`](crate::theme::ThemeColors::bg) so glyphs stay
    /// readable on chromatic fills.
@@ -156,9 +213,10 @@ impl Badge {
    /// Distance between the circle and the widget corner, in points.
    ///
    /// Negative values let the badge straddle the edge. Default: `2.0`.
+   /// With [`BadgeAnchor::Corner`] the offset points outward instead.
    #[inline]
    pub fn inset(mut self, inset: f32) -> Self {
-      self.inset = inset;
+      self.inset = Some(inset);
       self
    }
 
@@ -182,10 +240,20 @@ impl Badge {
    fn circle_rect(&self, text_size: Vec2, widget_rect: Rect) -> Rect {
       let diameter =
          (text_size + Vec2::splat(2.0 * self.padding)).max_elem().max(self.min_diameter);
-      self.corner.align2().align_size_within_rect(
-         Vec2::splat(diameter),
-         widget_rect.shrink(self.inset),
-      )
+      let size = Vec2::splat(diameter);
+      let inset = self.inset.unwrap_or(match self.anchor {
+         BadgeAnchor::Inside => DEFAULT_INSET,
+         BadgeAnchor::Corner => 0.0,
+      });
+      match self.anchor {
+         BadgeAnchor::Inside => {
+            self.corner.align2().align_size_within_rect(size, widget_rect.shrink(inset))
+         }
+         BadgeAnchor::Corner => Rect::from_center_size(
+            self.corner.point(widget_rect) + self.corner.sign() * inset,
+            size,
+         ),
+      }
    }
 
    /// Paint the badge on top of `widget_rect` (usually a widget's response rect).
@@ -298,6 +366,32 @@ mod tests {
       let inside = Badge::dot().center_for(TEXT, rect());
       let outside = Badge::dot().inset(-6.0).center_for(TEXT, rect());
       assert!(outside.x > inside.x);
+   }
+
+   #[test]
+   fn corner_anchor_centres_on_the_corner_point() {
+      let r = rect();
+      for (corner, (x, y)) in [
+         (BadgeCorner::TopLeft, (r.left(), r.top())),
+         (BadgeCorner::TopRight, (r.right(), r.top())),
+         (BadgeCorner::BottomLeft, (r.left(), r.bottom())),
+         (BadgeCorner::BottomRight, (r.right(), r.bottom())),
+      ] {
+         let centre = Badge::dot().corner(corner).straddle().center_for(TEXT, r);
+         assert!(
+            (centre.x - x).abs() < 0.01 && (centre.y - y).abs() < 0.01,
+            "{corner:?}: expected ({x}, {y}), got {centre:?}"
+         );
+      }
+   }
+
+   #[test]
+   fn corner_inset_pushes_outward() {
+      let r = rect();
+      let resting = Badge::dot().straddle().center_for(TEXT, r);
+      let pushed = Badge::dot().straddle().inset(4.0).center_for(TEXT, r);
+      assert!((pushed.x - (resting.x + 4.0)).abs() < 0.01);
+      assert!((pushed.y - (resting.y - 4.0)).abs() < 0.01);
    }
 
    #[test]
