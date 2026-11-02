@@ -1,12 +1,12 @@
-//! The toggle family: the shared plate with its glyphs, and the two widgets built on them.
+//! The toggle family: the shared plate, its glyphs, and the two widgets built on them.
 //!
-//! The plate is a rounded box with a glyph, a label and one clickable row; everything that is not the
-//! glyph lives here: the row allocation, the interaction weights, the press scale and the lift.
-//! [`Checkbox`] is a rounded box with a tick, and
-//! [`Radio`] is a circle with a dot — same row, clock and palette, only the
-//! outline and the mark differ. The plate itself is crate-private; the public knobs it exposes,
-//! [`ToggleVisuals`] and [`ToggleShadow`], are re-exported at the crate root, and
-//! [`Checkbox`] keeps its historic `CheckboxVisuals`/`CheckboxShadow` aliases.
+//! A plate is one outlined shape with a glyph inside it, a label beside it and one clickable row.
+//! Everything that is not the glyph lives here: the row allocation, the interaction weights, the press
+//! scale and the lift. [`Checkbox`] pairs a rounded box with a tick and [`Radio`] pairs a circle with a
+//! dot, so the same row, clock and palette serve both and only the outline and the mark differ. The plate
+//! itself is crate-private; the public knobs it exposes, [`ToggleVisuals`] and [`ToggleShadow`], are
+//! re-exported at the crate root, and [`Checkbox`] keeps its historic `CheckboxVisuals`/`CheckboxShadow`
+//! aliases.
 
 mod checkbox;
 mod glyph;
