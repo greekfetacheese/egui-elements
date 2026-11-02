@@ -104,6 +104,11 @@ An open combo keeps its hover fill and hover border — the popup is the state c
 
 Labels that are interactive inherit button hover/click **fills** but stay transparent idle (no shadow). Static labels have no frame.
 
+A checkbox's checked face is a **chromatic status, not a selection**: fill `accent`, tick `bg` (§7), border
+`accent`; its idle box is `border` over a fill the surface shows through (`TRANSPARENT` fill), so one widget reads
+correctly on `bg`, `frame1` and `window` without a per-surface palette. `highlight` stays the row/list selection
+slot — a checked box is never painted `highlight`.
+
 `bg_color(...)` on a button is an idle chromatic fill. Hover / click / selected must **stay in that chromatic family** (mix ~15–20% toward `bg` on hover), not snap back to `hover` / `widget_bg`. Text on that fill is `bg` (see §7). This hover-in-family behavior is required by the spec; the widget may still need a code follow-up to honor it.
 
 ### Stock `egui::Widgets`

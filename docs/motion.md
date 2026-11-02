@@ -74,6 +74,20 @@ host either accepts constant speed or writes the curve and the clock itself.
 in on its own, with no closed-frame ticking, and every curve in `Easing` is available to a value as well as to a
 container.
 
+`animate_from` is the same primitive for the opposite need. A *state* that is already true when a widget first
+appears must not animate itself on: a checkbox created checked has to be checked on its first frame, not fill
+itself in. It takes the first-sight value from the caller — pass `target` for "no entrance animation", `0.0` for
+an entrance — and afterwards behaves exactly like `animate_with`: a changed target retargets from the value on
+screen.
+
+```rust
+// A toggle: land on the state, then animate every later change from what is on screen.
+let t = animate_from(ui, response.id.with("check"), target, target, Motion::from_ui(ui));
+```
+
+`Checkbox` is the widget that uses it. A fade and a toggle want opposite first frames, and that is the whole
+difference between the two functions.
+
 egui's own widgets still swap visual sets instantly through `Style::interact(&response)` — hover and active states
 jump rather than transition, and that is the third gap. Every widget in this crate that paints an interaction state
 (`Button`, `Frame`, `ComboBox`, `MultiLabel`, `SecureTextEdit`) now blends between them instead, through
