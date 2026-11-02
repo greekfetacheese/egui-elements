@@ -1,8 +1,8 @@
 //! The tick: a 3-point polyline with round caps and a round elbow.
 //!
 //! The points are the reference checkbox's measured ratios inside its box (`74..89 × 173..188` of a 16 px
-//! box), so one [`Checkbox::size`](super::Checkbox::size) scales the glyph. epaint's `PathStroke` has no caps
-//! and no round joins, so each tip and the elbow get a filled circle.
+//! box), so one [`Checkbox::size`](crate::widgets::Checkbox::size) scales the glyph. epaint's
+//! `PathStroke` has no caps and no round joins, so each tip and the elbow get a filled circle.
 
 use egui::{Color32, Pos2, Rect, Shape, Stroke, vec2};
 

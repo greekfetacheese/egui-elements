@@ -245,7 +245,7 @@ impl CheckboxApp {
                border: colors.bg,
                border_hover: colors.bg,
                border_checked: colors.bg,
-               tick: colors.accent,
+               mark: colors.accent,
                shadow: CheckboxShadow::new(colors.bg),
                ..CheckboxVisuals::from_theme(colors)
             };

@@ -18,6 +18,7 @@ pub mod modal;
 pub mod multi_label;
 pub mod secure_text_edit;
 pub mod spinner;
+pub mod toggle;
 pub mod window;
 
 pub use badge::{Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner, BadgePulse};
@@ -30,4 +31,5 @@ pub use modal::{IntoModalId, Modal};
 pub use multi_label::MultiLabel;
 pub use secure_text_edit::SecureTextEdit;
 pub use spinner::{Spinner, SpinnerShadow};
+pub use toggle::{ToggleShadow, ToggleVisuals};
 pub use window::Window;
