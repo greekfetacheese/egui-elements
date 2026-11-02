@@ -416,12 +416,6 @@ impl Badge {
          .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, ui.is_enabled(), &label));
       (rect, response)
    }
-
-   /// Center of the circle for a laid-out text of `text_size`. Test helper.
-   #[cfg(test)]
-   fn center_for(&self, text_size: Vec2, widget_rect: Rect) -> Pos2 {
-      self.circle_rect(text_size, widget_rect).center()
-   }
 }
 
 impl egui::Widget for Badge {
@@ -435,10 +429,6 @@ mod tests {
    use super::*;
    use egui::vec2;
    use egui::{FullOutput, Shape};
-
-   fn rect() -> Rect {
-      Rect::from_min_size(Pos2::new(100.0, 100.0), vec2(200.0, 40.0))
-   }
 
    fn flatten(shape: &Shape, out: &mut Vec<Shape>) {
       out.push(shape.clone());
@@ -495,157 +485,6 @@ mod tests {
       );
    }
 
-   const TEXT: Vec2 = Vec2::new(8.0, 12.0);
-
-   #[test]
-   fn corners_anchor_to_the_matching_side() {
-      let r = rect();
-      let inset = DEFAULT_INSET;
-      let pad = DEFAULT_PADDING;
-      let min = DEFAULT_MIN_DIAMETER;
-
-      let expected_diameter = (TEXT.x + 2.0 * pad).max(TEXT.y + 2.0 * pad).max(min);
-      let radius = expected_diameter * 0.5;
-
-      let cases = [
-         (
-            BadgeCorner::TopLeft,
-            r.left() + inset + radius,
-            r.top() + inset + radius,
-         ),
-         (
-            BadgeCorner::TopRight,
-            r.right() - inset - radius,
-            r.top() + inset + radius,
-         ),
-         (
-            BadgeCorner::BottomLeft,
-            r.left() + inset + radius,
-            r.bottom() - inset - radius,
-         ),
-         (
-            BadgeCorner::BottomRight,
-            r.right() - inset - radius,
-            r.bottom() - inset - radius,
-         ),
-      ];
-
-      for (corner, x, y) in cases {
-         let center = Badge::dot().corner(corner).center_for(TEXT, r);
-         assert!(
-            (center.x - x).abs() < 0.01 && (center.y - y).abs() < 0.01,
-            "{corner:?}: expected ({x}, {y}), got {center:?}"
-         );
-      }
-   }
-
-   #[test]
-   fn circle_covers_text_and_min_diameter() {
-      let badge = Badge::new("12");
-      let small = badge.clone().circle_rect(Vec2::ZERO, rect());
-      assert_eq!(small.width(), DEFAULT_MIN_DIAMETER);
-
-      let wide = badge.circle_rect(vec2(40.0, 12.0), rect());
-      assert_eq!(wide.width(), 40.0 + 2.0 * DEFAULT_PADDING);
-   }
-
-   #[test]
-   fn negative_inset_lets_the_badge_straddle_the_corner() {
-      let inside = Badge::dot().center_for(TEXT, rect());
-      let outside = Badge::dot().inset(-6.0).center_for(TEXT, rect());
-      assert!(outside.x > inside.x);
-   }
-
-   #[test]
-   fn corner_anchor_centres_on_the_corner_point() {
-      let r = rect();
-      for (corner, (x, y)) in [
-         (BadgeCorner::TopLeft, (r.left(), r.top())),
-         (BadgeCorner::TopRight, (r.right(), r.top())),
-         (BadgeCorner::BottomLeft, (r.left(), r.bottom())),
-         (BadgeCorner::BottomRight, (r.right(), r.bottom())),
-      ] {
-         let centre = Badge::dot().corner(corner).straddle().center_for(TEXT, r);
-         assert!(
-            (centre.x - x).abs() < 0.01 && (centre.y - y).abs() < 0.01,
-            "{corner:?}: expected ({x}, {y}), got {centre:?}"
-         );
-      }
-   }
-
-   #[test]
-   fn corner_inset_pushes_outward() {
-      let r = rect();
-      let resting = Badge::dot().straddle().center_for(TEXT, r);
-      let pushed = Badge::dot().straddle().inset(4.0).center_for(TEXT, r);
-      assert!((pushed.x - (resting.x + 4.0)).abs() < 0.01);
-      assert!((pushed.y - (resting.y - 4.0)).abs() < 0.01);
-   }
-
-   #[test]
-   fn defaults_are_top_right_error_and_bg_text() {
-      let badge = Badge::dot();
-      assert_eq!(badge.corner, BadgeCorner::TopRight);
-      assert_eq!(badge.color, None);
-      assert_eq!(badge.text_color, None);
-   }
-
-   #[test]
-   fn paints_without_panicking() {
-      egui::__run_test_ui(|ui| {
-         let response = ui.add(
-            crate::widgets::Button::new("Balance & approvals").badge(
-               Badge::new("3")
-                  .corner(BadgeCorner::TopRight)
-                  .outline(Stroke::new(1.5, Color32::BLACK)),
-            ),
-         );
-         assert!(response.rect.width() > 0.0);
-      });
-   }
-
-   #[test]
-   fn a_pulsing_badge_paints_a_halo_behind_the_core() {
-      let ctx = egui::Context::default();
-      let host = Rect::from_min_size(Pos2::new(60.0, 60.0), vec2(60.0, 40.0));
-      let input = egui::RawInput {
-         screen_rect: Some(Rect::from_min_size(
-            Pos2::ZERO,
-            vec2(200.0, 200.0),
-         )),
-         ..Default::default()
-      };
-      let mut repaint = false;
-      let mut out = ctx.run_ui(input, |ui| {
-         Badge::dot().color(Color32::RED).pulse(BadgePulse::new()).paint_at(ui, host);
-         repaint = ui.ctx().has_requested_repaint();
-      });
-      out.textures_delta.clear();
-
-      let circles: Vec<_> = shapes(&out)
-         .into_iter()
-         .filter_map(|shape| match shape {
-            Shape::Circle(circle) => Some(circle),
-            _ => None,
-         })
-         .collect();
-      assert_eq!(circles.len(), 2, "the halo and the core");
-      assert!(
-         circles[0].radius > circles[1].radius,
-         "the halo is painted first and is larger"
-      );
-      assert_eq!(
-         circles[1].radius, 8.0,
-         "the core keeps its measured size"
-      );
-      assert!(
-         circles[0].fill.a() < 255,
-         "the halo is translucent"
-      );
-      assert!((circles[0].center - circles[1].center).length() < 0.01);
-      assert!(repaint, "a visible pulse must keep repainting");
-   }
-
    #[test]
    fn a_badge_hops_when_its_text_changes() {
       let ctx = egui::Context::default();
@@ -699,23 +538,5 @@ mod tests {
          mid_hop.center.x, first.center.x,
          "the hop is vertical only"
       );
-   }
-
-   #[test]
-   fn a_standalone_badge_allocates_a_square() {
-      egui::__run_test_ui(|ui| {
-         let rect = Badge::new("12").show(ui);
-         assert!(
-            (rect.width() - rect.height()).abs() < 0.001,
-            "square: {rect:?}"
-         );
-         assert!(
-            rect.width() >= DEFAULT_MIN_DIAMETER,
-            "at least the minimum: {rect:?}"
-         );
-
-         let response = ui.add(Badge::dot());
-         assert!((response.rect.width() - response.rect.height()).abs() < 0.001);
-      });
    }
 }

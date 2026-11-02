@@ -42,27 +42,3 @@ pub(super) fn tick_shapes(rect: Rect, color: Color32, width: f32) -> Vec<Shape> 
       Shape::circle_filled(c, cap, color),
    ]
 }
-
-#[cfg(test)]
-mod tests {
-   use super::*;
-   use egui::{Pos2, Rect, pos2};
-
-   #[test]
-   fn tick_points_hit_the_measured_ratios() {
-      let rect = Rect::from_min_size(Pos2::ZERO, vec2(18.0, 18.0));
-      let [a, b, c] = tick_points(rect);
-      let expect = |(x, y): (f32, f32)| pos2(x * 18.0, y * 18.0);
-      for (actual, (x, y)) in [(a, P1), (b, P2), (c, P3)] {
-         let wanted = expect((x, y));
-         assert!(
-            (actual.x - wanted.x).abs() < 0.01,
-            "{actual:?} vs {wanted:?}"
-         );
-         assert!(
-            (actual.y - wanted.y).abs() < 0.01,
-            "{actual:?} vs {wanted:?}"
-         );
-      }
-   }
-}

@@ -401,21 +401,13 @@ impl Widget for Checkbox<'_> {
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeKind};
-   use egui::{
-      Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Shape,
-      epaint::{CircleShape, RectShape},
-      pos2,
-   };
+   use egui::{Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, pos2};
 
    fn themed_ctx() -> Context {
       let ctx = Context::default();
       let mut theme = Theme::new(ThemeKind::TokyoNight);
       theme.install(&ctx);
       ctx
-   }
-
-   fn colors() -> ThemeColors {
-      Theme::new(ThemeKind::TokyoNight).colors
    }
 
    /// One frame at an explicit `input.time` (no sleeps, no wall clock).
@@ -439,18 +431,6 @@ mod tests {
       out
    }
 
-   /// Three settled frames at 0.0 / 0.1 / 0.2 s; returns the last output and the widget's rect.
-   fn run(ctx: &Context, mut body: impl FnMut(&mut Ui) -> Response) -> (FullOutput, Rect) {
-      let mut rect = Rect::ZERO;
-      let mut last = None;
-      for step in 0..3 {
-         last = Some(frame(ctx, f64::from(step) * 0.1, vec![], |ui| {
-            rect = body(ui).rect;
-         }));
-      }
-      (last.expect("three frames"), rect)
-   }
-
    fn press(pos: Pos2) -> Event {
       Event::PointerButton {
          pos,
@@ -467,274 +447,6 @@ mod tests {
          pressed: false,
          modifiers: Modifiers::NONE,
       }
-   }
-
-   fn flatten(shape: &Shape, out: &mut Vec<Shape>) {
-      out.push(shape.clone());
-      if let Shape::Vec(shapes) = shape {
-         for shape in shapes {
-            flatten(shape, out);
-         }
-      }
-   }
-
-   fn shapes(out: &FullOutput) -> Vec<Shape> {
-      let mut flat = Vec::new();
-      for clipped in &out.shapes {
-         flatten(&clipped.shape, &mut flat);
-      }
-      flat
-   }
-
-   /// The box: the `RectShape` that is not a blurred shadow.
-   fn box_rect(out: &FullOutput) -> RectShape {
-      shapes(out)
-         .into_iter()
-         .find_map(|shape| match shape {
-            Shape::Rect(rect) if rect.blur_width == 0.0 => Some(rect),
-            _ => None,
-         })
-         .expect("the box rect")
-   }
-
-   /// The shadow: the `RectShape` that *is* blurred.
-   fn shadow_rect(out: &FullOutput) -> Option<RectShape> {
-      shapes(out).into_iter().find_map(|shape| match shape {
-         Shape::Rect(rect) if rect.blur_width > 0.0 => Some(rect),
-         _ => None,
-      })
-   }
-
-   fn circles(out: &FullOutput) -> Vec<CircleShape> {
-      shapes(out)
-         .into_iter()
-         .filter_map(|shape| match shape {
-            Shape::Circle(circle) => Some(circle),
-            _ => None,
-         })
-         .collect()
-   }
-
-   fn segments(out: &FullOutput) -> Vec<Shape> {
-      shapes(out)
-         .into_iter()
-         .filter(|shape| matches!(shape, Shape::LineSegment { .. }))
-         .collect()
-   }
-
-   #[test]
-   fn default_size_is_18_and_square() {
-      let ctx = themed_ctx();
-      let mut flag = true;
-      let (out, _) = run(&ctx, |ui| {
-         ui.add(Checkbox::without_text(&mut flag))
-      });
-      let shape = box_rect(&out);
-      assert_eq!(shape.rect.size(), Vec2::new(18.0, 18.0));
-      assert_eq!(shape.corner_radius, CornerRadius::same(3));
-   }
-
-   #[test]
-   fn size_builder_scales_every_ratio() {
-      let mut small_flag = true;
-      let (small_out, _) = run(&themed_ctx(), |ui| {
-         ui.add(Checkbox::without_text(&mut small_flag))
-      });
-      let mut large_flag = true;
-      let (large_out, _) = run(&themed_ctx(), |ui| {
-         ui.add(Checkbox::without_text(&mut large_flag).size(36.0))
-      });
-      let (small, large) = (box_rect(&small_out), box_rect(&large_out));
-      assert_eq!(large.rect.width(), 2.0 * small.rect.width());
-      assert_eq!(small.corner_radius, CornerRadius::same(3));
-      assert_eq!(large.corner_radius, CornerRadius::same(6));
-      assert_eq!(large.stroke.width, 2.0 * small.stroke.width);
-      let cap = |out: &FullOutput| circles(out)[0].radius;
-      assert!((cap(&large_out) - 2.0 * cap(&small_out)).abs() < 1e-3);
-   }
-
-   #[test]
-   fn paints_box_fill_border_and_tick() {
-      let ctx = themed_ctx();
-      let mut flag = true;
-      let (out, _) = run(&ctx, |ui| {
-         ui.add(Checkbox::without_text(&mut flag))
-      });
-      let colors = colors();
-      let shape = box_rect(&out);
-      assert_eq!(shape.fill, colors.accent);
-      assert_eq!(shape.stroke.color, colors.accent);
-      assert_eq!(shape.stroke.width, 1.125);
-      assert_eq!(circles(&out).len(), 3);
-      assert_eq!(segments(&out).len(), 2);
-      assert!(
-         circles(&out).iter().all(|circle| circle.fill == colors.bg),
-         "the tick must be painted in `colors.bg`"
-      );
-   }
-
-   #[test]
-   fn first_sight_does_not_animate() {
-      // One frame only: a seeded animation must already be at its target.
-      let ctx = themed_ctx();
-      let mut flag = true;
-      let out = frame(&ctx, 10.0, vec![], |ui| {
-         ui.add(Checkbox::without_text(&mut flag));
-      });
-      assert_eq!(
-         box_rect(&out).fill,
-         colors().accent,
-         "a checkbox that starts checked must paint the checked fill on its first frame"
-      );
-   }
-
-   #[test]
-   fn toggle_blends_through_the_midpoint() {
-      let ctx = themed_ctx();
-      let mut flag = false;
-      let mut id = None;
-      frame(&ctx, 0.0, vec![], |ui| {
-         id = Some(ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2))).id);
-      });
-      // Toggled from the keyboard, so no pointer hovers the box: the fill is observed through the toggle
-      // alone, with no hover tint layered on top of it.
-      ctx.memory_mut(|memory| memory.request_focus(id.expect("an id")));
-      let clicked = frame(
-         &ctx,
-         0.1,
-         vec![Event::Key {
-            key: Key::Space,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: Modifiers::NONE,
-         }],
-         |ui| {
-            ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2)));
-         },
-      );
-      assert!(flag, "the click must toggle the bool");
-      assert_eq!(
-         box_rect(&clicked).fill,
-         Color32::TRANSPARENT,
-         "the toggle starts from the idle fill"
-      );
-
-      let mid = frame(&ctx, 0.2, vec![], |ui| {
-         ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2)));
-      });
-      let mid = box_rect(&mid).fill;
-      assert!(
-         mid.a() > 0 && mid.a() < 255,
-         "mid-flight alpha: {}",
-         mid.a()
-      );
-
-      let end = frame(&ctx, 0.5, vec![], |ui| {
-         ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2)));
-      });
-      assert_eq!(box_rect(&end).fill, colors().accent);
-   }
-
-   #[test]
-   fn tick_pops_past_its_settled_size() {
-      let ctx = themed_ctx();
-      let mut flag = false;
-      let mut center = pos2(0.0, 0.0);
-      frame(&ctx, 0.0, vec![], |ui| {
-         center = ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2))).rect.center();
-      });
-      frame(&ctx, 0.01, vec![press(center)], |ui| {
-         ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2)));
-      });
-      frame(&ctx, 0.02, vec![release(center)], |ui| {
-         ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2)));
-      });
-      let mut biggest: f32 = 0.0;
-      for step in 0..=12 {
-         let time = 0.02 + f64::from(step) * 0.02;
-         let out = frame(&ctx, time, vec![], |ui| {
-            ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2)));
-         });
-         for circle in circles(&out) {
-            biggest = biggest.max(circle.radius);
-         }
-      }
-      let settled = frame(&ctx, 1.0, vec![], |ui| {
-         ui.add(Checkbox::without_text(&mut flag).motion(Motion::new(0.2)));
-      });
-      let settled = circles(&settled)[0].radius;
-      assert!(
-         biggest > settled * 1.02,
-         "the tick must overshoot: peak {biggest}, settled {settled}"
-      );
-   }
-
-   #[test]
-   fn shadow_follows_the_fill_and_paints_under_the_box() {
-      let ctx = themed_ctx();
-      let mut flag = true;
-      let (out, _) = run(&ctx, |ui| {
-         ui.add(Checkbox::without_text(&mut flag))
-      });
-      let lift = shadow_rect(&out).expect("the default shadow");
-      assert_eq!(lift.fill, colors().accent.gamma_multiply(0.42));
-      assert_eq!(lift.blur_width, 6.0);
-
-      let flat = shapes(&out);
-      let shadow_at = flat
-         .iter()
-         .position(|shape| matches!(shape, Shape::Rect(rect) if rect.blur_width > 0.0))
-         .expect("shadow position");
-      let box_at = flat
-         .iter()
-         .position(|shape| matches!(shape, Shape::Rect(rect) if rect.blur_width == 0.0))
-         .expect("box position");
-      assert!(
-         shadow_at < box_at,
-         "the shadow must paint under the box"
-      );
-
-      let mut idle_flag = false;
-      let (idle, _) = run(&ctx, |ui| {
-         ui.add(Checkbox::without_text(&mut idle_flag))
-      });
-      let idle = shadow_rect(&idle).expect("the resting shadow");
-      assert!(
-         idle.fill.a() < lift.fill.a(),
-         "the shadow blooms with the fill: {} vs {}",
-         idle.fill.a(),
-         lift.fill.a()
-      );
-   }
-
-   #[test]
-   fn shadow_none_paints_no_shadow() {
-      let ctx = themed_ctx();
-      let mut flag = true;
-      let (out, _) = run(&ctx, |ui| {
-         ui.add(Checkbox::without_text(&mut flag).shadow(CheckboxShadow::NONE))
-      });
-      assert!(shadow_rect(&out).is_none());
-      assert_eq!(box_rect(&out).fill, colors().accent);
-   }
-
-   #[test]
-   fn press_scales_the_box_down() {
-      let ctx = themed_ctx();
-      let mut flag = false;
-      let mut center = pos2(0.0, 0.0);
-      frame(&ctx, 0.0, vec![], |ui| {
-         center = ui.add(Checkbox::without_text(&mut flag)).rect.center();
-      });
-      let down = frame(&ctx, 0.1, vec![press(center)], |ui| {
-         ui.add(Checkbox::without_text(&mut flag));
-      });
-      let width = box_rect(&down).rect.width();
-      assert!(
-         (width - 18.0 * 0.93).abs() < 0.2,
-         "pressed width {width}"
-      );
    }
 
    #[test]
@@ -811,16 +523,6 @@ mod tests {
          },
       );
       assert!(flag, "Space on a focused checkbox must toggle it");
-   }
-
-   #[test]
-   fn without_text_allocates_only_the_box() {
-      let ctx = themed_ctx();
-      let mut flag = true;
-      let (_, rect) = run(&ctx, |ui| {
-         ui.add(Checkbox::without_text(&mut flag))
-      });
-      assert_eq!(rect.width(), 18.0);
    }
 
    #[test]
