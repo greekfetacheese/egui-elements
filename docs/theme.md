@@ -96,8 +96,11 @@ Map every interactive control through these states. **Selected ≠ hover.**
 | Hover | `hover` | Mid chrome (Tokyo Night: `DUSK`) or `hover` for stock | keep | `text` |
 | Click / active | `widget_bg` (return toward idle) | Transparent or `border` | keep | `text` |
 | Selected | `highlight` | optional | keep | `text` |
-| Open / focus (text edit, combo) | `widget_bg` | `accent` | none on text edit | `text` |
+| Open (combo) | `hover` (same as hover) | mid chrome (same as hover) | keep | `text` |
+| Open / focus (text edit) | `widget_bg` | `accent` | none on text edit | `text` |
 | Disabled | same fills, `text_muted` | as idle | as idle | `text_muted` |
+
+An open combo keeps its hover fill and hover border — the popup is the state change, so the trigger must not fall back to idle while the pointer is elsewhere. The popup surface is `popup_bg` (default `widget_bg`) + `popup_border` (default `border`) + `popup_shadow`; never `bg`, which every palette aliases to the page through `Visuals::window_fill`.
 
 Labels that are interactive inherit button hover/click **fills** but stay transparent idle (no shadow). Static labels have no frame.
 
@@ -222,6 +225,7 @@ WCAG 2.x relative luminance, sRGB.
    - Same gallery on **bg**, **frame1**, **window**
    - Selected button vs hover
    - Combo selected row
+   - Open combo keeps the hover fill + border; the popup reads as a step above the page
    - Muted hint copy
    - Semantic fills with **`bg` text**, idle
    - Nested `frame1` / `frame2`
