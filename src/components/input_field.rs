@@ -506,8 +506,31 @@ fn show_field_chrome(
    }
 
    let margin = inner_margin.unwrap_or_else(|| Margin::same(theme.inner_margin));
-   let row_height = (theme.typography.normal + margin.sum().y).max(min_size.y);
-   let row_size = vec2(min_size.x, row_height);
+   let row_height = (theme.typography.normal + margin.sum().y)
+      .max(min_size.y)
+      .max(ui.spacing().interact_size.y);
+
+   // The trailing icon buttons are `icon + 2 × button_padding` wide (`Button` sizes itself from a `Frame::inner_margin`
+   // and only floors its *height* at `interact_size.y`), and each costs one item gap. Reserving them keeps the buttons
+   // inside the rect this row is allocated, so they no longer paint over whatever follows the field.
+   #[cfg_attr(
+      not(all(
+         feature = "qr-scanner",
+         any(target_os = "linux", target_os = "windows")
+      )),
+      allow(unused_mut)
+   )]
+   let mut trailing_icons = if hidden.is_some() { 1.0 } else { 0.0 };
+   #[cfg(all(
+      feature = "qr-scanner",
+      any(target_os = "linux", target_os = "windows")
+   ))]
+   if qr_enabled {
+      trailing_icons += 1.0;
+   }
+   let icon_button_w = icon_size.x + 2.0 * ui.spacing().button_padding.x;
+   let trailing = trailing_icons * (icon_button_w + ui.spacing().item_spacing.x);
+   let row_size = vec2(min_size.x + trailing, row_height);
 
    let password = hidden.as_deref().copied().unwrap_or(false);
    let text_edit = SecureTextEdit::singleline(text)
