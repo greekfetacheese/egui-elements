@@ -27,9 +27,17 @@
 //! circle's centre on the corner point. Each effect it paints (the pulse, the
 //! hop, a later task) spills outside the host rect without changing layout.
 
-use egui::{Align2, Color32, Pos2, Rect, Stroke, TextStyle, TextWrapMode, Ui, Vec2, WidgetText};
+use std::sync::Arc;
+
+use egui::{
+   Align2, Color32, Galley, Id, Pos2, Rect, Stroke, TextStyle, TextWrapMode, Ui, Vec2, WidgetText,
+};
 
 use crate::theme::Theme;
+
+mod pulse;
+
+pub use pulse::BadgePulse;
 
 /// Default size (in points) of a badge with an empty text — a plain dot.
 const DEFAULT_MIN_DIAMETER: f32 = 16.0;
@@ -137,6 +145,8 @@ pub struct Badge {
    inset: Option<f32>,
    padding: f32,
    outline: Option<Stroke>,
+   pulse: Option<BadgePulse>,
+   id: Option<Id>,
 }
 
 impl Badge {
@@ -153,6 +163,8 @@ impl Badge {
          inset: None,
          padding: DEFAULT_PADDING,
          outline: None,
+         pulse: None,
+         id: None,
       }
    }
 
@@ -235,6 +247,24 @@ impl Badge {
       self
    }
 
+   /// Loop a radar-like halo behind the circle. Off by default.
+   #[inline]
+   pub fn pulse(mut self, pulse: BadgePulse) -> Self {
+      self.pulse = Some(pulse);
+      self
+   }
+
+   /// Stable id for this badge's animation state.
+   ///
+   /// Defaults to the host's id — the `Response::id` of the widget the badge is painted on. Set it when
+   /// a host wants [`Badge::bounce_now`] to reach this badge by name.
+   #[inline]
+   #[allow(deprecated)] // `Id::new` is the documented constructor for this crate's egui 0.37.
+   pub fn id(mut self, id: impl std::hash::Hash + std::fmt::Debug) -> Self {
+      self.id = Some(Id::new(id));
+      self
+   }
+
    /// Rect the circle occupies for a laid-out text of `text_size`, inside
    /// `widget_rect`. Pure geometry — shared by painting and tests.
    fn circle_rect(&self, text_size: Vec2, widget_rect: Rect) -> Rect {
@@ -258,38 +288,73 @@ impl Badge {
 
    /// Paint the badge on top of `widget_rect` (usually a widget's response rect).
    ///
-   /// Public so any widget can host a badge without re-implementing the
-   /// placement and text metrics.
+   /// Public so any widget can host a badge without re-implementing the placement and text metrics.
    pub fn paint_at(&self, ui: &Ui, widget_rect: Rect) {
-      let colors = Theme::colors_from_ctx(ui.ctx());
-      let fill = self.color.unwrap_or(colors.error);
-      let text_color = self.text_color.unwrap_or(colors.bg);
+      #[allow(deprecated)]
+      self.paint_at_id(ui, widget_rect, ui.id().with("badge"));
+   }
 
-      let galley = self.text.clone().into_galley(
+   /// [`Badge::paint_at`] with the host's id, which keys the hop state.
+   ///
+   /// Two badges hosted by two widgets in the same `Ui` share `ui.id()`, so a host with more than one
+   /// badge passes its own `Response::id` — otherwise one changing count hops every badge in the row.
+   pub fn paint_at_id(&self, ui: &Ui, widget_rect: Rect, host_id: Id) {
+      let galley = self.galley(ui);
+      let circle = self.circle_rect(galley.size(), widget_rect);
+      self.paint_circle(ui, circle, &galley, self.id.unwrap_or(host_id));
+   }
+
+   fn galley(&self, ui: &Ui) -> Arc<Galley> {
+      self.text.clone().into_galley(
          ui,
          Some(TextWrapMode::Extend),
          f32::INFINITY,
          TextStyle::Small,
-      );
+      )
+   }
 
-      let circle = self.circle_rect(galley.size(), widget_rect);
-      // The badge is an overlay: it can hang outside the host rect, so the host's own visibility
-      // says nothing about whether the badge is on screen.
-      if !ui.is_rect_visible(circle) {
+   /// Paint the halo and the circle into `circle`, on `badge_id`'s clock.
+   fn paint_circle(&self, ui: &Ui, circle: Rect, galley: &Arc<Galley>, badge_id: Id) {
+      let colors = Theme::colors_from_ctx(ui.ctx());
+      let fill = self.color.unwrap_or(colors.error);
+      let text_color = self.text_color.unwrap_or(colors.bg);
+      let radius = circle.width() * 0.5;
+      let now = ui.ctx().input(|i| i.time);
+
+      let pulse_reach = self.pulse.map_or(0.0, |p| (p.scale.max(1.0) - 1.0) * radius);
+      // The badge is an overlay: it can hang outside the host rect, so the host's own visibility says
+      // nothing about whether the badge is on screen.
+      if !ui.is_rect_visible(circle.expand(pulse_reach + 1.0)) {
          return;
       }
 
-      let center = circle.center();
-
       let painter = ui.painter();
+
+      if let Some(pulse) = self.pulse {
+         let period = pulse.period.max(0.05) as f64;
+         let p = ((now / period + BadgePulse::phase(badge_id) as f64) % 1.0) as f32;
+         let (scale, alpha) = pulse.frame(p);
+         painter.circle_filled(
+            circle.center(),
+            radius * scale,
+            pulse.color.unwrap_or(fill).gamma_multiply(alpha),
+         );
+         // A visible loop is never settled.
+         ui.ctx().request_repaint();
+      }
+
       painter.circle(
-         center,
-         circle.width() * 0.5,
+         circle.center(),
+         radius,
          fill,
          self.outline.unwrap_or(Stroke::NONE),
       );
       if !galley.is_empty() {
-         painter.galley(center - galley.size() * 0.5, galley, text_color);
+         painter.galley(
+            circle.center() - galley.size() * 0.5,
+            galley.clone(),
+            text_color,
+         );
       }
    }
 
@@ -472,5 +537,47 @@ mod tests {
          );
          assert!(response.rect.width() > 0.0);
       });
+   }
+
+   #[test]
+   fn a_pulsing_badge_paints_a_halo_behind_the_core() {
+      let ctx = egui::Context::default();
+      let host = Rect::from_min_size(Pos2::new(60.0, 60.0), vec2(60.0, 40.0));
+      let input = egui::RawInput {
+         screen_rect: Some(Rect::from_min_size(
+            Pos2::ZERO,
+            vec2(200.0, 200.0),
+         )),
+         ..Default::default()
+      };
+      let mut repaint = false;
+      let mut out = ctx.run_ui(input, |ui| {
+         Badge::dot().color(Color32::RED).pulse(BadgePulse::new()).paint_at(ui, host);
+         repaint = ui.ctx().has_requested_repaint();
+      });
+      out.textures_delta.clear();
+
+      let circles: Vec<_> = shapes(&out)
+         .into_iter()
+         .filter_map(|shape| match shape {
+            Shape::Circle(circle) => Some(circle),
+            _ => None,
+         })
+         .collect();
+      assert_eq!(circles.len(), 2, "the halo and the core");
+      assert!(
+         circles[0].radius > circles[1].radius,
+         "the halo is painted first and is larger"
+      );
+      assert_eq!(
+         circles[1].radius, 8.0,
+         "the core keeps its measured size"
+      );
+      assert!(
+         circles[0].fill.a() < 255,
+         "the halo is translucent"
+      );
+      assert!((circles[0].center - circles[1].center).length() < 0.01);
+      assert!(repaint, "a visible pulse must keep repainting");
    }
 }
