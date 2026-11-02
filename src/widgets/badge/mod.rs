@@ -261,10 +261,6 @@ impl Badge {
    /// Public so any widget can host a badge without re-implementing the
    /// placement and text metrics.
    pub fn paint_at(&self, ui: &Ui, widget_rect: Rect) {
-      if !ui.is_rect_visible(widget_rect) {
-         return;
-      }
-
       let colors = Theme::colors_from_ctx(ui.ctx());
       let fill = self.color.unwrap_or(colors.error);
       let text_color = self.text_color.unwrap_or(colors.bg);
@@ -277,6 +273,12 @@ impl Badge {
       );
 
       let circle = self.circle_rect(galley.size(), widget_rect);
+      // The badge is an overlay: it can hang outside the host rect, so the host's own visibility
+      // says nothing about whether the badge is on screen.
+      if !ui.is_rect_visible(circle) {
+         return;
+      }
+
       let center = circle.center();
 
       let painter = ui.painter();
@@ -302,9 +304,65 @@ impl Badge {
 mod tests {
    use super::*;
    use egui::vec2;
+   use egui::{FullOutput, Shape};
 
    fn rect() -> Rect {
       Rect::from_min_size(Pos2::new(100.0, 100.0), vec2(200.0, 40.0))
+   }
+
+   fn flatten(shape: &Shape, out: &mut Vec<Shape>) {
+      out.push(shape.clone());
+      if let Shape::Vec(shapes) = shape {
+         for shape in shapes {
+            flatten(shape, out);
+         }
+      }
+   }
+
+   fn shapes(out: &FullOutput) -> Vec<Shape> {
+      let mut flat = Vec::new();
+      for clipped in &out.shapes {
+         flatten(&clipped.shape, &mut flat);
+      }
+      flat
+   }
+
+   #[test]
+   fn paints_when_only_the_badge_is_visible() {
+      let ctx = egui::Context::default();
+      let screen = Rect::from_min_size(Pos2::ZERO, vec2(200.0, 200.0));
+      // The host sits fully below the 200 pt screen; its top-right badge straddles y = 205 and reaches
+      // up to y = 197, so the badge is on screen while the host rect is not.
+      let host = Rect::from_min_size(Pos2::new(140.0, 205.0), vec2(60.0, 40.0));
+      let input = egui::RawInput {
+         screen_rect: Some(screen),
+         ..Default::default()
+      };
+      let mut out = ctx.run_ui(input, |ui| {
+         Badge::dot().straddle().color(Color32::RED).paint_at(ui, host);
+      });
+      out.textures_delta.clear();
+
+      let painted = shapes(&out).into_iter().find_map(|shape| match shape {
+         Shape::Circle(circle) if circle.fill == Color32::RED => Some(circle),
+         _ => None,
+      });
+      let circle = painted.expect("the badge's circle was not painted even though it is on screen");
+      assert!(
+         (circle.center.x - 200.0).abs() < 0.01,
+         "centre x: {}",
+         circle.center.x
+      );
+      assert!(
+         (circle.center.y - 205.0).abs() < 0.01,
+         "centre y: {}",
+         circle.center.y
+      );
+      assert!(
+         (circle.radius - 8.0).abs() < 0.01,
+         "radius: {}",
+         circle.radius
+      );
    }
 
    const TEXT: Vec2 = Vec2::new(8.0, 12.0);
