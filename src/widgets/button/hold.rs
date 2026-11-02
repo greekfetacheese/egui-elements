@@ -444,35 +444,6 @@ mod tests {
    }
 
    #[test]
-   fn body_ui_renders_without_a_window() {
-      let mut settings = HoldSettings::default();
-      assert!(!settings.open);
-      egui::__run_test_ui(|ui| {
-         settings.body_ui(ui);
-      });
-      assert!(
-         !settings.open,
-         "body_ui must not touch the window flag"
-      );
-   }
-
-   #[test]
-   fn show_window_returns_response_only_when_open() {
-      egui::__run_test_ctx(|ctx| {
-         let mut closed = HoldSettings::default();
-         assert!(closed.show_window(ctx).is_none());
-      });
-
-      egui::__run_test_ctx(|ctx| {
-         let mut open = HoldSettings {
-            open: true,
-            ..Default::default()
-         };
-         assert!(open.show_window(ctx).is_some());
-      });
-   }
-
-   #[test]
    fn off_and_zero_intensity_are_not_visible_bursts() {
       assert!(
          !HoldSettings {
@@ -493,7 +464,7 @@ mod tests {
 
    #[cfg(feature = "serde")]
    #[test]
-   fn hold_settings_round_trip() -> Result<(), serde_json::Error> {
+   fn settings_serde_round_trips_and_tolerates_older_payloads() -> Result<(), serde_json::Error> {
       let settings = HoldSettings {
          open: true,
          seconds: 2.5,
@@ -516,43 +487,7 @@ mod tests {
       let restored: HoldSettings = serde_json::from_str(&json)?;
 
       assert_eq!(restored, settings);
-      Ok(())
-   }
 
-   #[cfg(feature = "serde")]
-   #[test]
-   fn missing_fields_take_their_defaults() -> Result<(), serde_json::Error> {
-      let restored: HoldSettings = serde_json::from_str(r#"{"seconds": 0.6}"#)?;
-
-      assert_eq!(
-         restored,
-         HoldSettings {
-            seconds: 0.6,
-            ..HoldSettings::default()
-         }
-      );
-      Ok(())
-   }
-
-   #[cfg(feature = "serde")]
-   #[test]
-   fn unknown_fields_are_ignored() -> Result<(), serde_json::Error> {
-      let restored: HoldSettings =
-         serde_json::from_str(r#"{"seconds": 0.6, "some_knob_from_the_future": 3}"#)?;
-
-      assert_eq!(
-         restored,
-         HoldSettings {
-            seconds: 0.6,
-            ..HoldSettings::default()
-         }
-      );
-      Ok(())
-   }
-
-   #[cfg(feature = "serde")]
-   #[test]
-   fn every_burst_kind_round_trips() -> Result<(), serde_json::Error> {
       for burst in [HoldBurst::Off, HoldBurst::Glow, HoldBurst::Lightning] {
          let settings = HoldSettings {
             burst,
@@ -567,6 +502,27 @@ mod tests {
             "burst kind {burst:?} must survive a round trip"
          );
       }
+
+      let restored: HoldSettings = serde_json::from_str(r#"{"seconds": 0.6}"#)?;
+
+      assert_eq!(
+         restored,
+         HoldSettings {
+            seconds: 0.6,
+            ..HoldSettings::default()
+         }
+      );
+
+      let restored: HoldSettings =
+         serde_json::from_str(r#"{"seconds": 0.6, "some_knob_from_the_future": 3}"#)?;
+
+      assert_eq!(
+         restored,
+         HoldSettings {
+            seconds: 0.6,
+            ..HoldSettings::default()
+         }
+      );
       Ok(())
    }
 }

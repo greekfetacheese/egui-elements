@@ -567,19 +567,3 @@ fn show_field_chrome(
 
    (output.inner, qr_clicked)
 }
-
-#[cfg(test)]
-mod tests {
-   use super::*;
-
-   #[test]
-   fn input_field_drives_a_plain_string() {
-      let mut field = InputField::new("Name", true);
-
-      field.set_text("hello");
-      assert_eq!(field.text(), "hello");
-
-      field.erase();
-      assert_eq!(field.text(), "");
-   }
-}

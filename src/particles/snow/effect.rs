@@ -298,7 +298,8 @@ mod tests {
    use egui::{Pos2, Rect, vec2};
 
    #[test]
-   fn from_settings_swaps_inverted_ranges() {
+   fn from_settings_maps_the_snow_fields_and_spawns_flakes() {
+      // Case: from_settings_swaps_inverted_ranges
       let settings = SnowSettings {
          size_min: 2.0,
          size_max: 0.5,
@@ -312,10 +313,8 @@ mod tests {
       assert_eq!(*snow.size_range.end(), 2.0);
       assert_eq!(*snow.speed_range.start(), 10.0);
       assert_eq!(*snow.speed_range.end(), 100.0);
-   }
 
-   #[test]
-   fn from_settings_maps_layer() {
+      // Case: from_settings_maps_layer
       let settings = SnowSettings {
          layer: ParticleLayer::Top,
          color: Color32::from_rgb(1, 2, 3),
@@ -336,10 +335,8 @@ mod tests {
          },
       );
       assert_eq!(background.layer_order, Order::Background);
-   }
 
-   #[test]
-   fn show_spawns_flakes() {
+      // Case: show_spawns_flakes
       __run_test_ctx(|ctx| {
          let area = Rect::from_min_size(Pos2::ZERO, vec2(64.0, 64.0));
          Snow::new("test_snow").density(7).area(area).show(ctx);

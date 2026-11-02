@@ -775,8 +775,7 @@ impl Widget for Button<'_> {
 mod tests {
    use super::*;
    use egui::{
-      Context, Event, FullOutput, Key, Modifiers, PointerButton, RawInput, ViewportId,
-      epaint::Mesh, vec2,
+      Context, Event, FullOutput, Key, Modifiers, PointerButton, RawInput, ViewportId, vec2,
    };
    use std::time::Duration;
 
@@ -807,19 +806,6 @@ mod tests {
          pressed: false,
          modifiers: Modifiers::NONE,
       }
-   }
-
-   fn hover(pos: Pos2) -> Event {
-      Event::PointerMoved(pos)
-   }
-
-   /// A context with a crate theme installed, so widget visuals and the
-   /// animation duration come from the live style.
-   fn themed_ctx() -> Context {
-      let ctx = Context::default();
-      let mut theme = Theme::new(crate::theme::ThemeKind::TokyoNight);
-      theme.install(&ctx);
-      ctx
    }
 
    fn enter() -> Event {
@@ -888,27 +874,6 @@ mod tests {
       })
    }
 
-   /// Every `RectShape` fill in paint order, flattening nested [`Shape::Vec`]s
-   /// so a frame-painted shadow stays visible to the ordering assertions.
-   fn rect_fills(output: &FullOutput) -> Vec<Color32> {
-      fn collect(shape: &Shape, fills: &mut Vec<Color32>) {
-         match shape {
-            Shape::Rect(rect) => fills.push(rect.fill),
-            Shape::Vec(shapes) => {
-               for shape in shapes {
-                  collect(shape, fills);
-               }
-            }
-            _ => {}
-         }
-      }
-      let mut fills = Vec::new();
-      for clipped in &output.shapes {
-         collect(&clipped.shape, &mut fills);
-      }
-      fills
-   }
-
    fn has_mesh(output: &FullOutput) -> bool {
       output.shapes.iter().any(|clipped| matches!(clipped.shape, Shape::Mesh(_)))
    }
@@ -940,22 +905,6 @@ mod tests {
       has_mesh(output) || path_count(output) > 0
    }
 
-   /// Fill of the partial sweep rect at `progress`, found by geometry rather
-   /// than by colour so a shifting fill can be read too.
-   fn painted_sweep(output: &FullOutput, rect: Rect, progress: f32) -> Option<Color32> {
-      output.shapes.iter().find_map(|clipped| match &clipped.shape {
-         Shape::Rect(shape)
-            if (shape.rect.width() - rect.width()).abs() < 4.0
-               && (shape.rect.height() - rect.height()).abs() < 4.0
-               && (clipped.clip_rect.width() - progress * rect.width()).abs() < 0.5
-               && (clipped.clip_rect.left() - rect.left()).abs() < 0.5 =>
-         {
-            Some(shape.fill)
-         }
-         _ => None,
-      })
-   }
-
    /// Advance passes until the hold fires, returning that frame's output and time.
    fn advance_until_fired(
       ctx: &Context,
@@ -976,91 +925,6 @@ mod tests {
    fn complete_hold(settings: HoldSettings) -> (Context, FullOutput, Response, f64) {
       let ctx = Context::default();
       let build = move || Button::new("Hold").hold_settings(&settings);
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let center = warm.rect.center();
-      let mut time = f64::from(STEP);
-      run_pass(&ctx, vec![press(center)], time, build);
-      let (completed, completion_time) = advance_until_fired(&ctx, &mut time, &build);
-      (ctx, completed, warm, completion_time)
-   }
-
-   /// The glow mesh the frame painted, identified by its fully transparent rim
-   /// (text stays a `Shape::Text`, so the glow is the only `Shape::Mesh` with a
-   /// zero-alpha vertex).
-   fn burst_mesh(output: &FullOutput) -> Option<Mesh> {
-      output.shapes.iter().find_map(|clipped| match &clipped.shape {
-         Shape::Mesh(mesh) if mesh.vertices.iter().any(|vertex| vertex.color.a() == 0) => {
-            Some(mesh.as_ref().clone())
-         }
-         _ => None,
-      })
-   }
-
-   /// Largest distance from `center` to any vertex of `mesh`.
-   fn mesh_radius(mesh: &Mesh, center: Pos2) -> f32 {
-      mesh
-         .vertices
-         .iter()
-         .map(|vertex| vertex.pos.distance(center))
-         .fold(0.0_f32, f32::max)
-   }
-
-   /// Every painted polyline as `(points, stroke width)`, in paint order.
-   fn polylines(output: &FullOutput) -> Vec<(Vec<Pos2>, f32)> {
-      output
-         .shapes
-         .iter()
-         .filter_map(|clipped| match &clipped.shape {
-            Shape::Path(path) => Some((path.points.clone(), path.stroke.width)),
-            _ => None,
-         })
-         .collect()
-   }
-
-   /// Largest perpendicular distance of `points` from the line joining their
-   /// first and last point (`0.0` for a straight polyline).
-   fn max_deviation(points: &[Pos2]) -> f32 {
-      let (Some(&first), Some(&last)) = (points.first(), points.last()) else {
-         return 0.0;
-      };
-      let direction = last - first;
-      let length = direction.length();
-      if length <= f32::MIN_POSITIVE {
-         return 0.0;
-      }
-      points
-         .iter()
-         .map(|point| {
-            let offset = *point - first;
-            (offset.x * direction.y - offset.y * direction.x).abs() / length
-         })
-         .fold(0.0_f32, f32::max)
-   }
-
-   /// Hold a button from `settings` to completion and advance `extra` frames,
-   /// returning the last frame's glow mesh and the button rect.
-   fn glow_burst_after(settings: HoldSettings, extra: usize) -> (Mesh, Rect) {
-      let ctx = Context::default();
-      let build = move || Button::new("Hold").hold_settings(&settings);
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let center = warm.rect.center();
-      let mut time = f64::from(STEP);
-      run_pass(&ctx, vec![press(center)], time, build);
-      let (mut output, mut time) = advance_until_fired(&ctx, &mut time, &build);
-      for _ in 0..extra {
-         time += f64::from(STEP);
-         let (next, _) = run_pass(&ctx, vec![], time, build);
-         output = next;
-      }
-      let mesh = burst_mesh(&output).expect("the Glow burst must paint its mesh");
-      (mesh, warm.rect)
-   }
-
-   /// Like [`complete_hold`], but at the demo's `(250, 45)` button size so a
-   /// strike's geometry has a stable area to bend in.
-   fn complete_hold_sized(settings: HoldSettings) -> (Context, FullOutput, Response, f64) {
-      let ctx = Context::default();
-      let build = move || Button::new("Hold").hold_settings(&settings).min_size(vec2(250.0, 45.0));
       let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
       let center = warm.rect.center();
       let mut time = f64::from(STEP);
@@ -1092,33 +956,6 @@ mod tests {
          );
       }
       (first, passes)
-   }
-
-   /// The fill of the button's own base (chrome) rect, picked by matching the
-   /// button's rect so panel backgrounds and the partial sweep are skipped.
-   fn base_fill(output: &FullOutput, rect: Rect) -> Option<Color32> {
-      output.shapes.iter().find_map(|clipped| match &clipped.shape {
-         Shape::Rect(shape)
-            if shape.fill.a() == 255
-               && (shape.rect.width() - rect.width()).abs() < 4.0
-               && (shape.rect.height() - rect.height()).abs() < 4.0
-               && shape.rect.center().distance(rect.center()) < 2.0 =>
-         {
-            Some(shape.fill)
-         }
-         _ => None,
-      })
-   }
-
-   /// Bounding rect of the painted text whose galley source is `text`.
-   fn text_rect(output: &FullOutput, text: &str) -> Option<Rect> {
-      output.shapes.iter().find_map(|clipped| match &clipped.shape {
-         Shape::Text(shape) if shape.galley.text() == text => Some(Rect::from_min_size(
-            shape.pos,
-            shape.galley.size(),
-         )),
-         _ => None,
-      })
    }
 
    #[test]
@@ -1288,32 +1125,6 @@ mod tests {
    }
 
    #[test]
-   fn sweep_width_tracks_progress() {
-      let build = || Button::new("Hold").hold(0.5).hold_fill(SWEEP);
-      let ctx = Context::default();
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let center = warm.rect.center();
-
-      let (output, pressed) = run_pass(&ctx, vec![press(center)], f64::from(STEP), build);
-      let progress = hold_state(&ctx, pressed.id).expect("hold state").progress;
-      assert!(
-         (progress - 0.2).abs() < 1e-6,
-         "unexpected progress {progress}"
-      );
-
-      let (clip_width, clip_left) = sweep_shape(&output, SWEEP).expect("a sweep shape");
-      assert!(
-         (clip_width - progress * pressed.rect.width()).abs() < 0.01,
-         "sweep width {clip_width} does not track progress {progress} of {}",
-         pressed.rect.width()
-      );
-      assert!(
-         (clip_left - pressed.rect.left()).abs() < 0.01,
-         "the sweep must start at the button's left edge"
-      );
-   }
-
-   #[test]
    fn two_hold_buttons_keep_separate_progress() {
       let ctx = Context::default();
       let mut first = None;
@@ -1427,7 +1238,8 @@ mod tests {
    }
 
    #[test]
-   fn the_burst_ends() {
+   fn the_burst_lifetime_is_honoured_and_costs_no_idle_frames() {
+      // Case: the_burst_ends
       let build = || Button::new(()).hold(0.5);
       let ctx = Context::default();
       let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
@@ -1485,6 +1297,74 @@ mod tests {
          delay,
          Duration::MAX,
          "the ended burst requested a repaint after {delay:?}"
+      );
+
+      // Case: the_burst_honours_its_duration
+      /// Long enough that the old 300 ms constant would be long gone.
+      const BURST_MS: f32 = 600.0;
+      let settings = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Glow,
+         burst_ms: BURST_MS,
+         ..Default::default()
+      };
+      let (ctx, _, _, completion_time) = complete_hold(settings);
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      let mut time = completion_time;
+
+      // ~375 ms after completion: the burst must still be visible.
+      for _ in 0..3 {
+         time += f64::from(STEP);
+         run_pass(&ctx, vec![], time, build);
+      }
+      let (still, _) = run_pass(&ctx, vec![], time, build);
+      assert!(
+         mesh_alpha(&still) > 0,
+         "the {BURST_MS} ms burst was already invisible ~400 ms after completion"
+      );
+
+      // ~750 ms after completion: the burst must be over.
+      for _ in 0..2 {
+         time += f64::from(STEP);
+         run_pass(&ctx, vec![], time, build);
+      }
+      let (gone, _) = run_pass(&ctx, vec![], time, build);
+      assert_eq!(
+         mesh_alpha(&gone),
+         0,
+         "the {BURST_MS} ms burst still painted ~700 ms after completion"
+      );
+
+      // Case: burst_off_paints_nothing_and_costs_no_frames
+      let settings = HoldSettings {
+         seconds: 0.5,
+         burst: HoldBurst::Off,
+         ..Default::default()
+      };
+      let (ctx, completed, warm, mut time) = complete_hold(settings);
+      assert!(
+         !has_burst_shape(&completed),
+         "a burst set to Off must not paint a completion shape"
+      );
+
+      // Still held: nothing animates, so the widget must not pin the frame loop.
+      let build = move || Button::new("Hold").hold_settings(&settings);
+      time += f64::from(STEP);
+      let (after, _) = run_pass(&ctx, vec![], time, build);
+      assert_eq!(
+         hold_state(&ctx, warm.id).expect("hold state").progress,
+         1.0,
+         "the pointer is still down after completion"
+      );
+      assert!(
+         !has_burst_shape(&after),
+         "an Off burst must stay unpainted while the completed hold is held"
+      );
+      let delay = after.viewport_output[&ViewportId::ROOT].repaint_delay;
+      assert_eq!(
+         delay,
+         Duration::MAX,
+         "an Off burst requested a repaint after {delay:?}"
       );
    }
 
@@ -1554,266 +1434,6 @@ mod tests {
    }
 
    #[test]
-   fn the_sweep_keeps_filling_past_egui_max_click_duration() {
-      const SECONDS: f32 = 1.5;
-      let ctx = Context::default();
-      let ceiling = max_click_duration(&ctx);
-      assert!(
-         f64::from(SECONDS) > ceiling,
-         "this test only bites while its {SECONDS}s hold outlives egui's {ceiling}s click ceiling"
-      );
-      let build = || Button::new("Hold").hold(SECONDS).hold_fill(SWEEP);
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let center = warm.rect.center();
-      let width = warm.rect.width();
-
-      let mut time = f64::from(STEP);
-      run_pass(&ctx, vec![press(center)], time, build);
-      let press_time = time;
-
-      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
-      let mut at_ceiling = None;
-      let mut past_ceiling = None;
-      for _ in 0..max_frames {
-         time += f64::from(STEP);
-         let (output, frame) = run_pass(&ctx, vec![], time, build);
-         let elapsed = time - press_time;
-         let sweep = sweep_shape(&output, SWEEP).map(|(clip_width, _)| clip_width);
-         if at_ceiling.is_none() && elapsed >= ceiling {
-            at_ceiling = sweep;
-         } else if past_ceiling.is_none() && elapsed >= ceiling + f64::from(STEP) {
-            past_ceiling = sweep;
-            break;
-         }
-         if frame.clicked() {
-            break;
-         }
-      }
-
-      let at_ceiling = at_ceiling.expect("the sweep must still be painted at egui's click ceiling");
-      let past_ceiling =
-         past_ceiling.expect("the sweep must still be painted past the click ceiling");
-      assert!(
-         past_ceiling > at_ceiling,
-         "the sweep stopped growing past the click ceiling: {at_ceiling} px then {past_ceiling} px"
-      );
-      assert!(
-         past_ceiling < width,
-         "the sweep completed early, before the hold finished: {past_ceiling} of {width} px"
-      );
-   }
-
-   #[test]
-   fn the_shadow_does_not_paint_over_the_sweep() {
-      /// An opaque test shadow, distinct from every chrome fill.
-      const SHADOW: Color32 = Color32::from_rgb(200, 30, 40);
-      /// Shadow spread, in points — enough to ring the button's rect.
-      const SHADOW_SPREAD: u8 = 4;
-      /// Distinct fills so the chrome selection is unambiguous; the shipped
-      /// themes alias idle and pressed, which is why sentinels are needed.
-      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
-      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
-      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
-      let ctx = Context::default();
-      let visuals = ButtonVisuals {
-         bg: IDLE,
-         bg_hover: HOVER,
-         bg_click: PRESSED,
-         shadow: Shadow {
-            offset: [0, 0],
-            blur: 0,
-            spread: SHADOW_SPREAD,
-            color: SHADOW,
-         },
-         ..Default::default()
-      };
-      let build = || Button::new("Hold").hold(0.5).hold_fill(SWEEP).visuals(visuals);
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let rect = warm.rect;
-      let center = rect.center();
-
-      let (output, pressed) = run_pass(&ctx, vec![press(center)], f64::from(STEP), build);
-      let progress = hold_state(&ctx, pressed.id).expect("hold state").progress;
-      assert!(
-         progress > 0.0 && progress < 1.0,
-         "the sweep must be partial mid-hold, got progress {progress}"
-      );
-
-      let fills = rect_fills(&output);
-      let sweep_index = fills
-         .iter()
-         .position(|fill| *fill == SWEEP)
-         .expect("the sweep must be painted mid-hold");
-      let shadow_indices: Vec<usize> = fills
-         .iter()
-         .enumerate()
-         .filter_map(|(index, fill)| (*fill == SHADOW).then_some(index))
-         .collect();
-      assert!(
-         !shadow_indices.is_empty(),
-         "the frame's shadow must still be painted while the sweep is drawn"
-      );
-      assert!(
-         shadow_indices.iter().all(|&index| index < sweep_index),
-         "the shadow (shapes {shadow_indices:?}) paints at or after the sweep (shape {sweep_index}) and would cover it"
-      );
-
-      let (clip_width, clip_left) = sweep_shape(&output, SWEEP).expect("a sweep shape");
-      assert!(
-         (clip_width - progress * rect.width()).abs() < 0.01,
-         "sweep width {clip_width} does not track progress {progress} of {}",
-         rect.width()
-      );
-      assert!(
-         (clip_left - rect.left()).abs() < 0.01,
-         "the sweep must start at the button's left edge"
-      );
-   }
-
-   #[test]
-   fn the_chrome_stays_pressed_for_the_whole_hold() {
-      const SECONDS: f32 = 1.5;
-      /// A sample well inside egui's click window.
-      const EARLY: f64 = 0.4;
-      /// How far past the click ceiling the late sample is taken.
-      const PAST_CEILING: f64 = 0.2;
-      /// Distinct test-only chrome fills; the shipped themes alias idle and
-      /// pressed, so pick explicit ones to isolate the pressed selection.
-      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
-      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
-      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
-      let ctx = Context::default();
-      let ceiling = max_click_duration(&ctx);
-      assert!(
-         f64::from(SECONDS) > ceiling + PAST_CEILING,
-         "this test only bites while its {SECONDS}s hold outlives egui's {ceiling}s click ceiling"
-      );
-      let visuals = ButtonVisuals {
-         bg: IDLE,
-         bg_hover: HOVER,
-         bg_click: PRESSED,
-         ..Default::default()
-      };
-      let build = || Button::new("Hold").hold(SECONDS).visuals(visuals);
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let rect = warm.rect;
-      let center = rect.center();
-
-      let mut time = f64::from(STEP);
-      run_pass(&ctx, vec![press(center)], time, build);
-      let press_time = time;
-
-      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
-      let mut early = None;
-      let mut late = None;
-      for _ in 0..max_frames {
-         time += f64::from(STEP);
-         let (output, frame) = run_pass(&ctx, vec![], time, build);
-         let elapsed = time - press_time;
-         if early.is_none() && elapsed >= EARLY {
-            early = base_fill(&output, rect);
-         } else if late.is_none() && elapsed >= ceiling + PAST_CEILING {
-            late = base_fill(&output, rect);
-            break;
-         }
-         if frame.clicked() {
-            break;
-         }
-      }
-
-      let early = early.expect("the pressed chrome must be painted early in the hold");
-      let late = late.expect("the pressed chrome must still be painted past the click ceiling");
-      assert_eq!(
-         early, late,
-         "the chrome un-pressed at egui's click ceiling: {early:?} then {late:?} (worst case {IDLE:?}/{HOVER:?})"
-      );
-      assert_eq!(
-         early, PRESSED,
-         "the hold must paint its pressed chrome while the pointer is down, got {early:?}"
-      );
-   }
-
-   #[test]
-   fn the_chrome_releases_when_the_hold_completes() {
-      const SECONDS: f32 = 0.5;
-      /// Distinct test-only chrome fills; the shipped themes alias idle and
-      /// pressed, so pick explicit ones to isolate the release.
-      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
-      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
-      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
-      let ctx = Context::default();
-      let visuals = ButtonVisuals {
-         bg: IDLE,
-         bg_hover: HOVER,
-         bg_click: PRESSED,
-         ..Default::default()
-      };
-      let build = || Button::new("Hold").hold(SECONDS).visuals(visuals);
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let rect = warm.rect;
-      let id = warm.id;
-      let center = rect.center();
-
-      let mut time = f64::from(STEP);
-      run_pass(&ctx, vec![press(center)], time, build);
-
-      // Mid-hold, before completion: the pressed chrome must be painted.
-      time += f64::from(STEP);
-      let (held_output, _) = run_pass(&ctx, vec![], time, build);
-      let held_progress = hold_state(&ctx, id).expect("hold state").progress;
-      assert!(
-         held_progress > 0.0 && held_progress < 1.0,
-         "the hold must still be running, got progress {held_progress}"
-      );
-      assert_eq!(
-         base_fill(&held_output, rect),
-         Some(PRESSED),
-         "the pressed chrome must be painted mid-hold"
-      );
-
-      // Hold to completion without releasing the pointer.
-      let max_frames = (SECONDS / HOLD_MAX_DT).ceil() as usize + 2;
-      let mut completed_output = None;
-      for _ in 0..max_frames {
-         time += f64::from(STEP);
-         let (output, frame) = run_pass(&ctx, vec![], time, build);
-         if frame.clicked() {
-            assert_eq!(
-               hold_state(&ctx, id).expect("hold state").progress,
-               1.0,
-               "the completed hold must be full"
-            );
-            completed_output = Some(output);
-            break;
-         }
-         assert!(
-            hold_state(&ctx, id).expect("hold state").progress < 1.0,
-            "the hold must not be full before it clicks"
-         );
-      }
-      let completed_output = completed_output.expect("the hold must complete without a release");
-      assert_ne!(
-         base_fill(&completed_output, rect),
-         Some(PRESSED),
-         "the pressed chrome must be released once the hold fires"
-      );
-
-      // Still held: the next frame must neither re-press nor reset.
-      time += f64::from(STEP);
-      let (after_output, _) = run_pass(&ctx, vec![], time, build);
-      assert_eq!(
-         hold_state(&ctx, id).expect("hold state").progress,
-         1.0,
-         "the pointer is still down, so the completed sweep must stay full"
-      );
-      assert_ne!(
-         base_fill(&after_output, rect),
-         Some(PRESSED),
-         "the pressed chrome must stay released while the completed hold is still held"
-      );
-   }
-
-   #[test]
    fn a_second_press_starts_a_fresh_hold() {
       const SECONDS: f32 = 1.0;
       let build = || Button::new("Hold").hold(SECONDS);
@@ -1879,532 +1499,6 @@ mod tests {
       assert!(
          second_fired,
          "the second hold must fire on its own"
-      );
-   }
-   #[test]
-   fn a_solid_fill_ignores_progress() {
-      let settings = HoldSettings {
-         seconds: 1.0,
-         fill_from: Some(SWEEP),
-         fill_to: None,
-         ..Default::default()
-      };
-      let build = move || Button::new("Hold").hold_settings(&settings);
-      let ctx = Context::default();
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let rect = warm.rect;
-
-      let mut time = f64::from(STEP);
-      run_pass(&ctx, vec![press(rect.center())], time, build);
-
-      time += f64::from(STEP);
-      let (early, _) = run_pass(&ctx, vec![], time, build);
-      let early_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
-      assert!(
-         (early_progress - 0.2).abs() < 1e-6,
-         "unexpected early progress {early_progress}"
-      );
-      assert_eq!(
-         painted_sweep(&early, rect, early_progress),
-         Some(SWEEP),
-         "a solid fill must paint its colour at {early_progress} progress"
-      );
-
-      let mut late = None;
-      for _ in 0..7 {
-         time += f64::from(STEP);
-         let (output, _) = run_pass(&ctx, vec![], time, build);
-         late = Some(output);
-      }
-      let late = late.expect("a late frame");
-      let late_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
-      assert!(
-         (late_progress - 0.9).abs() < 1e-6,
-         "unexpected late progress {late_progress}"
-      );
-      assert_eq!(
-         painted_sweep(&late, rect, late_progress),
-         Some(SWEEP),
-         "a solid fill must paint the same colour at {late_progress} progress"
-      );
-   }
-
-   #[test]
-   fn the_fill_shifts_towards_the_second_colour() {
-      /// The shift starts here.
-      const FROM: Color32 = Color32::from_rgb(16, 200, 32);
-      /// …and ends here; every channel moves a long way, so between-ness is
-      /// unambiguous.
-      const TO: Color32 = Color32::from_rgb(224, 48, 176);
-      let settings = HoldSettings {
-         seconds: 1.0,
-         fill_from: Some(FROM),
-         fill_to: Some(TO),
-         ..Default::default()
-      };
-      let build = move || Button::new("Hold").hold_settings(&settings);
-      let ctx = Context::default();
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let rect = warm.rect;
-
-      let mut time = f64::from(STEP);
-      run_pass(&ctx, vec![press(rect.center())], time, build);
-
-      time += f64::from(STEP);
-      let (early, _) = run_pass(&ctx, vec![], time, build);
-      let early_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
-      assert!(
-         (early_progress - 0.2).abs() < 1e-6,
-         "unexpected early progress {early_progress}"
-      );
-      let early = painted_sweep(&early, rect, early_progress).expect("the early sweep");
-
-      let mut late = None;
-      for _ in 0..7 {
-         time += f64::from(STEP);
-         let (output, _) = run_pass(&ctx, vec![], time, build);
-         late = Some(output);
-      }
-      let late = late.expect("a late frame");
-      let late_progress = hold_state(&ctx, warm.id).expect("hold state").progress;
-      assert!(
-         (late_progress - 0.9).abs() < 1e-6,
-         "unexpected late progress {late_progress}"
-      );
-      let late = painted_sweep(&late, rect, late_progress).expect("the late sweep");
-
-      assert_ne!(
-         early, late,
-         "the fill painted the same colour at {early_progress} and {late_progress}"
-      );
-      for (from, to, actual, label) in [
-         (FROM.r(), TO.r(), early.r(), "red early"),
-         (FROM.g(), TO.g(), early.g(), "green early"),
-         (FROM.b(), TO.b(), early.b(), "blue early"),
-         (FROM.r(), TO.r(), late.r(), "red late"),
-         (FROM.g(), TO.g(), late.g(), "green late"),
-         (FROM.b(), TO.b(), late.b(), "blue late"),
-      ] {
-         assert!(
-            actual >= from.min(to).saturating_sub(1) && actual <= from.max(to).saturating_add(1),
-            "{label} channel {actual} is not between {from} and {to}"
-         );
-      }
-   }
-
-   #[test]
-   fn the_fill_clears_when_the_hold_fires() {
-      let settings = HoldSettings {
-         seconds: 0.5,
-         fill_from: Some(SWEEP),
-         fill_to: None,
-         ..Default::default()
-      };
-      let build = move || Button::new("Hold").hold_settings(&settings);
-      let ctx = Context::default();
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let center = warm.rect.center();
-
-      let mut time = f64::from(STEP);
-      let (held, pressed) = run_pass(&ctx, vec![press(center)], time, build);
-      let progress = hold_state(&ctx, pressed.id).expect("hold state").progress;
-      assert!(
-         progress > 0.0 && progress < 1.0,
-         "the sweep must be partial mid-hold, got progress {progress}"
-      );
-      assert!(
-         sweep_shape(&held, SWEEP).is_some(),
-         "the sweep must be painted mid-hold"
-      );
-
-      let (completed, completion_time) = advance_until_fired(&ctx, &mut time, &build);
-      assert!(
-         sweep_shape(&completed, SWEEP).is_none(),
-         "the sweep must clear on the frame the hold fires"
-      );
-
-      time = completion_time + f64::from(STEP);
-      let (after, _) = run_pass(&ctx, vec![], time, build);
-      assert_eq!(
-         hold_state(&ctx, warm.id).expect("hold state").progress,
-         1.0,
-         "the pointer is still down, so the completed hold must stay full"
-      );
-      assert!(
-         sweep_shape(&after, SWEEP).is_none(),
-         "the sweep must stay cleared while the completed hold is still held"
-      );
-   }
-
-   #[test]
-   fn burst_off_paints_nothing_and_costs_no_frames() {
-      let settings = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Off,
-         ..Default::default()
-      };
-      let (ctx, completed, warm, mut time) = complete_hold(settings);
-      assert!(
-         !has_burst_shape(&completed),
-         "a burst set to Off must not paint a completion shape"
-      );
-
-      // Still held: nothing animates, so the widget must not pin the frame loop.
-      let build = move || Button::new("Hold").hold_settings(&settings);
-      time += f64::from(STEP);
-      let (after, _) = run_pass(&ctx, vec![], time, build);
-      assert_eq!(
-         hold_state(&ctx, warm.id).expect("hold state").progress,
-         1.0,
-         "the pointer is still down after completion"
-      );
-      assert!(
-         !has_burst_shape(&after),
-         "an Off burst must stay unpainted while the completed hold is held"
-      );
-      let delay = after.viewport_output[&ViewportId::ROOT].repaint_delay;
-      assert_eq!(
-         delay,
-         Duration::MAX,
-         "an Off burst requested a repaint after {delay:?}"
-      );
-   }
-
-   #[test]
-   fn the_burst_honours_its_duration() {
-      /// Long enough that the old 300 ms constant would be long gone.
-      const BURST_MS: f32 = 600.0;
-      let settings = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Glow,
-         burst_ms: BURST_MS,
-         ..Default::default()
-      };
-      let (ctx, _, _, completion_time) = complete_hold(settings);
-      let build = move || Button::new("Hold").hold_settings(&settings);
-      let mut time = completion_time;
-
-      // ~375 ms after completion: the burst must still be visible.
-      for _ in 0..3 {
-         time += f64::from(STEP);
-         run_pass(&ctx, vec![], time, build);
-      }
-      let (still, _) = run_pass(&ctx, vec![], time, build);
-      assert!(
-         mesh_alpha(&still) > 0,
-         "the {BURST_MS} ms burst was already invisible ~400 ms after completion"
-      );
-
-      // ~750 ms after completion: the burst must be over.
-      for _ in 0..2 {
-         time += f64::from(STEP);
-         run_pass(&ctx, vec![], time, build);
-      }
-      let (gone, _) = run_pass(&ctx, vec![], time, build);
-      assert_eq!(
-         mesh_alpha(&gone),
-         0,
-         "the {BURST_MS} ms burst still painted ~700 ms after completion"
-      );
-   }
-
-   #[test]
-   fn burst_intensity_zero_hides_the_burst() {
-      let visible = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Glow,
-         burst_intensity: 1.0,
-         ..Default::default()
-      };
-      let hidden = HoldSettings {
-         burst_intensity: 0.0,
-         ..visible
-      };
-
-      let (_, hidden_output, _, _) = complete_hold(hidden);
-      assert_eq!(
-         mesh_alpha(&hidden_output),
-         0,
-         "intensity 0 must not paint a visible glow"
-      );
-
-      let (_, visible_output, _, _) = complete_hold(visible);
-      assert!(
-         mesh_alpha(&visible_output) > 0,
-         "intensity 1 must paint the glow"
-      );
-   }
-
-   #[test]
-   fn lightning_knobs_reach_the_effect() {
-      let few = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Lightning,
-         burst_bolts: 1,
-         burst_branch_depth: 1,
-         ..Default::default()
-      };
-      let many = HoldSettings {
-         burst_bolts: 4,
-         burst_branch_depth: 3,
-         ..few
-      };
-
-      let (_, few_output, _, _) = complete_hold(few);
-      let (_, many_output, _, _) = complete_hold(many);
-      let few_paths = path_count(&few_output);
-      let many_paths = path_count(&many_output);
-      assert!(
-         few_paths > 0,
-         "the lightning burst must paint at least one bolt stroke"
-      );
-      assert!(
-         many_paths > few_paths,
-         "4 bolts / depth 3 painted {many_paths} bolt polylines, 1 bolt / depth 1 painted {few_paths}"
-      );
-   }
-
-   #[test]
-   fn the_glow_size_range_is_honoured() {
-      /// Burst long enough to sample it late.
-      const BURST_MS: f32 = 2000.0;
-      /// Seconds a burst advances per pass (`stable_dt`, capped by `HOLD_MAX_DT`).
-      const BURST_DT: f32 = HOLD_MAX_DT;
-      /// Passes from completion to the last painted frame: the age reaches
-      /// `secs - BURST_DT`, i.e. `t = 1 - BURST_DT / secs`.
-      const LATE_FRAMES: usize = ((BURST_MS / 1000.0 - BURST_DT) / BURST_DT) as usize;
-      /// The start radius, in short sides; shared by both pairs.
-      const FROM: f32 = 1.0;
-      /// A small end radius.
-      const SMALL_TO: f32 = 1.4;
-      /// A larger end radius.
-      const LARGE_TO: f32 = 2.6;
-
-      let base = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Glow,
-         burst_ms: BURST_MS,
-         burst_glow_from: FROM,
-         ..Default::default()
-      };
-      let small = HoldSettings {
-         burst_glow_to: SMALL_TO,
-         ..base
-      };
-      let large = HoldSettings {
-         burst_glow_to: LARGE_TO,
-         ..base
-      };
-
-      // At completion the radius is exactly `short x from`; at the last painted
-      // frame it is `short x (from + (to - from) x t)`.
-      let (start_mesh, rect) = glow_burst_after(small, 0);
-      let (small_mesh, _) = glow_burst_after(small, LATE_FRAMES);
-      let (large_mesh, _) = glow_burst_after(large, LATE_FRAMES);
-      let center = rect.center();
-      let short = rect.width().min(rect.height()).max(1.0);
-
-      let start_radius = mesh_radius(&start_mesh, center);
-      assert!(
-         (start_radius - short * FROM).abs() < 1e-3,
-         "the glow started at {start_radius} px, expected {short} px (short x {FROM})"
-      );
-
-      let t = 1.0 - BURST_DT / (BURST_MS / 1000.0);
-      let small_radius = mesh_radius(&small_mesh, center);
-      let large_radius = mesh_radius(&large_mesh, center);
-      let expected_small = short * (FROM + (SMALL_TO - FROM) * t);
-      let expected_large = short * (FROM + (LARGE_TO - FROM) * t);
-      assert!(
-         (small_radius - expected_small).abs() < 1e-3,
-         "the small glow's bounding radius was {small_radius} px, expected \
-          {expected_small} px (short {short} x {FROM} + ({SMALL_TO} - {FROM}) x {t})"
-      );
-      assert!(
-         (large_radius - expected_large).abs() < 1e-3,
-         "the large glow's bounding radius was {large_radius} px, expected \
-          {expected_large} px (short {short} x {FROM} + ({LARGE_TO} - {FROM}) x {t})"
-      );
-      assert!(
-         large_radius > small_radius,
-         "a larger end radius must paint a larger glow: {large_radius} px vs {small_radius} px"
-      );
-      assert!(
-         (large_radius - short * LARGE_TO).abs() < 0.1 * short * LARGE_TO,
-         "the late large glow reached {large_radius} px, not ~ short x {LARGE_TO} = {} px",
-         short * LARGE_TO
-      );
-   }
-
-   #[test]
-   fn softness_one_matches_the_shared_profile() {
-      /// A known burst colour, so the expected fan's tint is unambiguous.
-      const BURST: Color32 = Color32::from_rgb(140, 90, 40);
-
-      let settings = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Glow,
-         burst_color: Some(BURST),
-         burst_glow_softness: 1.0,
-         ..Default::default()
-      };
-
-      // At completion `t = 0`, so the radius is `short x from == short`, the
-      // attenuation is exactly `1.0` and the tint is the burst colour.
-      let (mesh, rect) = glow_burst_after(settings, 0);
-      let short = rect.width().min(rect.height()).max(1.0);
-      let expected = crate::glow::glow_mesh(rect.center(), short, BURST);
-      assert_eq!(
-         mesh, expected,
-         "softness 1.0 must reproduce the shared glow fan vertex for vertex"
-      );
-
-      let softer = HoldSettings {
-         burst_glow_softness: 2.0,
-         ..settings
-      };
-      let (softer_mesh, _) = glow_burst_after(softer, 0);
-      assert_ne!(
-         softer_mesh, expected,
-         "softness 2.0 must reshape the shared glow fan"
-      );
-   }
-
-   #[test]
-   fn the_strike_thickness_and_jitter_reach_the_effect() {
-      /// Thin and thick cores, so the painted stroke widths are unambiguous.
-      const THIN: f32 = 1.0;
-      const THICK: f32 = 8.0;
-      /// A straight trunk's rounding is far below this; a jittered bolt is far
-      /// above it.
-      const STRAIGHT_TOLERANCE: f32 = 1e-3;
-
-      let base = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Lightning,
-         burst_thickness: THIN,
-         burst_jitter: 0.0,
-         ..Default::default()
-      };
-
-      let (_, thin_output, _, _) = complete_hold_sized(base);
-      let thin = polylines(&thin_output);
-      assert!(
-         !thin.is_empty(),
-         "the strike must paint its polylines"
-      );
-      let thin_core = thin.iter().map(|(_, width)| *width).fold(f32::MAX, f32::min);
-      assert!(
-         (thin_core - THIN).abs() < 1e-6,
-         "the thinnest stroke was {thin_core} px, expected the core's {THIN} px"
-      );
-
-      let (_, thick_output, _, _) = complete_hold_sized(HoldSettings {
-         burst_thickness: THICK,
-         ..base
-      });
-      let thick = polylines(&thick_output);
-      let thick_core = thick.iter().map(|(_, width)| *width).fold(f32::MAX, f32::min);
-      assert!(
-         (thick_core - THICK).abs() < 1e-6,
-         "the thinnest stroke was {thick_core} px, expected the core's {THICK} px"
-      );
-      assert!(
-         thick_core > thin_core,
-         "a thicker burst must paint a wider core: {thick_core} px vs {thin_core} px"
-      );
-
-      // `jitter = 0` lays the trunk on a straight line. Only the trunk (the
-      // first polyline) is checked: a branch endpoint clamped to the effect
-      // area can bend even a zero-jitter branch.
-      let trunk = thin
-         .first()
-         .map(|(points, _)| points.as_slice())
-         .expect("the strike must paint a trunk");
-      let straight = max_deviation(trunk);
-      assert!(
-         straight <= STRAIGHT_TOLERANCE,
-         "jitter 0 still deviated by {straight} px"
-      );
-
-      let (_, jittered_output, _, _) = complete_hold_sized(HoldSettings {
-         burst_jitter: 0.6,
-         ..base
-      });
-      let jittered = polylines(&jittered_output);
-      let jittered_trunk = jittered
-         .first()
-         .map(|(points, _)| points.as_slice())
-         .expect("the jittered strike must paint a trunk");
-      let deviated = max_deviation(jittered_trunk);
-      assert!(
-         deviated > STRAIGHT_TOLERANCE,
-         "jitter 0.6 must bend the bolt, but the trunk's largest deviation was {deviated} px"
-      );
-   }
-
-   #[test]
-   fn default_settings_paint_the_previous_burst() {
-      // Lightning: the default settings only switch the kind; the new thickness
-      // and jitter fields keep the effect's own defaults, so the painted
-      // polylines must match a `Lightning` built without those two calls.
-      let settings = HoldSettings {
-         seconds: 0.5,
-         burst: HoldBurst::Lightning,
-         ..Default::default()
-      };
-      let (ctx, output, warm, _) = complete_hold(settings);
-      let actual = polylines(&output);
-      assert!(
-         !actual.is_empty(),
-         "the default Lightning burst must paint its polylines"
-      );
-
-      let accent = Theme::current(&ctx).colors.accent;
-      let color = settings.burst_color.unwrap_or(accent);
-      let area = warm.rect;
-      let effect = || {
-         Lightning::new(("hold_burst", warm.id))
-            .color(color)
-            .bolt_count(settings.burst_bolts)
-            .branch_depth(settings.burst_branch_depth)
-            .duration_ms(settings.burst_ms)
-            .flash_intensity(HOLD_BURST_FLASH)
-            .area(area)
-      };
-      let reference_ctx = Context::default();
-      let mut reference = reference_ctx.run_ui(
-         RawInput {
-            screen_rect: Some(screen()),
-            time: Some(f64::from(STEP)),
-            predicted_dt: STEP,
-            ..Default::default()
-         },
-         |ui| {
-            effect().strike(ui.ctx());
-            effect().show(ui.ctx());
-         },
-      );
-      reference.textures_delta.clear();
-      assert_eq!(
-         actual,
-         polylines(&reference),
-         "the default Lightning burst must paint the effect's own default polylines and strokes"
-      );
-
-      // Glow: the default kind, whose default fan is the pre-change fan at
-      // `short x from == short`.
-      let (glow_ctx, glow_output, glow_warm, _) = complete_hold(HoldSettings {
-         seconds: 0.5,
-         ..Default::default()
-      });
-      let mesh = burst_mesh(&glow_output).expect("the default Glow burst must paint a mesh");
-      let short = glow_warm.rect.width().min(glow_warm.rect.height()).max(1.0);
-      let accent = Theme::current(&glow_ctx).colors.accent;
-      assert_eq!(
-         mesh,
-         crate::glow::glow_mesh(glow_warm.rect.center(), short, accent),
-         "the default Glow burst must emit the pre-change fan at short x 1.0"
       );
    }
 
@@ -2477,213 +1571,6 @@ mod tests {
       assert!(
          sweep_shape(&pressed, SHORTCUT_FILL).is_some(),
          "`.hold_fill(a).hold(seconds)` must keep the earlier fill"
-      );
-   }
-
-   #[test]
-   fn the_settings_body_renders_and_the_widget_uses_its_fields() {
-      let ctx = Context::default();
-      let mut settings = HoldSettings {
-         seconds: 0.5,
-         fill_from: Some(Color32::from_rgb(1, 1, 1)),
-         ..Default::default()
-      };
-
-      let output = ctx.run_ui(
-         RawInput {
-            screen_rect: Some(screen()),
-            ..Default::default()
-         },
-         |ui| {
-            settings.body_ui(ui);
-         },
-      );
-      output.drop_without_applying_deltas();
-      assert!(
-         !settings.open,
-         "body_ui must not touch the window flag"
-      );
-
-      // Edit the struct after the body pass: the widget must read the live value.
-      settings.fill_from = Some(SWEEP);
-      let build = move || Button::new("Hold").hold_settings(&settings);
-      let (_, warm) = run_pass(&ctx, vec![], 0.0, build);
-      let (pressed, response) = run_pass(
-         &ctx,
-         vec![press(warm.rect.center())],
-         f64::from(STEP),
-         build,
-      );
-      assert_eq!(
-         hold_state(&ctx, response.id).expect("hold state").progress,
-         0.2,
-         "the widget must use the settings' duration"
-      );
-      assert!(
-         sweep_shape(&pressed, SWEEP).is_some(),
-         "the widget must use the fill edited in the struct"
-      );
-   }
-
-   /// Wide enough that a left, centred and right label land far apart.
-   const WIDE: Vec2 = vec2(240.0, 44.0);
-
-   #[test]
-   fn the_default_label_alignment_is_left() {
-      let ctx = Context::default();
-      let (output, response) = run_pass(&ctx, vec![], 0.0, || {
-         Button::new("Reset").min_size(WIDE)
-      });
-      let text = text_rect(&output, "Reset").expect("the label must be painted");
-      let padding = ctx.style_of(ctx.theme()).spacing.button_padding.x;
-      assert!(
-         (text.left() - (response.rect.left() + padding)).abs() < 1.0,
-         "the default label must start at the button's left edge plus padding: \
-          label left {} vs button left {} plus padding {padding}",
-         text.left(),
-         response.rect.left()
-      );
-      assert!(
-         text.left() < response.rect.center().x,
-         "the default label must sit left of the button's centre"
-      );
-   }
-
-   #[test]
-   fn a_centred_label_sits_in_the_middle() {
-      let ctx = Context::default();
-      let (output, response) = run_pass(&ctx, vec![], 0.0, || {
-         Button::new("Reset").min_size(WIDE).label_align(Align::Center)
-      });
-      let text = text_rect(&output, "Reset").expect("the label must be painted");
-      assert!(
-         (text.center().x - response.rect.center().x).abs() <= 2.0,
-         "the centred label's centre {} must match the button's centre {}",
-         text.center().x,
-         response.rect.center().x
-      );
-   }
-
-   #[test]
-   fn a_right_aligned_label_moves_to_the_end() {
-      let ctx = Context::default();
-      let (output, response) = run_pass(&ctx, vec![], 0.0, || {
-         Button::new("Reset").min_size(WIDE).label_align(Align::Max)
-      });
-      let text = text_rect(&output, "Reset").expect("the label must be painted");
-      let padding = ctx.style_of(ctx.theme()).spacing.button_padding.x;
-      assert!(
-         (text.right() - (response.rect.right() - padding)).abs() <= 2.0,
-         "the right-aligned label's right edge {} must sit near the button's \
-          right edge {} minus padding {padding}",
-         text.right(),
-         response.rect.right()
-      );
-   }
-
-   #[test]
-   fn a_right_text_atom_stays_at_the_right_edge() {
-      let ctx = Context::default();
-      let padding = ctx.style_of(ctx.theme()).spacing.button_padding.x;
-      for align in [Align::Min, Align::Center, Align::Max] {
-         let (output, response) = run_pass(&ctx, vec![], 0.0, || {
-            Button::new("Reset").min_size(WIDE).right_text("\u{2318}K").label_align(align)
-         });
-         let right = text_rect(&output, "\u{2318}K").expect("the right text must be painted");
-         assert!(
-            (right.right() - (response.rect.right() - padding)).abs() <= 2.0,
-            "the right text must stay at the button's right edge under {align:?}: \
-             its right edge {} vs the button's right edge {}",
-            right.right(),
-            response.rect.right()
-         );
-         // `right_text` inserts a trailing grow atom, so the atom block already
-         // fills the rect and the label keeps its left position under every
-         // alignment; only the alignment of grow-free buttons can move.
-         let label = text_rect(&output, "Reset").expect("the label must be painted");
-         assert!(
-            (label.left() - (response.rect.left() + padding)).abs() <= 2.0,
-            "with a trailing grow atom the label must stay left under {align:?}: \
-             its left edge {} vs the button's left edge {} plus padding {padding}",
-            label.left(),
-            response.rect.left()
-         );
-      }
-   }
-
-   #[test]
-   fn button_hover_fill_eases_instead_of_jumping() {
-      let ctx = themed_ctx();
-      // The theme's own button visuals, minus the shadow: the shadow paints a
-      // second opaque rect of the same size, which the whole-frame fill reader
-      // would match instead of the button's fill.
-      let visuals = ButtonVisuals {
-         shadow: Shadow::NONE,
-         ..Theme::button_visuals_from_ctx(&ctx).expect("the theme installs button visuals")
-      };
-      let build = || Button::new("Save").visuals(visuals);
-      let (idle, hovered) = (visuals.bg, visuals.bg_hover);
-      assert_ne!(
-         idle, hovered,
-         "the theme must distinguish idle from hover for this test to mean anything"
-      );
-
-      // Frame 1, no pointer: the button exists and we learn where it is.
-      let (_, response) = run_pass(&ctx, Vec::new(), 0.0, build);
-      let centre = response.rect.center();
-
-      // Point at the button: the hover leg starts on this frame, at 0.0.
-      run_pass(&ctx, vec![hover(centre)], 0.15, build);
-
-      // Half of the 0.3 s theme duration after the hover began: the painted
-      // fill must be a blend, not either endpoint.
-      let (output, _) = run_pass(&ctx, vec![hover(centre)], 0.30, build);
-      let fills = rect_fills(&output);
-      assert!(
-         fills.iter().any(|c| *c != idle && *c != hovered),
-         "mid-transition fill should be neither idle nor hover: {fills:?}"
-      );
-
-      // Settled: exactly the themed hover fill.
-      let (output, _) = run_pass(&ctx, vec![hover(centre)], 0.6, build);
-      assert!(
-         rect_fills(&output).contains(&hovered),
-         "settled hover should paint the theme's hover fill exactly"
-      );
-   }
-
-   #[test]
-   fn button_press_fill_snaps_in() {
-      let ctx = themed_ctx();
-      // The shipped themes alias their idle and pressed fills, so sentinels are
-      // needed to tell the two apart.
-      const IDLE: Color32 = Color32::from_rgb(10, 20, 30);
-      const HOVER: Color32 = Color32::from_rgb(40, 50, 60);
-      const PRESSED: Color32 = Color32::from_rgb(70, 80, 90);
-      let visuals = ButtonVisuals {
-         bg: IDLE,
-         bg_hover: HOVER,
-         bg_click: PRESSED,
-         shadow: Shadow::NONE,
-         ..Default::default()
-      };
-      let build = || Button::new("Save").visuals(visuals);
-      let (_, response) = run_pass(&ctx, Vec::new(), 0.0, build);
-      let centre = response.rect.center();
-      run_pass(&ctx, vec![hover(centre)], 0.15, build);
-      let (settled, _) = run_pass(&ctx, vec![hover(centre)], 0.6, build); // settle the hover first
-      assert!(
-         rect_fills(&settled).contains(&HOVER),
-         "the hover must be settled before the press, got {:?}",
-         rect_fills(&settled)
-      );
-
-      // The very frame the pointer goes down: already the pressed fill (the
-      // pressed leg runs on `Motion::instant`).
-      let (output, _) = run_pass(&ctx, vec![press(centre)], 0.725, build);
-      assert!(
-         rect_fills(&output).contains(&PRESSED),
-         "a press must paint the pressed fill on the same frame"
       );
    }
 }

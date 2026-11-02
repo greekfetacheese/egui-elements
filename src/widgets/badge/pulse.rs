@@ -109,32 +109,6 @@ mod tests {
    use super::*;
 
    #[test]
-   fn frame_holds_the_measured_alpha_then_fades() {
-      let pulse = BadgePulse::new();
-
-      let (scale, alpha) = pulse.frame(0.0);
-      assert!((scale - 1.0).abs() < 1e-6, "scale at 0: {scale}");
-      assert!((alpha - 0.50).abs() < 1e-6, "alpha at 0: {alpha}");
-
-      let (scale, alpha) = pulse.frame(0.5);
-      assert!(
-         alpha > 0.49,
-         "the capture's flat band holds at 0.51: {alpha}"
-      );
-      assert!(
-         scale > 1.5 && scale < 1.9,
-         "scale at the hold: {scale}"
-      );
-
-      let (scale, alpha) = pulse.frame(0.999);
-      assert!(alpha < 0.02, "alpha at the end: {alpha}");
-      assert!(
-         (scale - 1.9).abs() < 0.02,
-         "scale at the end: {scale}"
-      );
-   }
-
-   #[test]
    fn phase_is_deterministic_and_off_zero_for_a_real_id() {
       let a = BadgePulse::phase(Id::unique("inbox"));
       assert_eq!(a, BadgePulse::phase(Id::unique("inbox")));

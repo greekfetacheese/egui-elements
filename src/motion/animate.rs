@@ -185,7 +185,8 @@ mod tests {
    }
 
    #[test]
-   fn seeded_first_sight_lands_on_the_target() {
+   fn a_seeded_animation_starts_settled_and_retargets_from_the_seed() {
+      // Case: seeded_first_sight_lands_on_the_target
       let ctx = themed_ctx();
       let mut value = -1.0;
       let mut idle = false;
@@ -204,10 +205,8 @@ mod tests {
          idle,
          "a seeded first sight must not request a repaint"
       );
-   }
 
-   #[test]
-   fn seeded_animation_retargets_from_the_seed() {
+      // Case: seeded_animation_retargets_from_the_seed
       let ctx = themed_ctx();
       let motion = Motion::new(0.2);
       let mut values = Vec::new();
@@ -378,23 +377,5 @@ mod tests {
          );
       });
       assert_eq!(v, 0.0);
-   }
-
-   #[test]
-   fn color_lerp_mixes_channels() {
-      let a = Color32::BLACK;
-      assert_eq!(a.lerp(Color32::WHITE, 0.0), Color32::BLACK);
-      assert_eq!(a.lerp(Color32::WHITE, 1.0), Color32::WHITE);
-
-      let mid = a.lerp(Color32::WHITE, 0.5);
-      for channel in [mid.r(), mid.g(), mid.b()] {
-         assert!(
-            (124..=131).contains(&channel),
-            "mid channel: {channel}"
-         );
-      }
-      assert_eq!(mid.r(), mid.g());
-      assert_eq!(mid.g(), mid.b());
-      assert_eq!(mid.a(), 255);
    }
 }

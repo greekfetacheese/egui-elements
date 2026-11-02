@@ -522,7 +522,8 @@ mod tests {
    }
 
    #[test]
-   fn columns_fr_share_the_free_space_by_weight() {
+   fn columns_follow_their_specs() {
+      // Case: columns_fr_share_the_free_space_by_weight
       let out = resolve_columns(
          &[Column::Fr(2.0), Column::Fr(1.0)],
          &[0.0, 0.0],
@@ -532,10 +533,8 @@ mod tests {
       assert!(close(out.widths[0], 193.33));
       assert!(close(out.widths[1], 96.67));
       assert_eq!(out.total, 300.0);
-   }
 
-   #[test]
-   fn columns_auto_use_the_measured_width() {
+      // Case: columns_auto_use_the_measured_width
       let out = resolve_columns(
          &[Column::Auto, Column::Auto],
          &[80.0, 40.0],
@@ -545,10 +544,8 @@ mod tests {
       assert!(close(out.widths[0], 80.0));
       assert!(close(out.widths[1], 40.0));
       assert_eq!(out.total, 130.0);
-   }
 
-   #[test]
-   fn columns_fixed_keeps_its_width_with_fr_present() {
+      // Case: columns_fixed_keeps_its_width_with_fr_present
       let out = resolve_columns(
          &[Column::Fr(1.0), Column::Fixed(100.0)],
          &[0.0, 0.0],
@@ -558,10 +555,8 @@ mod tests {
       assert!(close(out.widths[0], 200.0));
       assert!(close(out.widths[1], 100.0));
       assert_eq!(out.total, 300.0);
-   }
 
-   #[test]
-   fn columns_overflow_collapses_fr_to_zero() {
+      // Case: columns_overflow_collapses_fr_to_zero
       let out = resolve_columns(
          &[Column::Fixed(200.0), Column::Fixed(200.0), Column::Fr(1.0)],
          &[0.0, 0.0, 0.0],
@@ -572,10 +567,8 @@ mod tests {
       assert!(close(out.widths[1], 200.0));
       assert_eq!(out.widths[2], 0.0);
       assert_eq!(out.total, 400.0);
-   }
 
-   #[test]
-   fn columns_mix_auto_and_fr() {
+      // Case: columns_mix_auto_and_fr
       let out = resolve_columns(
          &[Column::Auto, Column::Fr(1.0)],
          &[120.0, 0.0],

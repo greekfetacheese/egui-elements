@@ -864,7 +864,8 @@ mod tests {
    }
 
    #[test]
-   fn help_frame_never_covers_the_capture_box() {
+   fn help_frame_placement_keeps_the_capture_box_clear() {
+      // Case: help_frame_never_covers_the_capture_box
       // Frame heights without and with the error line, and with a taller
       // theme font.
       for top in [0.0, 8.0, 60.0, 200.0, 415.0, 455.0, 700.0, 830.0] {
@@ -877,10 +878,8 @@ mod tests {
             );
          }
       }
-   }
 
-   #[test]
-   fn help_frame_favours_the_roomier_side() {
+      // Case: help_frame_favours_the_roomier_side
       // Mid-screen box: above, the side it has always been on.
       let capture = capture_box(455.0);
       assert_eq!(
@@ -900,10 +899,8 @@ mod tests {
             pos2(capture.min.x, capture.max.y + HELP_GAP_PT)
          )
       );
-   }
 
-   #[test]
-   fn help_frame_paints_only_inside_its_rect() {
+      // Case: help_frame_paints_only_inside_its_rect
       // A window shadow is painted outside the frame rect: on Linux that paint
       // lands in the captured image and darkens its top rows, even when
       // `help_placement` keeps the rect itself clear of the capture box.
@@ -911,10 +908,8 @@ mod tests {
          help_frame(&egui::Style::default()).shadow,
          egui::Shadow::NONE
       );
-   }
 
-   #[test]
-   fn help_frame_fits_on_screen_where_there_is_room() {
+      // Case: help_frame_fits_on_screen_where_there_is_room
       let capture = capture_box(455.0);
       assert!(screen().contains_rect(frame_rect(capture, vec2(247.0, 104.0))));
 

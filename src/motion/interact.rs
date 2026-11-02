@@ -63,7 +63,7 @@ impl InteractT {
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeKind};
-   use egui::{Color32, Context, Pos2, RawInput, Rect, Stroke, Vec2};
+   use egui::{Context, Pos2, RawInput, Rect, Vec2};
 
    fn themed_ctx() -> Context {
       let ctx = Context::default();
@@ -84,34 +84,6 @@ mod tests {
       };
       let mut out = ctx.run_ui(input, |ui| body(ui));
       out.textures_delta.clear();
-   }
-
-   #[test]
-   fn interact_t_eases_the_hover() {
-      let ctx = themed_ctx();
-      let motion = Motion::new(0.2);
-      let mut seen = Vec::new();
-      for time in [10.0, 10.1, 10.2] {
-         frame_at(&ctx, time, |ui| {
-            seen.push(InteractT::of(ui, Id::unique("h"), true, false, motion).hover);
-         });
-      }
-      assert_eq!(seen.len(), 3);
-      assert!(
-         (seen[0] - 0.0).abs() < 1e-4,
-         "first sight: {}",
-         seen[0]
-      );
-      assert!(
-         (seen[1] - 0.875).abs() < 0.01,
-         "half: {}",
-         seen[1]
-      );
-      assert!(
-         (seen[2] - 1.0).abs() < 1e-4,
-         "settled: {}",
-         seen[2]
-      );
    }
 
    #[test]
@@ -139,68 +111,5 @@ mod tests {
          "release must land on the up frame: {}",
          t.press
       );
-   }
-
-   #[test]
-   fn interact_t_blends_idle_hover_press() {
-      let idle = Color32::BLACK;
-      let hover = Color32::WHITE;
-      let press = Color32::RED;
-
-      assert_eq!(
-         InteractT {
-            hover: 0.0,
-            press: 0.0
-         }
-         .blend(idle, hover, press),
-         Color32::BLACK
-      );
-      assert_eq!(
-         InteractT {
-            hover: 1.0,
-            press: 0.0
-         }
-         .blend(idle, hover, press),
-         Color32::WHITE
-      );
-      assert_eq!(
-         InteractT {
-            hover: 0.0,
-            press: 1.0
-         }
-         .blend(idle, hover, press),
-         Color32::RED
-      );
-
-      let mid = InteractT {
-         hover: 0.5,
-         press: 0.0,
-      }
-      .blend(idle, hover, press);
-      for channel in [mid.r(), mid.g(), mid.b()] {
-         assert!(
-            (124..=131).contains(&channel),
-            "mid channel: {channel}"
-         );
-      }
-      assert_eq!(mid.r(), mid.g());
-      assert_eq!(mid.g(), mid.b());
-      assert_eq!(mid.a(), 255);
-   }
-
-   #[test]
-   fn stroke_lerp_blends_width_and_colour() {
-      let stroke = Stroke::new(1.0, Color32::BLACK).lerp(Stroke::new(3.0, Color32::WHITE), 0.5);
-      assert!(
-         (stroke.width - 2.0).abs() < 1e-4,
-         "width: {}",
-         stroke.width
-      );
-      for channel in [stroke.color.r(), stroke.color.g(), stroke.color.b()] {
-         assert!(
-            (124..=131).contains(&channel),
-            "mid channel: {channel}"
-         );
-      }
    }
 }

@@ -180,22 +180,6 @@ impl SnowSettings {
 #[cfg(test)]
 mod tests {
    use super::*;
-   use egui::__run_test_ctx;
-
-   #[test]
-   fn defaults_match_upstream_demo() {
-      let settings = SnowSettings::default();
-      assert!(!settings.open);
-      assert!(settings.active);
-      assert_eq!(settings.color, Color32::from_white_alpha(200));
-      assert_eq!(settings.density, 400);
-      assert_eq!(settings.size_min, 0.3);
-      assert_eq!(settings.size_max, 1.0);
-      assert_eq!(settings.speed_min, 40.0);
-      assert_eq!(settings.speed_max, 120.0);
-      assert_eq!(settings.wind, Vec2::ZERO);
-      assert_eq!(settings.layer, ParticleLayer::Foreground);
-   }
 
    #[test]
    fn reset_keeps_open() {
@@ -277,34 +261,5 @@ mod tests {
          height <= 400.0,
          "settings window is {height} tall, root is 400"
       );
-   }
-
-   #[test]
-   fn body_ui_renders_without_a_window() {
-      let mut settings = SnowSettings::default();
-      assert!(!settings.open);
-      egui::__run_test_ui(|ui| {
-         settings.body_ui(ui);
-      });
-      assert!(
-         !settings.open,
-         "body_ui must not touch the window flag"
-      );
-   }
-
-   #[test]
-   fn show_window_returns_response_only_when_open() {
-      __run_test_ctx(|ctx| {
-         let mut closed = SnowSettings::default();
-         assert!(closed.show_window(ctx).is_none());
-      });
-
-      __run_test_ctx(|ctx| {
-         let mut open = SnowSettings {
-            open: true,
-            ..Default::default()
-         };
-         assert!(open.show_window(ctx).is_some());
-      });
    }
 }

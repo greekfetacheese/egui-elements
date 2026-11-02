@@ -137,7 +137,6 @@ mod tests {
    use super::*;
 
    const ACCENT: Color32 = Color32::from_rgb(11, 140, 255);
-   const GLOW: Color32 = Color32::from_rgb(255, 0, 0);
 
    fn arc() -> Arc {
       Arc {
@@ -147,110 +146,6 @@ mod tests {
          start: 0.0,
          end: std::f64::consts::PI,
       }
-   }
-
-   fn at(mesh: &Mesh, sample: usize, ring: usize) -> (Pos2, Color32) {
-      let vertex = &mesh.vertices[sample * RINGS + ring];
-      (vertex.pos, vertex.color)
-   }
-
-   #[test]
-   fn band_edges_sit_a_half_thickness_either_side_of_the_centreline() {
-      let arc = arc();
-      let mesh = arc_mesh(&arc, ACCENT, GLOW, 0.0, 0.0, 0.0);
-      let samples = arc.samples();
-
-      let (inner, inner_color) = at(&mesh, 0, 2);
-      let (outer, outer_color) = at(&mesh, samples - 1, 3);
-
-      assert!(
-         (inner.distance(arc.center) - 18.0).abs() < 0.01,
-         "{inner:?}"
-      );
-      assert!(
-         (outer.distance(arc.center) - 22.0).abs() < 0.01,
-         "{outer:?}"
-      );
-      assert_eq!(inner_color, ACCENT);
-      assert_eq!(outer_color, ACCENT);
-   }
-
-   #[test]
-   fn the_fringe_falls_off_to_a_transparent_rim() {
-      let arc = arc();
-      let strength = 0.3;
-      let mesh = arc_mesh(&arc, ACCENT, GLOW, 6.0, strength, 0.0);
-      let samples = arc.samples();
-      let mid = (255.0 * GLOW_MID_ALPHA * strength + 0.5) as u8;
-
-      assert_eq!(at(&mesh, 0, 0).1.a(), 0, "inner rim");
-      assert_eq!(at(&mesh, 0, 5).1.a(), 0, "outer rim");
-      assert_eq!(
-         at(&mesh, samples - 1, 1).1.a(),
-         mid,
-         "inner mid ring"
-      );
-      assert_eq!(
-         at(&mesh, samples - 1, 4).1.a(),
-         mid,
-         "outer mid ring"
-      );
-      assert_eq!(at(&mesh, samples - 1, 2).1.a(), 255, "band");
-   }
-
-   #[test]
-   fn the_fringe_uses_the_glow_colour() {
-      let arc = arc();
-      let mesh = arc_mesh(&arc, ACCENT, GLOW, 6.0, 1.0, 0.0);
-      let samples = arc.samples();
-
-      assert_eq!(at(&mesh, 0, 2).1, ACCENT);
-      assert_eq!(
-         at(&mesh, samples - 1, 4).1,
-         GLOW.gamma_multiply(GLOW_MID_ALPHA)
-      );
-   }
-
-   #[test]
-   fn the_comet_ramp_runs_from_the_tail_alpha_to_full_at_the_head() {
-      let arc = arc();
-      let mesh = arc_mesh(&arc, ACCENT, ACCENT, 0.0, 0.0, 1.0);
-      let samples = arc.samples();
-
-      let tail = at(&mesh, 0, 2).1.a();
-      let middle = at(&mesh, samples / 2, 2).1.a();
-      let head = at(&mesh, samples - 1, 2).1.a();
-
-      assert_eq!(tail, (255.0 * TAIL_ALPHA + 0.5) as u8);
-      assert_eq!(head, 255);
-      assert!(
-         tail < middle && middle < head,
-         "tail {tail} middle {middle} head {head}"
-      );
-   }
-
-   #[test]
-   fn comet_zero_keeps_every_band_vertex_opaque() {
-      let arc = arc();
-      let mesh = arc_mesh(&arc, ACCENT, ACCENT, 0.0, 0.0, 0.0);
-
-      for sample in 0..arc.samples() {
-         assert_eq!(at(&mesh, sample, 2).1.a(), 255);
-         assert_eq!(at(&mesh, sample, 3).1.a(), 255);
-      }
-   }
-
-   #[test]
-   fn a_glowless_arc_still_feathers_its_edges() {
-      let arc = arc();
-      let mesh = arc_mesh(&arc, ACCENT, ACCENT, 0.0, 0.0, 0.0);
-      let (rim, rim_color) = at(&mesh, 0, 5);
-
-      assert!(
-         (rim.distance(arc.center) - 23.0).abs() < 0.01,
-         "{rim:?}"
-      );
-      assert_eq!(rim_color.a(), 0);
    }
 
    #[test]

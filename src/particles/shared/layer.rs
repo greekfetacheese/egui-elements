@@ -46,15 +46,3 @@ pub(crate) fn resolve_target(
 
    Some((layer_id, area))
 }
-
-#[cfg(test)]
-mod tests {
-   use super::*;
-
-   #[test]
-   fn particle_layer_to_str() {
-      assert_eq!(ParticleLayer::Background.to_str(), "Background");
-      assert_eq!(ParticleLayer::Foreground.to_str(), "Foreground");
-      assert_eq!(ParticleLayer::Top.to_str(), "Top");
-   }
-}

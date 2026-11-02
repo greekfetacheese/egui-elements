@@ -645,7 +645,8 @@ mod tests {
    }
 
    #[test]
-   fn table_auto_column_fits_the_widest_cell() {
+   fn table_columns_and_rows_follow_their_specs() {
+      // Case: table_auto_column_fits_the_widest_cell
       const LONG: &str = "Buy the entire liquidity pool";
       let rows = [Row("Swap", "row 0"), Row(LONG, "row 1")];
       let ctx = themed_ctx();
@@ -708,10 +709,8 @@ mod tests {
             fixed.width()
          );
       }
-   }
 
-   #[test]
-   fn table_fr_columns_fill_the_available_width() {
+      // Case: table_fr_columns_fill_the_available_width
       let ctx = themed_ctx();
       let cells = std::cell::RefCell::new(Vec::new());
       for _ in 0..2 {
@@ -746,10 +745,8 @@ mod tests {
          "last cell max.x {} != 500",
          cells[2].max.x
       );
-   }
 
-   #[test]
-   fn table_row_height_is_its_tallest_cell() {
+      // Case: table_row_height_is_its_tallest_cell
       let rows = [Row("Label", "Button")];
       let ctx = themed_ctx();
       let rects = std::cell::RefCell::new(Vec::new());
@@ -781,10 +778,8 @@ mod tests {
          "row height {} != 44",
          rects[0].height()
       );
-   }
 
-   #[test]
-   fn table_header_rule_reserves_space_under_the_header() {
+      // Case: table_header_rule_reserves_space_under_the_header
       let ctx = themed_ctx();
       let rows = [Row("Deployer", "Swap")];
       let rects = std::cell::RefCell::new(Vec::new());

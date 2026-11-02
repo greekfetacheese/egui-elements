@@ -175,7 +175,8 @@ mod tests {
    use super::*;
 
    #[test]
-   fn hop_peaks_at_the_amplitude_then_returns() {
+   fn the_hop_peaks_then_returns_and_only_a_changed_text_starts_it() {
+      // Case: hop_peaks_at_the_amplitude_then_returns
       let bounce = BadgeBounce::new();
       assert_eq!(bounce.offset(18.0, 0.0), 0.0);
       assert_eq!(bounce.offset(18.0, 1.0), 0.0);
@@ -187,20 +188,16 @@ mod tests {
          (peak + 9.0).abs() < 0.2,
          "0.5 x 18 = 9 pt up, got {peak}"
       );
-   }
 
-   #[test]
-   fn first_sight_never_hops() {
+      // Case: first_sight_never_hops
       let mut state = BounceState::default();
       state.observe(7, 0.0);
       assert_eq!(
          state.start, None,
          "a badge that appears already showing its count is still"
       );
-   }
 
-   #[test]
-   fn a_changed_text_starts_a_leg_from_now() {
+      // Case: a_changed_text_starts_a_leg_from_now
       let mut state = BounceState::default();
       state.observe(7, 0.0);
       state.observe(9, 1.0);

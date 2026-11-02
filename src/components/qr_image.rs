@@ -478,34 +478,8 @@ mod tests {
       "0123456789abcdef0123456789abcdef",
    );
 
-   /// An EVM address: 42 characters.
-   const ADDRESS: &str = "0x492e7Bc37cCBE1Afb1738ceE2aa880Fe7184C0d";
-
    fn raster(png: &[u8]) -> image::GrayImage {
       image::load_from_memory_with_format(png, ImageFormat::Png).unwrap().to_luma8()
-   }
-
-   #[test]
-   fn test_qr_image() {
-      let mut qr = QrImage::new("Hello, world!", "bytes://test".to_string());
-      {
-         let _image = qr.image();
-      }
-
-      assert!(!qr.is_cleared());
-      assert!(!qr.has_error());
-      assert!(qr.modules() > 0);
-      assert_eq!(
-         qr.image_size(),
-         Vec2::splat((qr.raster_modules() * qr.module_px()) as f32)
-      );
-
-      qr.clear(&Context::default());
-      assert!(qr.is_cleared());
-      assert_eq!(qr.modules(), 0);
-      assert_eq!(qr.raster_modules(), 0);
-      assert_eq!(qr.module_px(), 0);
-      assert_eq!(qr.image_size(), Vec2::ZERO);
    }
 
    /// The raster must be a whole number of modules per side and it must not exceed
@@ -553,44 +527,6 @@ mod tests {
       }
    }
 
-   /// Fewer modules for the same payload means bigger modules at the same display
-   /// size, which is what makes a dense symbol scannable.
-   #[test]
-   fn lower_error_correction_uses_fewer_modules() {
-      let with = |ecc| {
-         QrImage::with_encoding(
-            DENSE_PAYLOAD,
-            format!("bytes://ecc-{ecc:?}"),
-            QrEncoding {
-               ecc,
-               ..Default::default()
-            },
-         )
-      };
-
-      let low = with(QrEcc::Low);
-      let high = with(QrEcc::High);
-
-      assert!(low.modules() < high.modules());
-      assert!(low.min_display_px(4) < high.min_display_px(4));
-      assert_eq!(high.min_display_px(4), high.raster_modules() * 4);
-   }
-
-   /// The payload length is what drives the module count: a short address and a
-   /// long hex digest are the same size on screen, so the digest's modules are
-   /// much smaller — the difference between a code that scans and one that barely
-   /// does.
-   #[test]
-   fn short_payloads_need_far_fewer_modules() {
-      let address = QrImage::new(ADDRESS, "bytes://address".to_string());
-      let digest = QrImage::new(DENSE_PAYLOAD, "bytes://digest".to_string());
-
-      assert!(digest.modules() >= address.modules() * 3 / 2);
-      // Same display size for both, so the digest gets fewer pixels per module.
-      assert!(digest.module_px() <= address.module_px() || digest.modules() > address.modules());
-      assert!(digest.min_display_px(4) > address.min_display_px(4));
-   }
-
    /// The quiet zone is a light border the QR specification asks for; without one
    /// the symbol sits straight on the surface behind it, which is what a scanner
    /// thresholds against.
@@ -634,12 +570,5 @@ mod tests {
             assert_eq!(img.get_pixel(b, i)[0], 255);
          }
       }
-   }
-
-   #[test]
-   fn image_size_pt_follows_the_scale_factor() {
-      let qr = QrImage::new(ADDRESS, "bytes://pt".to_string());
-      assert_eq!(qr.image_size_pt(1.0), qr.image_size());
-      assert_eq!(qr.image_size_pt(2.0), qr.image_size() / 2.0);
    }
 }

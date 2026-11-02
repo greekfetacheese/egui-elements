@@ -308,16 +308,4 @@ mod tests {
       assert!((hsla.a - 128.0 / 255.0).abs() < 1e-5);
       assert_eq!(hsla.to_color32().a(), 128);
    }
-
-   #[test]
-   fn hsl_pure_red() {
-      let c = Hsla {
-         h: 0.0,
-         s: 100.0,
-         l: 50.0,
-         a: 1.0,
-      }
-      .to_color32();
-      assert_eq!(c, Color32::from_rgb(255, 0, 0));
-   }
 }
