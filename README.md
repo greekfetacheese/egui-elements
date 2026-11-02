@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, and an animated checkbox
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, and an animated checkbox
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -223,6 +223,31 @@ style's `animation_time`; `.motion(..)` overrides it and `Motion::instant()` sna
 `CheckboxVisuals::from_theme(theme.colors)` to keep the rest. A click reports
 `Response::changed`, Space/Enter work while the box is focused, and
 `ui.add_enabled(false, Checkbox::new(..))` mutes the whole row.
+
+### Radios
+
+`Radio` shares the checkbox's plate — the same row, colours, shadow and clock — with
+a circular outline and a dot for its mark, so `.size()` scales both the same way.
+
+A group is **every radio bound to the same `&mut value`**: selecting one sets it and
+the rest of the group follows, while clicking the selected radio changes nothing.
+
+```rust
+use egui_elements::motion::Motion;
+use egui_elements::widgets::{Radio, ToggleShadow, ToggleVisuals};
+
+ui.add(Radio::new(&mut mode, Mode::Fast, "Fast"));
+ui.add(Radio::without_text(&mut mode, Mode::Slow));    // plate only, for a table cell
+ui.add(Radio::new(&mut mode, Mode::Fast, "Large").size(28.0));
+ui.add(Radio::new(&mut mode, Mode::Fast, "Flat").shadow(ToggleShadow::NONE));
+ui.add(Radio::new(&mut mode, Mode::Fast, "Instant").motion(Motion::instant()));
+```
+
+The shared knobs take the same types as the checkbox: `.visuals(ToggleVisuals)` and
+`.shadow(ToggleShadow)` replace the palette-derived colours and lift for one widget,
+and `.motion(Motion)` overrides the style's `animation_time`. A click reports
+`Response::changed`, Space selects a focused radio, and
+`ui.add_enabled(false, Radio::new(..))` mutes the whole row.
 
 ### Hold-to-confirm buttons
 

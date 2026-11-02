@@ -10,7 +10,7 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
-   Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox, Label, Modal, SecureTextEdit,
+   Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox, Label, Modal, Radio, SecureTextEdit,
    Spinner, Window,
 };
 
@@ -115,6 +115,7 @@ struct DemoApp {
    check: bool,
    check_on: bool,
    check_off: bool,
+   radio: u8,
    slider: f32,
    items: Items,
    text_single: String,
@@ -156,6 +157,7 @@ impl DemoApp {
          check: true,
          check_on: true,
          check_off: false,
+         radio: 0,
          slider: 42.0,
          items: Items::default(),
          text_single: String::from("Single-line text"),
@@ -662,6 +664,24 @@ impl DemoApp {
             RichText::new("Unchecked").size(size).color(text_color),
          ));
          ui.add(Checkbox::without_text(&mut self.check_off));
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 18.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+         ui.add(Radio::new(
+            &mut self.radio,
+            0u8,
+            RichText::new("Radio (themed)").size(size).color(text_color),
+         ));
+         ui.add(Radio::new(
+            &mut self.radio,
+            1u8,
+            RichText::new("Second option").size(size).color(text_color),
+         ));
+         ui.add(Radio::without_text(&mut self.radio, 2u8));
       });
 
       ui.add_space(8.0);
