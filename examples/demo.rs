@@ -9,9 +9,9 @@ use egui_elements::editor::ThemeEditor;
 use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
-use egui_elements::widgets::badge::BadgePulse;
 use egui_elements::widgets::{
-   Badge, BadgeCorner, Button, Checkbox, ComboBox, Label, Modal, SecureTextEdit, Spinner, Window,
+   Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox, Label, Modal, SecureTextEdit,
+   Spinner, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and

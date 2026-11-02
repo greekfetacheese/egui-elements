@@ -5,8 +5,9 @@
 
 use eframe::egui::*;
 use egui_elements::motion::Motion;
-use egui_elements::widgets::badge::{BadgeBounce, BadgeBounceTrigger, BadgePulse};
-use egui_elements::widgets::{Badge, Button, Frame as Card};
+use egui_elements::widgets::{
+   Badge, BadgeBounce, BadgeBounceTrigger, BadgePulse, Button, Frame as Card,
+};
 use egui_elements::{Theme, ThemeKind, utils};
 
 fn main() -> eframe::Result {
