@@ -77,5 +77,8 @@ name = "lightning"
 [[example]]
 name = "hold_to_confirm"
 
+[[example]]
+name = "spinner"
+
 [package.metadata.docs.rs]
 all-features = true

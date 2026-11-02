@@ -34,7 +34,7 @@
 //!   fills and completion bursts), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
 //!   [`ComboBox`], [`Modal`],
-//!   [`SecureTextEdit`], [`MultiLabel`],
+//!   [`SecureTextEdit`], [`MultiLabel`], [`Spinner`],
 //!   [`Window`]
 //! - [`particles`] — [`Snow`],
 //!   [`Light`] and
@@ -72,8 +72,8 @@
 //!
 //! See the crate README for system packages required by `qr-scanner`.
 //!
-//! [`ComboBox`] and [`Window`] have
-//! the same names as [`egui::ComboBox`] and [`egui::Window`]. Import this crate's
+//! [`ComboBox`], [`Window`] and [`Spinner`] have
+//! the same names as [`egui::ComboBox`], [`egui::Window`] and [`egui::Spinner`]. Import this crate's
 //! widgets after `use egui::*`, or alias one of them.
 
 mod glow;
@@ -100,7 +100,7 @@ pub use particles::{
 pub use theme::{Theme, ThemeKind};
 pub use widgets::{
    Badge, BadgeCorner, Button, ComboBox, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal,
-   MultiLabel, Window,
+   MultiLabel, Spinner, SpinnerShadow, Window,
 };
 
 #[cfg(feature = "secure-types")]

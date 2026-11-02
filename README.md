@@ -9,14 +9,14 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, and hold-to-confirm buttons with a configurable progress sweep and completion burst
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, and hold-to-confirm buttons with a configurable progress sweep and completion burst
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
 - Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
-`Button`, `ComboBox`, and `Window` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
+`Button`, `ComboBox`, `Window` and `Spinner` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
 
 ## Installation
 
@@ -128,6 +128,33 @@ error color; `Badge::dot()` is a plain coloured dot. `.corner(BadgeCorner::TopLe
 
 The badge is an overlay: it is painted on top of the button and never changes
 its size or layout.
+
+### Spinners
+
+`Spinner` has the same geometry as egui's spinner — a rotating arc whose sweep is
+modulated by `sin(time)` — drawn with the theme accent and three colour effects
+that make it read as a light orbiting the ring: a glow, a tail-to-head alpha ramp
+on the arc, and a faint track ring.
+
+```rust
+use egui_elements::widgets::{Spinner, SpinnerShadow};
+
+ui.add(Spinner::new());                              // accent, interact_size.y square
+ui.add(Spinner::new().size(48.0));                   // square, proportional stroke
+ui.add(Spinner::new().color(Color32::WHITE));        // glow re-derives from the override
+ui.add(Spinner::new().shadow(SpinnerShadow::NONE));  // no glow
+ui.add(Spinner::new().comet(0.0).track_strength(0.0)); // flat arc, no track
+```
+
+The colour comes from `Theme::colors_from_ctx`, so an installed theme is enough.
+The track (`.track_strength`, 0.16 of the arc colour) and the glow
+(`.shadow(SpinnerShadow::new(color))`, a reach of 0.22·size at 0.30 peak alpha)
+are both fractions of the *final* arc colour, so overriding `.color()` repaints
+the whole spinner coherently. `.comet()` ramps the arc from a quarter-strength
+tail to a full-strength head (`0.0` paints a flat arc), `.thickness()` overrides
+the stroke (default 10 % of the size, clamped 2–6 pt), and
+`paint_at(&Ui, Rect)` draws it inside another widget. As with any shadow, the glow
+spills past the allocated square by `blur_ratio · size`.
 
 ### Hold-to-confirm buttons
 
