@@ -129,6 +129,44 @@ error color; `Badge::dot()` is a plain coloured dot. `.corner(BadgeCorner::TopLe
 The badge is an overlay: it is painted on top of the button and never changes
 its size or layout.
 
+A badge can hang off the corner instead of sitting inside it, and can animate:
+
+```rust
+use egui_elements::widgets::{
+    Badge, BadgeBounce, BadgeBounceTrigger, BadgePulse,
+};
+
+// The circle's centre on the button's top-right corner.
+ui.add(Button::new("Messages").badge(Badge::new("3").straddle()));
+
+// A looping radar-like halo.
+ui.add(Button::new("Inbox").badge(Badge::new("12").straddle().pulse(BadgePulse::new())));
+
+// Hop when the count changes (the default trigger).
+ui.add(Button::new("Episodes").badge(
+    Badge::new(episodes.to_string()).straddle().bounce(BadgeBounce::new()),
+));
+
+// Hop only when the host says so.
+let badge = Badge::new("1")
+    .id("sith")
+    .straddle()
+    .bounce(BadgeBounce::new().trigger(BadgeBounceTrigger::Manual));
+ui.add(Button::new("Sith").badge(badge));
+if new_episode {
+    Badge::bounce_now(ui.ctx(), "sith");
+}
+```
+
+`.straddle()` centres the badge on the host's corner (`.anchor(BadgeAnchor::Corner)` with no explicit inset);
+`.inset(..)` then pushes it further out. `BadgePulse` is the loop — `scale`, `alpha` and `period` default to
+the measured `1.9 x`, `0.50` and `1.5 s`. `BadgeBounce` is the hop, `0.5 x` the diameter at peak, triggered by
+`OnChange` (the default), `Manual` (via `Badge::bounce_now`) or `Loop`.
+
+A badge can also be rendered on its own, with no host widget: `ui.add(Badge::new("3"))` allocates its own
+square. Both the halo and the hop paint outside the badge's rect, so a badge animating inside a clipped parent
+is clipped with it.
+
 ### Spinners
 
 `Spinner` has the same geometry as egui's spinner — a rotating arc whose sweep is
