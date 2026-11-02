@@ -57,6 +57,9 @@ name = "email"
 name = "label_sections"
 
 [[example]]
+name = "combo_box"
+
+[[example]]
 name = "layout"
 
 [[example]]

@@ -756,4 +756,41 @@ mod tests {
          "11.15 is mid-rotation: {between} must sit strictly between {up} and {down}"
       );
    }
+
+   #[test]
+   fn show_rows_builds_only_the_visible_rows() {
+      const ROW_H: f32 = 24.0;
+      const ROWS: usize = 10_000;
+
+      let ctx = themed_ctx();
+      let built = Cell::new(0usize);
+      let (output, _) = open_popup(&ctx, |ui| {
+         ComboBox::new("virtual", Label::new("Pick", None)).width(160.0).show_rows_ui(
+            ui,
+            ROW_H,
+            ROWS,
+            |ui, range| {
+               built.set(built.get() + range.len());
+               for index in range {
+                  ui.label(format!("Row {index}"));
+               }
+            },
+         );
+      });
+
+      assert!(
+         !output.shapes.is_empty(),
+         "the popup must have painted something"
+      );
+
+      let built = built.get();
+      assert!(
+         built > 0,
+         "the visible rows must be built, built {built} of {ROWS}"
+      );
+      assert!(
+         built < 200,
+         "only the viewport is built — six frames over {ROWS} rows built {built}"
+      );
+   }
 }

@@ -103,6 +103,8 @@ fn gallery(ui: &mut Ui, text: &mut String, modal_open: &mut bool) {
 
 Give each `ComboBox` / `SecureTextEdit` a unique `id_salt` if you repeat the same gallery on several surfaces (bg, frame, window). Otherwise their persistent state collides.
 
+Long option lists can be virtualized: `show_rows_ui(ui, row_height, total_rows, |ui, range| …)` builds only the rows in the viewport, and every row must lay out at exactly `row_height` (without `item_spacing.y`, which egui adds itself). The popup chrome is adjustable with `.popup_gap(points)` (default `ThemeSpacing::xs`) and `.popup_content_margin(points)` (default `5`), and its surface is themed through `ComboBoxVisuals::popup_bg` / `popup_border`. See `cargo run --example combo_box`.
+
 ### Badges
 
 Attach a notification `Badge` to a corner of a `Button` to signal unseen content
