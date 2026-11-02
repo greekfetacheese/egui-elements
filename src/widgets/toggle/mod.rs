@@ -1,14 +1,15 @@
 //! The shared core of a plate-style toggle: a rounded plate with a glyph, a label and one clickable row.
 //!
-//! [`Checkbox`](crate::widgets::Checkbox) is the first widget built on it and a radio is the next, so
+//! [`Checkbox`](crate::widgets::Checkbox) and [`Radio`](crate::widgets::Radio) are both built on it, so
 //! everything that is not the glyph lives here: the row allocation, the interaction weights, the press
 //! scale and the lift. The plate itself is crate-private; the two visual knobs it exposes,
-//! [`ToggleVisuals`] and [`ToggleShadow`], are re-exported under the widget's own name.
+//! [`ToggleVisuals`] and [`ToggleShadow`], are re-exported at the crate root, and
+//! [`Checkbox`](crate::widgets::Checkbox) keeps `CheckboxVisuals`/`CheckboxShadow` as aliases.
 
 mod glyph;
 mod plate;
 
-pub(crate) use plate::{DEFAULT_SIZE, Row};
+pub(crate) use plate::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row};
 
 use egui::{Color32, Shadow};
 

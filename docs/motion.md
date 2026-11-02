@@ -85,7 +85,7 @@ screen.
 let t = animate_from(ui, response.id.with("check"), target, target, Motion::from_ui(ui));
 ```
 
-`Checkbox` is the widget that uses it. A fade and a toggle want opposite first frames, and that is the whole
+`Checkbox` and `Radio` are the widgets that use it. A fade and a toggle want opposite first frames, and that is the whole
 difference between the two functions.
 
 egui's own widgets still swap visual sets instantly through `Style::interact(&response)` — hover and active states

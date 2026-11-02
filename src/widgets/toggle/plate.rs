@@ -7,7 +7,7 @@ use egui::{
    pos2, vec2,
 };
 
-use super::glyph::{self, tick_shapes};
+use super::glyph::{self, dot_shapes, tick_shapes};
 use super::{ToggleShadow, ToggleVisuals};
 use crate::motion::{InteractT, Lerp, Motion, animate_from};
 use crate::theme::Theme;
@@ -15,8 +15,6 @@ use crate::visuals::paint_shape;
 
 /// Default plate size in points. The reference is 16 at 1×, up from egui's own `icon_width` of 14.
 pub(crate) const DEFAULT_SIZE: f32 = 18.0;
-/// Corner radius as a fraction of the plate size.
-const RADIUS_RATIO: f32 = 0.17;
 /// Border width as a fraction of the plate size, floored at one point.
 const BORDER_RATIO: f32 = 0.0625;
 /// Plate scale while the pointer is down.
@@ -27,6 +25,22 @@ const GLYPH_POP_FROM: f32 = 0.35;
 const GLYPH_FADE: f32 = 2.2;
 /// Alpha multiplier applied to a disabled toggle.
 const DISABLED_ALPHA: f32 = 0.5;
+
+/// The outline a plate paints.
+#[derive(Clone, Copy)]
+pub(crate) enum PlateShape {
+   /// A box whose corner radius is `ratio` of the plate size.
+   Rounded { ratio: f32 },
+   /// A circle.
+   Circle,
+}
+
+/// The glyph a plate pops in when it is checked.
+#[derive(Clone, Copy)]
+pub(crate) enum PlateGlyph {
+   Tick,
+   Dot,
+}
 
 /// The row a toggle allocates: plate, `icon_spacing`, label — one `Sense::click()` rect.
 pub(crate) struct Row<'u> {
@@ -77,6 +91,8 @@ impl<'u> Row<'u> {
    pub(crate) fn paint(
       self,
       checked: bool,
+      shape: PlateShape,
+      glyph: PlateGlyph,
       visuals: &ToggleVisuals,
       shadow: ToggleShadow,
       motion: Option<Motion>,
@@ -140,7 +156,10 @@ impl<'u> Row<'u> {
          );
 
          let stroke = Stroke::new((size * BORDER_RATIO).max(1.0), border);
-         let radius = CornerRadius::same((size * RADIUS_RATIO).round() as u8);
+         let radius = match shape {
+            PlateShape::Rounded { ratio } => CornerRadius::same((size * ratio).round() as u8),
+            PlateShape::Circle => CornerRadius::same(u8::MAX),
+         };
          let lift = if enabled { shadow } else { ToggleShadow::NONE };
 
          ui.painter().add(paint_shape(
@@ -154,12 +173,16 @@ impl<'u> Row<'u> {
          if t > 0.0 {
             let color = shade(visuals.mark).gamma_multiply((t * GLYPH_FADE).min(1.0));
             let pop = GLYPH_POP_FROM + (1.0 - GLYPH_POP_FROM) * egui::emath::easing::back_out(t);
-            let tick_rect = Rect::from_center_size(box_rect.center(), box_rect.size() * pop);
-            for shape in tick_shapes(
-               tick_rect,
-               color,
-               glyph::stroke_width(size * scale) * pop,
-            ) {
+            let glyph_rect = Rect::from_center_size(box_rect.center(), box_rect.size() * pop);
+            let shapes = match glyph {
+               PlateGlyph::Tick => tick_shapes(
+                  glyph_rect,
+                  color,
+                  glyph::stroke_width(glyph_rect.width()),
+               ),
+               PlateGlyph::Dot => dot_shapes(glyph_rect, color),
+            };
+            for shape in shapes {
                ui.painter().add(shape);
             }
          }

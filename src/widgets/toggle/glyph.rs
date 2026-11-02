@@ -1,10 +1,15 @@
-//! The tick: a 3-point polyline with round caps and a round elbow.
+//! The family's glyphs: the checkbox's tick polyline and the radio's dot.
 //!
-//! The points are the reference checkbox's measured ratios inside its box (`74..89 × 173..188` of a 16 px
-//! box), so one [`Checkbox::size`](crate::widgets::Checkbox::size) scales the glyph. epaint's
-//! `PathStroke` has no caps and no round joins, so each tip and the elbow get a filled circle.
+//! Both are scaled as ratios of the plate, so one [`Checkbox::size`](crate::widgets::Checkbox::size)
+//! scales either mark, and each is drawn after the plate so its pop cannot be clipped by it. The tick's
+//! points are the reference checkbox's measured ratios inside its box (`74..89 × 173..188` of a 16 px
+//! box); epaint's `PathStroke` has no caps and no round joins, so each tip and the elbow get a filled
+//! circle.
 
 use egui::{Color32, Pos2, Rect, Shape, Stroke, vec2};
+
+/// Inner-dot radius as a fraction of the plate size (a dot of half the plate's diameter).
+pub(super) const DOT_RADIUS_RATIO: f32 = 0.25;
 
 /// Left tip, as a fraction of the box rect.
 pub(super) const P1: (f32, f32) = (0.28, 0.47);
@@ -41,4 +46,13 @@ pub(super) fn tick_shapes(rect: Rect, color: Color32, width: f32) -> Vec<Shape> 
       Shape::circle_filled(b, cap, color),
       Shape::circle_filled(c, cap, color),
    ]
+}
+
+/// One filled circle at `rect`'s centre, in `color`.
+pub(super) fn dot_shapes(rect: Rect, color: Color32) -> Vec<Shape> {
+   vec![Shape::circle_filled(
+      rect.center(),
+      rect.width() * DOT_RADIUS_RATIO,
+      color,
+   )]
 }

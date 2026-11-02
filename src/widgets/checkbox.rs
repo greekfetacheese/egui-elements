@@ -29,20 +29,20 @@
 //! [`ThemeColors::bg`]: crate::theme::ThemeColors::bg
 //! [`ThemeColors::border`]: crate::theme::ThemeColors::border
 
+use super::toggle::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row, ToggleVisuals};
 pub use super::toggle::{ToggleShadow as CheckboxShadow, ToggleVisuals as CheckboxVisuals};
-use super::toggle::{DEFAULT_SIZE, Row, ToggleVisuals};
 
 use egui::{Response, Role, Ui, Widget, WidgetInfo, WidgetText};
 
 use crate::motion::Motion;
 use crate::theme::Theme;
 
-#[cfg(test)]
-use egui::{Rect, vec2};
+/// Corner radius as a fraction of the box size.
+const RADIUS_RATIO: f32 = 0.17;
 
 /// A checkbox with an animated fill, tick and shadow.
 ///
-/// Reads [`ThemeColors`] from the installed [`Theme`] unless you pass
+/// Reads [`ThemeColors`](crate::theme::ThemeColors) from the installed [`Theme`] unless you pass
 /// [`.visuals(...)`](Self::visuals). Clicking anywhere in the row — box or label — toggles it; a click
 /// reports [`Response::changed`].
 ///
@@ -137,7 +137,16 @@ impl Widget for Checkbox<'_> {
       row.response
          .widget_info(|| WidgetInfo::selected(Role::CheckBox, enabled, *checked, label.clone()));
 
-      row.paint(*checked, &visuals, shadow, motion)
+      row.paint(
+         *checked,
+         PlateShape::Rounded {
+            ratio: RADIUS_RATIO,
+         },
+         PlateGlyph::Tick,
+         &visuals,
+         shadow,
+         motion,
+      )
    }
 }
 
@@ -145,7 +154,9 @@ impl Widget for Checkbox<'_> {
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeKind};
-   use egui::{Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, pos2};
+   use egui::{
+      Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2,
+   };
 
    fn themed_ctx() -> Context {
       let ctx = Context::default();
