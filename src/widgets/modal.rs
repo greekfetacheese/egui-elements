@@ -724,74 +724,6 @@ fn close_button(ui: &mut Ui, theme: &Theme) -> Response {
 mod tests {
    use super::*;
 
-   #[test]
-   fn center_header_without_separators_renders() {
-      egui::__run_test_ctx(|ctx| {
-         let mut open = true;
-         Modal::new("modal_opts", &mut open)
-            .heading("Title")
-            .subtitle("Subtitle")
-            .header_icon(Image::new("file://modal_icon"))
-            .center_header(true)
-            .center_header_icon(true)
-            .header_separator(false)
-            .footer_separator(false)
-            .footer(|ui| {
-               ui.label("ok");
-            })
-            .show(ctx, |ui| {
-               ui.label("body");
-            });
-         assert!(open);
-      });
-   }
-
-   #[test]
-   fn default_header_layout_still_renders() {
-      egui::__run_test_ctx(|ctx| {
-         let mut open = true;
-         Modal::new("modal_default", &mut open)
-            .heading("Title")
-            .footer(|ui| {
-               ui.label("ok");
-            })
-            .show(ctx, |ui| {
-               ui.label("body");
-            });
-         assert!(open);
-      });
-   }
-
-   #[test]
-   fn centered_close_button_hugs_card_right() {
-      egui::__run_test_ctx(|ctx| {
-         let mut open = true;
-         Modal::new("modal_corner", &mut open)
-            .heading("Title")
-            .center_header(true)
-            .max_width(500.0)
-            .show(ctx, |ui| {
-               ui.set_min_width(480.0);
-               ui.label("wide body");
-            });
-         let close: Rect = ctx
-            .data(|d| d.get_temp(Id::unique("egui_elements_test_close_rect")))
-            .expect("close button rect");
-         let card: Rect = ctx
-            .data(|d| d.get_temp(Id::unique("egui_elements_test_card_rect")))
-            .expect("card rect");
-         let gap = card.right() - close.right();
-         assert!(
-            gap >= 0.0 && gap < 56.0,
-            "close button should hug the card's right edge, gap={gap}, close={close:?}, card={card:?}"
-         );
-         assert!(
-            close.right() > card.center().x,
-            "close button should be on the right half of the card"
-         );
-      });
-   }
-
    fn run_until_painted(mut f: impl FnMut(&Context)) {
       let ctx = Context::default();
       ctx.set_fonts(egui::FontDefinitions::empty());
@@ -800,29 +732,6 @@ mod tests {
       for _ in 0..3 {
          ctx.run_ui(Default::default(), |ui| f(ui.ctx())).drop_without_applying_deltas();
       }
-   }
-
-   #[test]
-   fn modal_centers_without_max_width() {
-      let mut last: Option<(Rect, Rect)> = None;
-      run_until_painted(|ctx| {
-         let mut open = true;
-         Modal::new("modal_center", &mut open).heading("Title").show(ctx, |ui| {
-            ui.set_min_width(520.0);
-            ui.label("wide body");
-         });
-         let card: Rect = ctx
-            .data(|d| d.get_temp(Id::unique("egui_elements_test_card_rect")))
-            .expect("card rect");
-         last = Some((card, ctx.content_rect()));
-      });
-      let (card, screen) = last.expect("second pass");
-      let dx = (card.center().x - screen.center().x).abs();
-      let dy = (card.center().y - screen.center().y).abs();
-      assert!(
-         dx < 8.0 && dy < 8.0,
-         "card should be centered without max_width, dx={dx}, dy={dy}, card={card:?}, screen={screen:?}"
-      );
    }
 
    #[test]

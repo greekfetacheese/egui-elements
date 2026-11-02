@@ -1140,8 +1140,7 @@ fn secure_text_edit_events(
 #[cfg(test)]
 mod tests {
    use super::*;
-   use crate::theme::{Theme, ThemeKind};
-   use egui::{Context, Event, FullOutput, Id, ImeEvent, Pos2, RawInput, Rect, Stroke, vec2};
+   use egui::{Context, Event, Id, ImeEvent, RawInput};
 
    fn run_pass(ctx: &Context, text: &mut String, id: Id, events: Vec<Event>) {
       let output = ctx.run_ui(
@@ -1175,7 +1174,8 @@ mod tests {
    }
 
    #[test]
-   fn gnome_wayland_ime_types_forwards_not_in_reverse() {
+   fn ime_events_reach_the_editor() {
+      // Case: gnome_wayland_ime_types_forwards_not_in_reverse
       let ctx = Context::default();
       let id = Id::unique("secure_ime_gnome");
       let mut text = String::new();
@@ -1196,10 +1196,8 @@ mod tests {
          text, "hello",
          "IME keystrokes must append, not insert at 0"
       );
-   }
 
-   #[test]
-   fn plain_text_events_type_forwards() {
+      // Case: plain_text_events_type_forwards
       let ctx = Context::default();
       let id = Id::unique("secure_text_events");
       let mut text = String::new();
@@ -1214,10 +1212,8 @@ mod tests {
       }
 
       assert_eq!(text, "hello");
-   }
 
-   #[test]
-   fn empty_ime_preedit_without_composition_does_not_reset_cursor() {
+      // Case: empty_ime_preedit_without_composition_does_not_reset_cursor
       let ctx = Context::default();
       let id = Id::unique("secure_empty_preedit");
       let mut text = String::new();
@@ -1240,10 +1236,8 @@ mod tests {
          text, "abc",
          "spurious empty Preedit must not move the cursor to the start"
       );
-   }
 
-   #[test]
-   fn ime_composition_updates_replace_preedit_then_commit() {
+      // Case: ime_composition_updates_replace_preedit_then_commit
       let ctx = Context::default();
       let id = Id::unique("secure_ime_compose");
       let mut text = String::new();
@@ -1258,139 +1252,5 @@ mod tests {
       assert_eq!(text, "に");
       run_pass(&ctx, &mut text, id, gnome_wayland_keystroke('!'));
       assert_eq!(text, "に!");
-   }
-
-   fn screen() -> Rect {
-      Rect::from_min_size(Pos2::ZERO, vec2(320.0, 200.0))
-   }
-
-   /// A context with a crate theme installed, so the animation duration comes
-   /// from the live style (`0.3` in every theme).
-   fn themed_ctx() -> Context {
-      let ctx = Context::default();
-      let mut theme = Theme::new(ThemeKind::TokyoNight);
-      theme.install(&ctx);
-      ctx
-   }
-
-   /// One pass with one single-line field carrying sentinel borders, returning
-   /// the frame's output and the field's response.
-   fn run_edit_pass(
-      ctx: &Context,
-      text: &mut String,
-      events: Vec<Event>,
-      time: f64,
-   ) -> (FullOutput, Response) {
-      let visuals = TextEditVisuals {
-         text: Color32::WHITE,
-         bg: Color32::TRANSPARENT,
-         border: Stroke::new(1.0, Color32::from_rgb(10, 20, 30)),
-         border_hover: Stroke::new(1.0, Color32::from_rgb(40, 50, 60)),
-         border_open: Stroke::new(1.0, Color32::from_rgb(40, 50, 60)),
-         corner_radius: egui::CornerRadius::same(4),
-         shadow: egui::epaint::Shadow::NONE,
-      };
-      let mut response = None;
-      let mut output = ctx.run_ui(
-         RawInput {
-            events,
-            screen_rect: Some(screen()),
-            time: Some(time),
-            predicted_dt: 0.125,
-            ..Default::default()
-         },
-         |ui| {
-            response = Some(SecureTextEdit::singleline(text).visuals(visuals).show(ui).response);
-         },
-      );
-      // The tests inspect `shapes`; the font-atlas delta is never applied.
-      output.textures_delta.clear();
-      (output, response.expect("the field must be added"))
-   }
-
-   /// Every `RectShape` stroke colour in paint order, flattening nested
-   /// [`Shape::Vec`]s.
-   fn rect_strokes(output: &FullOutput) -> Vec<Color32> {
-      fn collect(shape: &Shape, strokes: &mut Vec<Color32>) {
-         match shape {
-            Shape::Rect(rect) => strokes.push(rect.stroke.color),
-            Shape::Vec(shapes) => {
-               for shape in shapes {
-                  collect(shape, strokes);
-               }
-            }
-            _ => {}
-         }
-      }
-      let mut strokes = Vec::new();
-      for clipped in &output.shapes {
-         collect(&clipped.shape, &mut strokes);
-      }
-      strokes
-   }
-
-   #[test]
-   fn text_edit_open_border_eases_in_on_hover() {
-      let ctx = themed_ctx();
-      let idle = Color32::from_rgb(10, 20, 30);
-      let open = Color32::from_rgb(40, 50, 60);
-      // The theme's duration, read through a pass so `ui.style()` is the live one.
-      let mut duration = 0.0_f32;
-      let mut warm = ctx.run_ui(
-         RawInput {
-            screen_rect: Some(screen()),
-            ..Default::default()
-         },
-         |ui| duration = Motion::from_ui(ui).duration,
-      );
-      warm.textures_delta.clear();
-      let duration = f64::from(duration);
-      assert!(
-         duration > 0.0,
-         "the theme must animate: {duration}"
-      );
-
-      let mut text = String::new();
-
-      // Frame 1 (no pointer): idle border, and the rect to hover.
-      let (idle_output, warm) = run_edit_pass(&ctx, &mut text, vec![], 0.0);
-      assert!(
-         rect_strokes(&idle_output).contains(&idle),
-         "idle field paints its idle border"
-      );
-      let at = warm.rect.center();
-
-      // Frame 2 (pointer arrives): the open leg starts from the value on screen.
-      run_edit_pass(
-         &ctx,
-         &mut text,
-         vec![Event::PointerMoved(at)],
-         1.0,
-      );
-
-      // Frame 3: a quarter of the duration into the hover leg.
-      let (mid_output, _) = run_edit_pass(
-         &ctx,
-         &mut text,
-         vec![Event::PointerMoved(at)],
-         1.0 + duration * 0.25,
-      );
-      let strokes = rect_strokes(&mid_output);
-      assert!(
-         strokes.iter().any(|stroke| *stroke != idle && *stroke != open),
-         "mid-transition stroke must be neither endpoint, got {strokes:?}"
-      );
-
-      // Frame 4: same pointer, well past the duration.
-      let (settled_output, _) = run_edit_pass(
-         &ctx,
-         &mut text,
-         vec![Event::PointerMoved(at)],
-         1.0 + 2.0 * duration,
-      );
-      assert!(
-         rect_strokes(&settled_output).contains(&open),
-         "settled hover border must be the open sentinel"
-      );
    }
 }

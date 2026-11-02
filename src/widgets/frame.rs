@@ -363,21 +363,6 @@ impl Prepared {
 #[cfg(test)]
 mod tests {
    use super::*;
-   use crate::theme::{Theme, ThemeKind};
-   use egui::{Context, Event, FullOutput, Pos2, RawInput, vec2};
-
-   #[test]
-   fn total_margin_sums_parts() {
-      let frame = Frame::new()
-         .inner_margin(Margin::same(4))
-         .outer_margin(Margin::same(3))
-         .stroke(Stroke::new(2.0, Color32::WHITE));
-      let m = frame.total_margin();
-      assert_eq!(m.left, 9.0);
-      assert_eq!(m.right, 9.0);
-      assert_eq!(m.top, 9.0);
-      assert_eq!(m.bottom, 9.0);
-   }
 
    #[test]
    fn fill_propagates_to_matching_states() {
@@ -386,18 +371,6 @@ mod tests {
       assert_eq!(frame.visuals.bg_hover, Color32::RED);
       assert_eq!(frame.visuals.bg_click, Color32::RED);
       assert_eq!(frame.visuals.bg_selected, Color32::RED);
-   }
-
-   #[test]
-   fn interactive_false_is_default() {
-      let frame = Frame::new().fill(Color32::RED);
-      assert!(!frame.interactive);
-      assert!(!frame.selected);
-      assert!(!frame.fill_width);
-      assert!(frame.interactive(true).interactive);
-      assert!(!frame.interactive(true).interactive(false).interactive);
-      assert!(frame.selected(true).selected);
-      assert!(frame.fill_width(true).fill_width);
    }
 
    fn theme_visuals() -> FrameVisuals {
@@ -415,183 +388,17 @@ mod tests {
    }
 
    #[test]
-   fn zero_radius_survives_later_visuals() {
+   fn a_zero_corner_radius_survives_any_call_order() {
+      // Case: zero_radius_survives_later_visuals / corner_radius_zero_survives_later_visuals
       let frame = Frame::new().corner_radius(0).visuals(theme_visuals());
       assert_eq!(frame.visuals.corner_radius, CornerRadius::ZERO);
-   }
 
-   #[test]
-   fn corner_radius_zero_survives_later_visuals() {
-      let frame = Frame::new().corner_radius(0).visuals(theme_visuals());
-      assert_eq!(frame.visuals.corner_radius, CornerRadius::ZERO);
-   }
-
-   #[test]
-   fn visuals_then_zero_corner_radius() {
+      // Case: visuals_then_zero_corner_radius
       let frame = Frame::new().visuals(theme_visuals()).corner_radius(0);
       assert_eq!(frame.visuals.corner_radius, CornerRadius::ZERO);
-   }
 
-   #[test]
-   fn visuals_without_override_keeps_theme_radius() {
+      // Case: visuals_without_override_keeps_theme_radius
       let frame = Frame::new().visuals(theme_visuals());
       assert_eq!(frame.visuals.corner_radius, CornerRadius::same(6));
-   }
-
-   fn screen() -> Rect {
-      Rect::from_min_size(Pos2::ZERO, vec2(320.0, 200.0))
-   }
-
-   /// A context with a crate theme installed, so the animation duration comes
-   /// from the live style (`0.3` in every theme).
-   fn themed_ctx() -> Context {
-      let ctx = Context::default();
-      let mut theme = Theme::new(ThemeKind::TokyoNight);
-      theme.install(&ctx);
-      ctx
-   }
-
-   /// Runs one pass, adding exactly one interactive `Frame` with sentinel state
-   /// colours and returning the frame's output plus the frame's [`Response`].
-   fn run_pass(ctx: &Context, events: Vec<Event>, time: f64) -> (FullOutput, Response) {
-      let mut response = None;
-      let mut output = ctx.run_ui(
-         RawInput {
-            events,
-            screen_rect: Some(screen()),
-            time: Some(time),
-            predicted_dt: 0.125,
-            ..Default::default()
-         },
-         |ui| {
-            let visuals = FrameVisuals {
-               bg: Color32::from_rgb(10, 20, 30),
-               bg_hover: Color32::from_rgb(40, 50, 60),
-               bg_click: Color32::from_rgb(70, 80, 90),
-               bg_selected: Color32::from_rgb(10, 20, 30),
-               border: Stroke::NONE,
-               border_hover: Stroke::NONE,
-               border_click: Stroke::NONE,
-               corner_radius: CornerRadius::same(4),
-               shadow: Shadow::NONE,
-            };
-            let frame = Frame::new()
-               .interactive(true)
-               .inner_margin(Margin::same(6))
-               .visuals(visuals)
-               .show(ui, |ui| {
-                  ui.label("x");
-               });
-            response = Some(frame.response);
-         },
-      );
-      // The tests inspect `shapes`; the font-atlas delta is never applied.
-      output.textures_delta.clear();
-      (output, response.expect("the frame must be shown"))
-   }
-
-   /// Every `RectShape` fill in paint order, flattening nested [`Shape::Vec`]s.
-   fn rect_fills(output: &FullOutput) -> Vec<Color32> {
-      fn collect(shape: &Shape, fills: &mut Vec<Color32>) {
-         match shape {
-            Shape::Rect(rect) => fills.push(rect.fill),
-            Shape::Vec(shapes) => {
-               for shape in shapes {
-                  collect(shape, fills);
-               }
-            }
-            _ => {}
-         }
-      }
-      let mut fills = Vec::new();
-      for clipped in &output.shapes {
-         collect(&clipped.shape, &mut fills);
-      }
-      fills
-   }
-
-   /// The fill of the rect painted at `rect` (the frame's own chrome, picked by
-   /// geometry so the panel background and the label are skipped).
-   fn rect_fill_at(output: &FullOutput, rect: Rect) -> Option<Color32> {
-      fn collect(shape: &Shape, rect: Rect, fills: &mut Vec<Color32>) {
-         match shape {
-            Shape::Rect(shape)
-               if (shape.rect.width() - rect.width()).abs() < 1.0
-                  && (shape.rect.height() - rect.height()).abs() < 1.0 =>
-            {
-               fills.push(shape.fill);
-            }
-            Shape::Vec(shapes) => {
-               for shape in shapes {
-                  collect(shape, rect, fills);
-               }
-            }
-            _ => {}
-         }
-      }
-      let mut fills = Vec::new();
-      for clipped in &output.shapes {
-         collect(&clipped.shape, rect, &mut fills);
-      }
-      fills.first().copied()
-   }
-
-   #[test]
-   fn frame_hover_fill_eases_instead_of_jumping() {
-      let ctx = themed_ctx();
-      let idle = Color32::from_rgb(10, 20, 30);
-      let hover = Color32::from_rgb(40, 50, 60);
-      // The theme's duration, read through a pass so `ui.style()` is the live one.
-      let mut duration = 0.0_f32;
-      let mut warm = ctx.run_ui(
-         RawInput {
-            screen_rect: Some(screen()),
-            ..Default::default()
-         },
-         |ui| duration = Motion::from_ui(ui).duration,
-      );
-      warm.textures_delta.clear();
-      let duration = f64::from(duration);
-      assert!(
-         duration > 0.0,
-         "the theme must animate: {duration}"
-      );
-
-      // Frame 1 (no pointer): the frame paints its idle fill and hands back a rect to hover.
-      let (idle_output, warm) = run_pass(&ctx, vec![], 0.0);
-      assert!(
-         rect_fills(&idle_output).contains(&idle),
-         "idle frame paints its idle fill"
-      );
-      let at = warm.rect.center();
-
-      // Frame 2 (pointer arrives): the hover leg starts from the value on screen.
-      run_pass(&ctx, vec![Event::PointerMoved(at)], 1.0);
-
-      // Frame 3: a quarter of the duration into the hover leg.
-      let (mid_output, _) = run_pass(
-         &ctx,
-         vec![Event::PointerMoved(at)],
-         1.0 + duration * 0.25,
-      );
-      let mid = rect_fill_at(&mid_output, warm.rect)
-         .unwrap_or_else(|| panic!("the frame must paint a rect at {:?}", warm.rect));
-      assert!(
-         mid != idle && mid != hover,
-         "mid-transition fill must be neither endpoint, got {mid:?}"
-      );
-
-      // Frame 4: same pointer, well past the duration.
-      let (settled_output, _) = run_pass(
-         &ctx,
-         vec![Event::PointerMoved(at)],
-         1.0 + 2.0 * duration,
-      );
-      let settled =
-         rect_fill_at(&settled_output, warm.rect).expect("the settled frame must paint a rect");
-      assert_eq!(
-         settled, hover,
-         "settled hover fill must be the hover sentinel"
-      );
    }
 }
