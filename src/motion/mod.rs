@@ -14,7 +14,7 @@ mod easing;
 mod interact;
 mod state;
 
-pub use animate::{Lerp, animate, animate_with};
+pub use animate::{Lerp, animate, animate_from, animate_with};
 pub use containers::{Collapse, Fade, FadeMode};
 pub use easing::Easing;
 pub use interact::InteractT;
