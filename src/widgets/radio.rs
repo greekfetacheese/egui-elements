@@ -397,4 +397,60 @@ mod tests {
          "a radio that mounts selected requested a repaint"
       );
    }
+
+   #[test]
+   fn two_radios_on_one_value_form_a_group() {
+      let ctx = themed_ctx();
+      let mut selected = Mode::Sms;
+      let mut first = Rect::ZERO;
+      let mut second = Rect::ZERO;
+      frame(&ctx, 0.0, vec![], |ui| {
+         first = ui.add(Radio::new(&mut selected, Mode::Sms, "SMS")).rect;
+         second = ui
+            .add(Radio::new(
+               &mut selected,
+               Mode::Authenticator,
+               "Authenticator app",
+            ))
+            .rect;
+      });
+      let at = pos2(second.right() - 4.0, second.center().y);
+      frame(&ctx, 0.1, vec![press(at)], |ui| {
+         ui.add(Radio::new(&mut selected, Mode::Sms, "SMS"));
+         ui.add(Radio::new(
+            &mut selected,
+            Mode::Authenticator,
+            "Authenticator app",
+         ));
+      });
+      let mut flags = (true, false);
+      frame(&ctx, 0.2, vec![release(at)], |ui| {
+         flags = (
+            ui.add(Radio::new(&mut selected, Mode::Sms, "SMS")).changed(),
+            ui.add(Radio::new(
+               &mut selected,
+               Mode::Authenticator,
+               "Authenticator app",
+            ))
+            .changed(),
+         );
+      });
+      assert_eq!(
+         selected,
+         Mode::Authenticator,
+         "clicking one radio must move the value shared by the whole group"
+      );
+      assert!(
+         !flags.0,
+         "the radio that lost the selection must not report `changed`"
+      );
+      assert!(
+         flags.1,
+         "the radio that took the selection must report `changed`"
+      );
+      assert_ne!(
+         first, second,
+         "each radio in a group must own its own row rect"
+      );
+   }
 }
