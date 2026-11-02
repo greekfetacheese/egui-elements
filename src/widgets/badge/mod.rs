@@ -35,8 +35,10 @@ use egui::{
 
 use crate::theme::Theme;
 
+mod bounce;
 mod pulse;
 
+pub use bounce::{BadgeBounce, BadgeBounceTrigger};
 pub use pulse::BadgePulse;
 
 /// Default size (in points) of a badge with an empty text — a plain dot.
@@ -146,6 +148,7 @@ pub struct Badge {
    padding: f32,
    outline: Option<Stroke>,
    pulse: Option<BadgePulse>,
+   bounce: Option<BadgeBounce>,
    id: Option<Id>,
 }
 
@@ -164,6 +167,7 @@ impl Badge {
          padding: DEFAULT_PADDING,
          outline: None,
          pulse: None,
+         bounce: None,
          id: None,
       }
    }
@@ -254,6 +258,22 @@ impl Badge {
       self
    }
 
+   /// Hop when the badge's text changes, when the host asks, or on a loop — see
+   /// [`BadgeBounceTrigger`]. Off by default.
+   #[inline]
+   pub fn bounce(mut self, bounce: BadgeBounce) -> Self {
+      self.bounce = Some(bounce);
+      self
+   }
+
+   /// Start a hop on the badge carrying `id`, for [`BadgeBounceTrigger::Manual`].
+   ///
+   /// Call it before the badge paints this frame. `id` is the value passed to [`Badge::id`].
+   #[allow(deprecated)] // `Id::new` is the documented constructor for this crate's egui 0.37.
+   pub fn bounce_now(ctx: &egui::Context, id: impl std::hash::Hash + std::fmt::Debug) {
+      bounce::start_now(ctx, Id::new(id));
+   }
+
    /// Stable id for this badge's animation state.
    ///
    /// Defaults to the host's id — the `Response::id` of the widget the badge is painted on. Set it when
@@ -321,10 +341,22 @@ impl Badge {
       let radius = circle.width() * 0.5;
       let now = ui.ctx().input(|i| i.time);
 
+      let dy = self.bounce.map_or(0.0, |bounce| {
+         bounce.offset_at(
+            ui.ctx(),
+            badge_id,
+            self.text.text(),
+            circle.width(),
+            now,
+         )
+      });
+      let circle = circle.translate(Vec2::new(0.0, dy));
+
       let pulse_reach = self.pulse.map_or(0.0, |p| (p.scale.max(1.0) - 1.0) * radius);
-      // The badge is an overlay: it can hang outside the host rect, so the host's own visibility says
-      // nothing about whether the badge is on screen.
-      if !ui.is_rect_visible(circle.expand(pulse_reach + 1.0)) {
+      let bounce_reach = self.bounce.map_or(0.0, |b| {
+         b.amplitude.clamp(0.0, 1.5) * circle.width()
+      });
+      if !ui.is_rect_visible(circle.expand(pulse_reach.max(bounce_reach) + 1.0)) {
          return;
       }
 
@@ -579,5 +611,60 @@ mod tests {
       );
       assert!((circles[0].center - circles[1].center).length() < 0.01);
       assert!(repaint, "a visible pulse must keep repainting");
+   }
+
+   #[test]
+   fn a_badge_hops_when_its_text_changes() {
+      let ctx = egui::Context::default();
+      let host = Rect::from_min_size(Pos2::new(60.0, 60.0), vec2(60.0, 40.0));
+      let screen = Rect::from_min_size(Pos2::ZERO, vec2(200.0, 200.0));
+
+      let frame = |text: &'static str, time: f64| {
+         let input = egui::RawInput {
+            screen_rect: Some(screen),
+            time: Some(time),
+            ..Default::default()
+         };
+         let mut out = ctx.run_ui(input, |ui| {
+            Badge::new(text)
+               .color(Color32::RED)
+               .id("inbox")
+               .bounce(BadgeBounce::new())
+               .paint_at_id(ui, host, Id::new("host"));
+         });
+         out.textures_delta.clear();
+         shapes(&out)
+            .into_iter()
+            .find_map(|shape| match shape {
+               Shape::Circle(circle) if circle.fill == Color32::RED => Some(circle),
+               _ => None,
+            })
+            .expect("the core circle")
+      };
+
+      let first = frame("2", 0.0);
+      let same = frame("2", 0.5);
+      let changed = frame("3", 1.0);
+      let mid_hop = frame("3", 1.15);
+
+      // Compare frames, not literal points: the diameter depends on the real font metrics.
+      assert_eq!(
+         first.center.y, same.center.y,
+         "the same text never hops"
+      );
+      assert_eq!(
+         same.center.y, changed.center.y,
+         "the trigger frame is still at rest"
+      );
+      assert!(
+         mid_hop.center.y < first.center.y - 1.0,
+         "the badge is up mid-hop: rest {} then {}",
+         first.center.y,
+         mid_hop.center.y
+      );
+      assert_eq!(
+         mid_hop.center.x, first.center.x,
+         "the hop is vertical only"
+      );
    }
 }

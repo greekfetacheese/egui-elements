@@ -746,7 +746,7 @@ impl<'a> Button<'a> {
 
          let painted = prepared.paint(ui);
          if let Some(badge) = &badge {
-            badge.paint_at(ui, painted.response.rect);
+            badge.paint_at_id(ui, painted.response.rect, painted.response.id);
          }
          painted
       } else {
