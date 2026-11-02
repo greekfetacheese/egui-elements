@@ -26,6 +26,9 @@
 //! A badge may straddle its host's corner with `.straddle()`, putting the
 //! circle's centre on the corner point. Each effect it paints (the pulse, the
 //! hop, a later task) spills outside the host rect without changing layout.
+//!
+//! A badge can also be added on its own with `ui.add(Badge::new("3"))`, which
+//! allocates its own square; the halo and the hop still paint outside it.
 
 use std::sync::Arc;
 
@@ -390,10 +393,45 @@ impl Badge {
       }
    }
 
+   /// Paint this badge on its own, allocating its own square in the layout.
+   ///
+   /// The halo and the hop paint **outside** the allocated rect, exactly like the corner placement
+   /// paints outside its host — leave a gap in the surrounding layout if that matters.
+   pub fn show(self, ui: &mut Ui) -> Rect {
+      self.show_response(ui).0
+   }
+
+   fn show_response(self, ui: &mut Ui) -> (Rect, egui::Response) {
+      let label = self.text.text().to_owned();
+      let galley = self.galley(ui);
+      let diameter = (galley.size() + Vec2::splat(2.0 * self.padding))
+         .max_elem()
+         .max(self.min_diameter);
+      let (rect, response) = ui.allocate_exact_size(Vec2::splat(diameter), egui::Sense::hover());
+      let circle = Rect::from_center_size(rect.center(), Vec2::splat(diameter));
+      #[allow(deprecated)]
+      // `Ui::id` is this crate's egui 0.37 spelling; `scope_id` is its rename.
+      self.paint_circle(
+         ui,
+         circle,
+         &galley,
+         self.id.unwrap_or_else(|| ui.id().with("badge-widget")),
+      );
+      response
+         .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, ui.is_enabled(), &label));
+      (rect, response)
+   }
+
    /// Center of the circle for a laid-out text of `text_size`. Test helper.
    #[cfg(test)]
    fn center_for(&self, text_size: Vec2, widget_rect: Rect) -> Pos2 {
       self.circle_rect(text_size, widget_rect).center()
+   }
+}
+
+impl egui::Widget for Badge {
+   fn ui(self, ui: &mut Ui) -> egui::Response {
+      self.show_response(ui).1
    }
 }
 
@@ -614,6 +652,7 @@ mod tests {
    }
 
    #[test]
+   #[allow(deprecated)] // `Id::new` is the documented constructor for this crate's egui 0.37.
    fn a_badge_hops_when_its_text_changes() {
       let ctx = egui::Context::default();
       let host = Rect::from_min_size(Pos2::new(60.0, 60.0), vec2(60.0, 40.0));
@@ -666,5 +705,23 @@ mod tests {
          mid_hop.center.x, first.center.x,
          "the hop is vertical only"
       );
+   }
+
+   #[test]
+   fn a_standalone_badge_allocates_a_square() {
+      egui::__run_test_ui(|ui| {
+         let rect = Badge::new("12").show(ui);
+         assert!(
+            (rect.width() - rect.height()).abs() < 0.001,
+            "square: {rect:?}"
+         );
+         assert!(
+            rect.width() >= DEFAULT_MIN_DIAMETER,
+            "at least the minimum: {rect:?}"
+         );
+
+         let response = ui.add(Badge::dot());
+         assert!((response.rect.width() - response.rect.height()).abs() < 0.001);
+      });
    }
 }
