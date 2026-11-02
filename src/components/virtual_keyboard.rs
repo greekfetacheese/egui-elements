@@ -1,3 +1,4 @@
+use crate::layout::{Flex, Item, Justify};
 use crate::theme::Theme;
 use crate::widgets::Button;
 use egui::*;
@@ -215,25 +216,27 @@ impl VirtualKeyboard {
          &keys_layout_lower
       };
 
-      let ui_size = self.max_ui_size();
-
       ui.vertical_centered(|ui| {
          frame.show(ui, |ui| {
             ui.spacing_mut().button_padding = self.button_padding;
             ui.spacing_mut().item_spacing = self.spacing;
             ui.set_max_size(self.max_ui_size);
 
-            for row in layout {
-               ui.horizontal(|ui| {
-                  ui.set_max_width(ui_size.x);
-                  for &key in row {
-                     let text = RichText::new(key).size(self.text_size);
-                     let key_button = Button::new(text).min_size(self.key_size);
-                     if ui.add(key_button).clicked() {
-                        self.handle_key_press(key, target_str);
+            for (row_idx, row) in layout.iter().enumerate() {
+               Flex::row(("virtual_keyboard_row", row_idx))
+                  .gap(self.spacing.x)
+                  .justify(Justify::Center)
+                  .show(ui, |f| {
+                     for &key in row.iter() {
+                        f.item(Item::new(), |ui| {
+                           let text = RichText::new(key).size(self.text_size);
+                           let key_button = Button::new(text).min_size(self.key_size);
+                           if ui.add(key_button).clicked() {
+                              self.handle_key_press(key, target_str);
+                           }
+                        });
                      }
-                  }
-               });
+                  });
             }
 
             let space_scale = self.key_size.x / DEFAULT_KEY_SIZE.x;
