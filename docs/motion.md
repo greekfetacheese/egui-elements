@@ -236,3 +236,7 @@ unconditional `request_repaint` is correct.
 | state | `ctx` temp data, keyed on the badge id | none |
 | repaint | while `q < 1`, and always for `Loop` | every visible frame |
 | measured ratios | `amplitude = 0.5 x d` | `scale = 1.9`, `alpha = 0.50`, `period 1.5 s` |
+
+Prove it: `cargo run --example badge` — the second badge in "The reference" loops while the `Loop` badge in
+"Triggers" hops every 2.2 s. A 30 fps capture of that window measures the halo at 1.90 x the diameter holding
+alpha 0.51, and the hop peaking 7.5 px up on a 16 pt badge configured for 8.

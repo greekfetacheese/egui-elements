@@ -130,6 +130,7 @@ impl BadgeApp {
                for i in 0..labels.len() {
                   let mut badge = Badge::new(self.counts[i].to_string())
                      .color(fills[i])
+                     .min_diameter(18.0)
                      .straddle()
                      .bounce(bounce);
 
