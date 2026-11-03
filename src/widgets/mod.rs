@@ -23,7 +23,7 @@ pub mod window;
 
 pub use avatar::{Avatar, AvatarGroup, AvatarVisuals};
 pub use badge::{Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner, BadgePulse};
-pub use button::{Button, HoldBurst, HoldSettings};
+pub use button::{Button, HoldBurst, HoldSettings, PushStyle};
 pub use combo_box::ComboBox;
 pub use frame::Frame;
 pub use label::Label;

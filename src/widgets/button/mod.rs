@@ -12,8 +12,10 @@ use crate::visuals::ButtonVisuals;
 use crate::widgets::badge::Badge;
 
 mod hold;
+mod push;
 
 pub use hold::{HoldBurst, HoldSettings};
+pub use push::PushStyle;
 
 /// Longest `stable_dt` the hold accumulation accepts, in seconds (spike guard).
 const HOLD_MAX_DT: f32 = 0.1;
@@ -132,6 +134,7 @@ pub struct Button<'a> {
    image_tint_follows_text_color: bool,
    limit_image_size: bool,
    hold: Option<HoldSettings>,
+   push: Option<PushStyle>,
 }
 
 impl<'a> Button<'a> {
@@ -152,6 +155,7 @@ impl<'a> Button<'a> {
          image_tint_follows_text_color: false,
          limit_image_size: false,
          hold: None,
+         push: None,
       }
    }
 
@@ -446,6 +450,58 @@ impl<'a> Button<'a> {
       self
    }
 
+   /// Lift the face above a solid base that collapses while the button is
+   /// pressed.
+   ///
+   /// `depth` is the height of the base in points — and the distance the face
+   /// travels down when pressed. `0.0` or less leaves the button flat.
+   ///
+   /// The widget reserves `depth` extra height below the face, so a following
+   /// row never lands on the base, and the whole rectangle (base included) is
+   /// the click target. [`Self::min_size`] keeps sizing the face, not the
+   /// widget. While armed the base replaces the theme's soft shadow; the face
+   /// keeps its themed fill, border and hover/press colours, so the 3D edge is
+   /// styled by [`ButtonVisuals`] like every other part of the button.
+   ///
+   /// ```
+   /// # use egui::__run_test_ui;
+   /// # use egui_elements::widgets::Button;
+   /// # __run_test_ui(|ui| {
+   /// ui.add(Button::new("Save").push(4.0));
+   /// # });
+   /// ```
+   pub fn push(mut self, depth: f32) -> Self {
+      let mut style = self.push.unwrap_or_default();
+      style.depth = depth;
+      self.push = Some(style);
+      self
+   }
+
+   /// Set the colour of the base painted by [`Self::push`].
+   ///
+   /// Does **not** arm the effect on its own — call [`Self::push`] or
+   /// [`Self::push_style`] too, like [`Self::hold_fill`]. Defaults to the
+   /// installed theme's
+   /// [`colors.accent`](crate::theme::ThemeColors::accent).
+   pub fn push_color(mut self, color: Color32) -> Self {
+      let style = self.push.get_or_insert_with(|| PushStyle {
+         depth: 0.0,
+         ..Default::default()
+      });
+      style.color = Some(color);
+      self
+   }
+
+   /// Replace the whole push configuration with `style`.
+   ///
+   /// Copies every field, including [`PushStyle::depth`]; a value of `0.0` or
+   /// less leaves the button flat. The most recent of this call and the
+   /// per-field shortcuts wins for the fields it sets.
+   pub fn push_style(mut self, style: &PushStyle) -> Self {
+      self.push = Some(*style);
+      self
+   }
+
    /// Show the button and return a [`WidgetAtomResponse`] for painting custom contents.
    pub fn atom_ui(self, ui: &mut Ui) -> WidgetAtomResponse {
       let Button {
@@ -461,14 +517,24 @@ impl<'a> Button<'a> {
          image_tint_follows_text_color,
          limit_image_size,
          hold,
+         push,
       } = self;
 
       let hold_settings = hold.filter(|settings| settings.seconds > 0.0);
 
       let visuals = visuals.or_else(|| Theme::button_visuals_from_ctx(ui.ctx()));
+      let has_frame_margin = visuals.is_some() || ui.visuals().button_frame;
+      // A frameless button has nothing to raise, and `push_color` alone must not
+      // arm the effect, so keep only a style that will paint.
+      let push = push.filter(|style| style.depth > 0.0 && has_frame_margin);
 
       if !small {
          min_size.y = min_size.y.at_least(ui.spacing().interact_size.y);
+      }
+      if let Some(style) = push {
+         // The base is layout, not overflow: the widget owns the band so a
+         // following row never lands on top of it. `min_size` stays the face.
+         min_size.y += style.depth;
       }
       if limit_image_size {
          layout.map_atoms(|atom| {
@@ -491,7 +557,6 @@ impl<'a> Button<'a> {
          layout = layout.align2(Align2([label_align, vertical]));
       }
 
-      let has_frame_margin = visuals.is_some() || ui.visuals().button_frame;
       let mut button_padding = if has_frame_margin {
          ui.spacing().button_padding
       } else {
@@ -599,6 +664,23 @@ impl<'a> Button<'a> {
          };
          let is_hovered = prepared.response.hovered();
 
+         // The widget reserves `depth` below the face; the face travels that far
+         // down while pressed. Painting follows the face while interaction stays
+         // on the whole rectangle, so the base is clickable.
+         let full_rect = prepared.response.rect;
+         let face_rect = push.map_or(full_rect, |style| {
+            let face = Rect::from_min_max(
+               full_rect.min,
+               Pos2::new(full_rect.max.x, full_rect.max.y - style.depth),
+            );
+            if is_active {
+               face.translate(Vec2::new(0.0, style.depth))
+            } else {
+               face
+            }
+         });
+         prepared.response.rect = face_rect;
+
          // Eased idle → hover → press. `is_active` / `is_hovered` stay the caller's own state selection; only the
          // colours between states are blended, so a hold gesture keeps its pressed chrome exactly as before.
          let across = InteractT::of(
@@ -641,6 +723,9 @@ impl<'a> Button<'a> {
 
          let text_color = visuals.as_ref().map(|v| v.text).unwrap_or(interact_visuals.text_color());
          let shadow = visuals.as_ref().map(|v| v.shadow).unwrap_or(Shadow::NONE);
+         // The plate *is* this style's elevation; a soft shadow would double the
+         // edge and blur the hard base.
+         let shadow = if push.is_some() { Shadow::NONE } else { shadow };
 
          let visible_frame = if frame_when_inactive {
             has_frame_margin
@@ -665,6 +750,20 @@ impl<'a> Button<'a> {
                .stroke(stroke)
                .corner_radius(corner_radius)
                .shadow(shadow);
+
+            // Painted before the frame fills the face: the same rounded rect
+            // shifted down by `depth`. A pressed face lands exactly on it, so
+            // it is skipped there instead of painted and covered.
+            if !is_active {
+               if let Some(style) = push {
+                  let color =
+                     style.color.unwrap_or_else(|| Theme::colors_from_ctx(ui.ctx()).accent);
+                  let base = face_rect
+                     .expand(interact_visuals.expansion)
+                     .translate(Vec2::new(0.0, style.depth));
+                  ui.painter().add(Shape::rect_filled(base, corner_radius, color));
+               }
+            }
          }
 
          // ---- sweep + burst painting -------------------------------------
@@ -745,7 +844,10 @@ impl<'a> Button<'a> {
             ui.ctx().request_repaint();
          }
 
-         let painted = prepared.paint(ui);
+         let mut painted = prepared.paint(ui);
+         // Report the whole widget — base included — while painting followed the
+         // face, so layout, tooltips and the badge see the full extent.
+         painted.response.rect = full_rect;
          if let Some(badge) = &badge {
             badge.paint_at_id(ui, painted.response.rect, painted.response.id);
          }
@@ -871,6 +973,14 @@ mod tests {
             clipped.clip_rect.width(),
             clipped.clip_rect.left(),
          )),
+         _ => None,
+      })
+   }
+
+   /// Fill rect of the first `RectShape` painted in `color`.
+   fn fill_rect(output: &FullOutput, color: Color32) -> Option<Rect> {
+      output.shapes.iter().find_map(|clipped| match &clipped.shape {
+         Shape::Rect(rect) if rect.fill == color => Some(rect.rect),
          _ => None,
       })
    }
@@ -1572,6 +1682,154 @@ mod tests {
       assert!(
          sweep_shape(&pressed, SHORTCUT_FILL).is_some(),
          "`.hold_fill(a).hold(seconds)` must keep the earlier fill"
+      );
+   }
+
+   /// Base colour of the push tests; distinct from every paint the harness makes.
+   const BASE: Color32 = Color32::from_rgb(7, 11, 13);
+   /// Face fill of the push tests.
+   const FACE: Color32 = Color32::from_rgb(23, 29, 31);
+
+   /// A raised button whose face and base paints are identifiable in `shapes`.
+   fn push_button() -> Button<'static> {
+      Button::new("Push").push(6.0).push_color(BASE).visuals(ButtonVisuals {
+         bg: FACE,
+         bg_hover: FACE,
+         bg_click: FACE,
+         ..Default::default()
+      })
+   }
+
+   #[test]
+   fn the_base_sits_below_the_face_at_rest() {
+      let ctx = Context::default();
+      let (output, response) = run_pass(&ctx, vec![], 0.0, push_button);
+
+      let base = fill_rect(&output, BASE).expect("the resting button paints its base");
+      let face = fill_rect(&output, FACE).expect("the resting button paints its face");
+
+      assert_eq!(
+         base.size(),
+         face.size(),
+         "the base is a shifted copy of the face"
+      );
+      assert_eq!(
+         base.top(),
+         face.top() + 6.0,
+         "the base hangs one depth below the face"
+      );
+      assert_eq!(
+         face.top(),
+         response.rect.top(),
+         "the face keeps the top of the widget"
+      );
+      assert_eq!(
+         base.bottom(),
+         response.rect.bottom(),
+         "the base ends the widget, so the band is layout"
+      );
+   }
+
+   #[test]
+   fn pressing_collapses_the_base_and_drops_the_face() {
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, push_button);
+      let center = warm.rect.center();
+      let (pressed, response) = run_pass(
+         &ctx,
+         vec![press(center)],
+         f64::from(STEP),
+         push_button,
+      );
+
+      assert!(
+         fill_rect(&pressed, BASE).is_none(),
+         "a pressed face lands on the base, so the base must not be painted"
+      );
+      let face = fill_rect(&pressed, FACE).expect("the pressed face still paints");
+      assert_eq!(
+         face.top(),
+         warm.rect.top() + 6.0,
+         "the face travels exactly one depth down"
+      );
+      assert_eq!(face.bottom(), warm.rect.bottom());
+      assert_eq!(
+         response.rect, warm.rect,
+         "the widget keeps its whole rect while pressed"
+      );
+   }
+
+   #[test]
+   fn a_flat_depth_reserves_no_layout_band() {
+      let plain_ctx = Context::default();
+      let (_, plain) = run_pass(&plain_ctx, vec![], 0.0, || Button::new("Flat"));
+
+      let zero_ctx = Context::default();
+      let (output, zero) = run_pass(&zero_ctx, vec![], 0.0, || {
+         Button::new("Flat").push(0.0).push_color(BASE)
+      });
+      assert_eq!(
+         zero.rect.height(),
+         plain.rect.height(),
+         "0 depth is flat"
+      );
+      assert!(
+         fill_rect(&output, BASE).is_none(),
+         "and paints no base"
+      );
+
+      let color_only_ctx = Context::default();
+      let (output, color_only) = run_pass(&color_only_ctx, vec![], 0.0, || {
+         Button::new("Flat").push_color(BASE)
+      });
+      assert_eq!(
+         color_only.rect.height(),
+         plain.rect.height(),
+         "a colour alone does not arm the effect"
+      );
+      assert!(fill_rect(&output, BASE).is_none());
+   }
+
+   #[test]
+   fn the_base_is_part_of_the_click_target() {
+      let ctx = Context::default();
+      let (_, warm) = run_pass(&ctx, vec![], 0.0, push_button);
+      // Below the face's bottom edge, inside the exposed band.
+      let point = Pos2::new(warm.rect.center().x, warm.rect.bottom() - 1.0);
+
+      let mut time = f64::from(STEP);
+      run_pass(&ctx, vec![press(point)], time, push_button);
+      time += f64::from(STEP);
+      let (_, released) = run_pass(&ctx, vec![release(point)], time, push_button);
+      assert!(
+         released.clicked(),
+         "the base band must push the button"
+      );
+   }
+
+   #[test]
+   fn min_size_sizes_the_face_not_the_widget() {
+      let ctx = Context::default();
+      let (output, response) = run_pass(&ctx, vec![], 0.0, || {
+         Button::new("Push")
+            .min_size(vec2(120.0, 36.0))
+            .push(6.0)
+            .visuals(ButtonVisuals {
+               bg: FACE,
+               ..Default::default()
+            })
+      });
+
+      let face = fill_rect(&output, FACE).expect("the face fill");
+      assert_eq!(
+         face.height(),
+         36.0,
+         "`min_size` is the face height"
+      );
+      assert_eq!(
+         response.rect.height(),
+         42.0,
+         "the widget owns the band too"
       );
    }
 }

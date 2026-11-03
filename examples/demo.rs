@@ -590,6 +590,11 @@ impl DemoApp {
             .selected(true)
             .min_size(button_size);
          ui.add(btn);
+
+         let btn = Button::new(RichText::new("Push").size(size).color(text_color))
+            .push(4.0)
+            .min_size(button_size);
+         ui.add(btn);
       });
 
       ui.add_space(8.0);

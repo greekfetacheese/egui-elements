@@ -78,6 +78,9 @@ name = "lightning"
 name = "hold_to_confirm"
 
 [[example]]
+name = "push_button"
+
+[[example]]
 name = "spinner"
 
 [[example]]

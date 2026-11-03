@@ -31,7 +31,8 @@
 //! - [`theme`] / [`themes`] — palettes, [`ThemeKind`], install
 //! - [`widgets`] — [`Button`] (with
 //!   [`HoldSettings`] for configurable hold-to-confirm
-//!   fills and completion bursts), [`Label`]
+//!   fills and completion bursts, and [`PushStyle`] for a raised base that
+//!   collapses on press), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
 //!   [`Checkbox`], [`Radio`], [`ComboBox`], [`Modal`], [`AvatarGroup`],
 //!   [`SecureTextEdit`], [`MultiLabel`], [`Spinner`],
@@ -101,8 +102,8 @@ pub use theme::{Theme, ThemeKind};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, ComboBox, Frame,
-   HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel, Radio, Spinner, SpinnerShadow,
-   Switch, ToggleShadow, ToggleVisuals, Window,
+   HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel, PushStyle, Radio, Spinner,
+   SpinnerShadow, Switch, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

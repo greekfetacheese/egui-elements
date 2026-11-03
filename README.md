@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, raised push buttons whose solid base collapses on press, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -374,6 +374,37 @@ takes over; `HoldBurst::Glow` grows a soft glow at the button's centre (the
 and falloff), `HoldBurst::Lightning` strikes a bolt across it (configurable
 thickness and jitter). The burst fizzles out on its own and requests no repaints
 once idle.
+
+### Raised push buttons
+
+`Button::push(depth)` lifts the face above a solid base and drops it by that
+same depth while the pointer is down — the "3D" look where the edge at the
+bottom collapses into the surface when pressed. The base is layout, not
+overflow: the widget reserves `depth` extra height below the face, so a
+following row never lands on the base, and the whole rectangle (base included)
+is the click target. `min_size` keeps sizing the face.
+
+```rust
+use egui_elements::{Button, PushStyle};
+
+// 4 pt of base; the face keeps the theme's fill, border and hover/press states.
+ui.add(Button::new("Winter").push(4.0));
+
+// The base defaults to the theme accent.
+ui.add(Button::new("Winter").push(6.0).push_color(theme.colors.info));
+
+// Or the whole style at once; `depth <= 0.0` leaves the button flat.
+ui.add(Button::new("Winter").push_style(&PushStyle {
+    depth: 8.0,
+    color: Some(theme.colors.info),
+}));
+```
+
+While armed the base replaces the theme's soft shadow, and the face snaps down
+and back like CSS `:active`; hover still eases the face's fill and border.
+`push_color` alone does not arm the effect. Pair a large `CornerRadius` with
+a thick `ButtonVisuals::border` to reproduce the reference (a pill, a 3 pt
+border, a 6 pt base); `cargo run --example push_button` shows it.
 
 ### Particles: Snow
 
