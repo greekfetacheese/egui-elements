@@ -10,7 +10,7 @@
 
 use super::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row, ToggleShadow, ToggleVisuals};
 
-use egui::{Response, Role, Ui, Widget, WidgetInfo, WidgetText};
+use egui::{Response, Role, Ui, Vec2, Widget, WidgetInfo, WidgetText};
 
 use crate::motion::Motion;
 use crate::theme::Theme;
@@ -116,7 +116,7 @@ impl<T: PartialEq> Widget for Radio<'_, T> {
       let label = text.as_ref().map(|text| text.text().to_owned()).unwrap_or_default();
       let mut checked = *selected == value;
 
-      let mut row = Row::new(ui, text, size);
+      let mut row = Row::new(ui, text, Vec2::splat(size));
       if row.response.clicked() && !checked {
          *selected = value;
          checked = true;

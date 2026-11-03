@@ -46,17 +46,17 @@ pub(crate) enum PlateGlyph {
 pub(crate) struct Row<'u> {
    ui: &'u mut Ui,
    rect: Rect,
-   size: f32,
+   plate: Vec2,
    pub(crate) response: Response,
    galley: Option<Arc<Galley>>,
 }
 
 impl<'u> Row<'u> {
    /// Lay the label out to wrap inside what the plate leaves, then allocate the row.
-   pub(crate) fn new(ui: &'u mut Ui, text: Option<WidgetText>, size: f32) -> Self {
+   pub(crate) fn new(ui: &'u mut Ui, text: Option<WidgetText>, plate: Vec2) -> Self {
       let gap = ui.spacing().icon_spacing;
       let galley = text.map(|text| {
-         let available = (ui.available_width() - size - gap).max(size);
+         let available = (ui.available_width() - plate.x - gap).max(plate.x);
          text.into_galley(
             ui,
             Some(egui::TextWrapMode::Wrap),
@@ -67,20 +67,20 @@ impl<'u> Row<'u> {
       let text_size = galley.as_ref().map(|galley| galley.size()).unwrap_or(Vec2::ZERO);
 
       let row = vec2(
-         size
+         plate.x
             + if galley.is_some() {
                gap + text_size.x
             } else {
                0.0
             },
-         size.max(text_size.y).max(ui.spacing().interact_size.y),
+         plate.y.max(text_size.y).max(ui.spacing().interact_size.y),
       );
       let (rect, response) = ui.allocate_exact_size(row, Sense::click());
 
       Self {
          ui,
          rect,
-         size,
+         plate,
          response,
          galley,
       }
@@ -100,7 +100,7 @@ impl<'u> Row<'u> {
       let Row {
          ui,
          rect,
-         size,
+         plate,
          response,
          galley,
       } = self;
@@ -130,8 +130,8 @@ impl<'u> Row<'u> {
 
          let scale = 1.0 - (1.0 - PRESS_SCALE) * across.press;
          let box_rect = Rect::from_center_size(
-            pos2(rect.left() + size * 0.5, rect.center().y),
-            Vec2::splat(size * scale),
+            pos2(rect.left() + plate.x * 0.5, rect.center().y),
+            plate * scale,
          );
 
          let shade = |color: Color32| {
@@ -155,9 +155,11 @@ impl<'u> Row<'u> {
             shade(visuals.border_hover.lerp(visuals.border_checked, t)),
          );
 
-         let stroke = Stroke::new((size * BORDER_RATIO).max(1.0), border);
+         let stroke = Stroke::new((plate.y * BORDER_RATIO).max(1.0), border);
          let radius = match shape {
-            PlateShape::Rounded { ratio } => CornerRadius::same((size * ratio).round() as u8),
+            PlateShape::Rounded { ratio } => {
+               CornerRadius::same((plate.min_elem() * ratio).round() as u8)
+            }
             PlateShape::Circle => CornerRadius::same(u8::MAX),
          };
          let lift = if enabled { shadow } else { ToggleShadow::NONE };
@@ -167,7 +169,7 @@ impl<'u> Row<'u> {
             fill,
             stroke,
             radius,
-            lift.to_shadow(size * scale, shade(visuals.bg_checked), t),
+            lift.to_shadow(plate.y * scale, shade(visuals.bg_checked), t),
          ));
 
          if t > 0.0 {
