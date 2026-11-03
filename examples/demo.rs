@@ -11,7 +11,7 @@ use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox, Label, Modal, Radio, SecureTextEdit,
-   Spinner, Window,
+   Spinner, Switch, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -115,6 +115,8 @@ struct DemoApp {
    check: bool,
    check_on: bool,
    check_off: bool,
+   switch_on: bool,
+   switch_off: bool,
    radio: u8,
    slider: f32,
    items: Items,
@@ -157,6 +159,8 @@ impl DemoApp {
          check: true,
          check_on: true,
          check_off: false,
+         switch_on: true,
+         switch_off: false,
          radio: 0,
          slider: 42.0,
          items: Items::default(),
@@ -664,6 +668,22 @@ impl DemoApp {
             RichText::new("Unchecked").size(size).color(text_color),
          ));
          ui.add(Checkbox::without_text(&mut self.check_off));
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 18.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+         ui.add(Switch::new(
+            &mut self.switch_on,
+            RichText::new("Switch (themed)").size(size).color(text_color),
+         ));
+         ui.add(Switch::new(
+            &mut self.switch_off,
+            RichText::new("Off").size(size).color(text_color),
+         ));
+         ui.add(Switch::without_text(&mut self.switch_off));
       });
 
       ui.add_space(8.0);
