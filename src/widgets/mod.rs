@@ -29,5 +29,7 @@ pub use modal::{IntoModalId, Modal};
 pub use multi_label::MultiLabel;
 pub use secure_text_edit::SecureTextEdit;
 pub use spinner::{Spinner, SpinnerShadow};
-pub use toggle::{Checkbox, CheckboxShadow, CheckboxVisuals, Radio, ToggleShadow, ToggleVisuals};
+pub use toggle::{
+   Checkbox, CheckboxShadow, CheckboxVisuals, Radio, Switch, ToggleShadow, ToggleVisuals,
+};
 pub use window::Window;

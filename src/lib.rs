@@ -101,7 +101,7 @@ pub use theme::{Theme, ThemeKind};
 pub use widgets::{
    Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner, BadgePulse, Button, Checkbox,
    CheckboxShadow, CheckboxVisuals, ComboBox, Frame, HoldBurst, HoldSettings, IntoModalId, Label,
-   Modal, MultiLabel, Radio, Spinner, SpinnerShadow, ToggleShadow, ToggleVisuals, Window,
+   Modal, MultiLabel, Radio, Spinner, SpinnerShadow, Switch, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, and an animated checkbox
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, and an animated checkbox
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -248,6 +248,31 @@ The shared knobs take the same types as the checkbox: `.visuals(ToggleVisuals)` 
 and `.motion(Motion)` overrides the style's `animation_time`. A click reports
 `Response::changed`, Space selects a focused radio, and
 `ui.add_enabled(false, Radio::new(..))` mutes the whole row.
+
+### Switches
+
+`Switch` draws the checkbox's plate as a track with a sliding knob: the same
+`ToggleVisuals`, `ToggleShadow` and clock, so it sits beside a checkbox without
+changing the language. The track is 1.9 times its height and the knob 0.82 of it,
+so one `.size()` scales both. Off, the track is an outline and the knob takes the
+border colour; on, the track fills with `accent` and the knob takes `mark`, exactly
+like the checkbox's tick.
+
+```rust
+use egui_elements::motion::Motion;
+use egui_elements::widgets::{Switch, ToggleShadow, ToggleVisuals};
+
+ui.add(Switch::new(&mut dark_mode, "Dark mode"));
+ui.add(Switch::without_text(&mut flag));               // track only, for a table cell
+ui.add(Switch::new(&mut flag, "Large").size(28.0));    // height; track and knob scale
+ui.add(Switch::new(&mut flag, "Flat").shadow(ToggleShadow::NONE));
+ui.add(Switch::new(&mut flag, "Instant").motion(Motion::instant()));
+```
+
+`.visuals(ToggleVisuals { .. })` replaces the colours for one switch — start from
+`ToggleVisuals::from_theme(theme.colors)` to keep the rest. A click anywhere in the
+row reports `Response::changed`, Space toggles a focused switch, and
+`ui.add_enabled(false, Switch::new(..))` mutes the whole row.
 
 ### Hold-to-confirm buttons
 

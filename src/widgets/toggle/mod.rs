@@ -1,10 +1,11 @@
-//! The toggle family: the shared plate, its glyphs, and the two widgets built on them.
+//! The toggle family: the shared plate, its glyphs, and the widgets built on them.
 //!
 //! A plate is one outlined shape with a glyph inside it, a label beside it and one clickable row.
 //! Everything that is not the glyph lives here: the row allocation, the interaction weights, the press
-//! scale and the lift. [`Checkbox`] pairs a rounded box with a tick and [`Radio`] pairs a circle with a
-//! dot, so the same row, clock and palette serve both and only the outline and the mark differ. The plate
-//! itself is crate-private; the public knobs it exposes, [`ToggleVisuals`] and [`ToggleShadow`], are
+//! scale and the lift. Checkbox pairs a rounded box with a tick, Radio pairs a circle with a dot, and
+//! Switch draws the same plate as a pill whose knob slides from end to end, so the same row, clock and
+//! palette serve all three and only the outline and the mark differ. The plate itself is crate-private;
+//! the public knobs it exposes, [`ToggleVisuals`] and [`ToggleShadow`], are
 //! re-exported at the crate root, and [`Checkbox`] keeps its historic `CheckboxVisuals`/`CheckboxShadow`
 //! aliases.
 
@@ -12,10 +13,12 @@ mod checkbox;
 mod glyph;
 mod plate;
 mod radio;
+mod switch;
 
 pub use checkbox::{Checkbox, CheckboxShadow, CheckboxVisuals};
-pub(crate) use plate::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row};
+pub(crate) use plate::{DEFAULT_SIZE, PlateGlyph, PlateShape, Row, TRACK_RATIO};
 pub use radio::Radio;
+pub use switch::Switch;
 
 use egui::{Color32, Shadow};
 

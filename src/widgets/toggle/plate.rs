@@ -17,6 +17,12 @@ use crate::visuals::paint_shape;
 pub(crate) const DEFAULT_SIZE: f32 = 18.0;
 /// Border width as a fraction of the plate size, floored at one point.
 const BORDER_RATIO: f32 = 0.0625;
+/// Track width as a fraction of its height (the reference switch measures 1.91).
+pub(crate) const TRACK_RATIO: f32 = 1.9;
+/// Knob diameter as a fraction of the track height.
+const KNOB_RATIO: f32 = 0.82;
+/// Gap between the knob and each end of the track, as a fraction of its height.
+const KNOB_INSET_RATIO: f32 = 0.09;
 /// Plate scale while the pointer is down.
 const PRESS_SCALE: f32 = 0.93;
 /// Glyph scale at `t = 0`; it pops to 1.0 and overshoots on the way.
@@ -40,6 +46,8 @@ pub(crate) enum PlateShape {
 pub(crate) enum PlateGlyph {
    Tick,
    Dot,
+   /// The switch's knob: painted in both states, its centre travelling on `t`.
+   Knob,
 }
 
 /// The row a toggle allocates: plate, `icon_spacing`, label — one `Sense::click()` rect.
@@ -172,20 +180,40 @@ impl<'u> Row<'u> {
             lift.to_shadow(plate.y * scale, shade(visuals.bg_checked), t),
          ));
 
-         if t > 0.0 {
-            let color = shade(visuals.mark).gamma_multiply((t * GLYPH_FADE).min(1.0));
-            let pop = GLYPH_POP_FROM + (1.0 - GLYPH_POP_FROM) * egui::emath::easing::back_out(t);
-            let glyph_rect = Rect::from_center_size(box_rect.center(), box_rect.size() * pop);
-            let shapes = match glyph {
-               PlateGlyph::Tick => tick_shapes(
-                  glyph_rect,
-                  color,
-                  glyph::stroke_width(glyph_rect.width()),
-               ),
-               PlateGlyph::Dot => dot_shapes(glyph_rect, color),
-            };
-            for shape in shapes {
-               ui.painter().add(shape);
+         match glyph {
+            PlateGlyph::Knob => {
+               let diameter = box_rect.height() * KNOB_RATIO;
+               let inset = box_rect.height() * KNOB_INSET_RATIO;
+               let travel = box_rect.width() - 2.0 * (inset + diameter * 0.5);
+               let centre = pos2(
+                  box_rect.left() + inset + diameter * 0.5 + travel * t,
+                  box_rect.center().y,
+               );
+               ui.painter().add(egui::Shape::circle_filled(
+                  centre,
+                  diameter * 0.5,
+                  shade(visuals.border.lerp(visuals.mark, t)),
+               ));
+            }
+            PlateGlyph::Tick | PlateGlyph::Dot => {
+               if t > 0.0 {
+                  let color = shade(visuals.mark).gamma_multiply((t * GLYPH_FADE).min(1.0));
+                  let pop =
+                     GLYPH_POP_FROM + (1.0 - GLYPH_POP_FROM) * egui::emath::easing::back_out(t);
+                  let glyph_rect = Rect::from_center_size(box_rect.center(), box_rect.size() * pop);
+                  let shapes = match glyph {
+                     PlateGlyph::Tick => tick_shapes(
+                        glyph_rect,
+                        color,
+                        glyph::stroke_width(glyph_rect.width()),
+                     ),
+                     PlateGlyph::Dot => dot_shapes(glyph_rect, color),
+                     PlateGlyph::Knob => Vec::new(),
+                  };
+                  for shape in shapes {
+                     ui.painter().add(shape);
+                  }
+               }
             }
          }
 
