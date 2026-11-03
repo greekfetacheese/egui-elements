@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, and an animated checkbox
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -273,6 +273,44 @@ ui.add(Switch::new(&mut flag, "Instant").motion(Motion::instant()));
 `ToggleVisuals::from_theme(theme.colors)` to keep the rest. A click anywhere in the
 row reports `Response::changed`, Space toggles a focused switch, and
 `ui.add_enabled(false, Switch::new(..))` mutes the whole row.
+
+### Avatar groups
+
+`AvatarGroup` stacks avatars — each one overlapping the previous by a share of its diameter — and fans
+them out while the pointer is over the stack, so every picture becomes visible. Only the spacing
+animates, on the style's `animation_time`; the diameter, the ring and the fallback plate stay put.
+
+```rust
+use egui_elements::widgets::{Avatar, AvatarGroup};
+
+let chains = [
+    Avatar::initials("E"),
+    Avatar::initials("A").plate(theme.colors.info),
+    Avatar::initials("O"),
+    Avatar::initials("P"),
+];
+ui.add(AvatarGroup::new(&chains).size(28.0));
+
+// A picture clips to the circle; `Image` accepts textures, URIs and SVGs.
+ui.add(AvatarGroup::new(&[Avatar::image(Image::new("bytes://icon.png"))]));
+```
+
+Geometry is measured from the reference this was ported from and expressed as ratios of `.size()`
+(default 32): the collapsed step is `0.69 × d` (an `overlap` of `0.31`), the expanded step `1.11 × d`
+(a `gap` of `0.11`), and the ring `0.08 × d`, painted inside each avatar's edge. The ring defaults to
+`colors.bg` — the page — because it is what separates a front avatar from the one behind it; on a
+`frame1` surface pass
+`.visuals(AvatarVisuals { ring: colors.widget_bg, ..AvatarVisuals::from_theme(colors) })`.
+
+The group always reserves the **expanded** width and spreads the stack around a fixed centre, so a
+neighbour never reflows and nothing paints outside the allocated rect. `.align(Align::Min)` pins the
+leftmost avatar instead and lets the fan grow rightwards, which is what a row wants. `.motion(Motion)`
+overrides the clock, `Motion::instant()` snaps, and `.expand(false)` keeps a group permanently stacked.
+`Avatar::initials` falls back to the accent plate with `bg` text (the theme rule for chromatic fills);
+`Avatar::plate` / `.ink` override one entry. Keep initials to one or two characters: longer text is
+shrunk to fit the plate, and at small sizes it still ends up under the next avatar's ring.
+
+Run the proof with `cargo run --example avatar`.
 
 ### Hold-to-confirm buttons
 
@@ -566,6 +604,12 @@ Interactive lightning with the public settings window and an ambient scheduler:
 
 ```sh
 cargo run --example lightning
+```
+
+Avatar groups: the reference stack, live geometry knobs and a multi-chain balance row:
+
+```sh
+cargo run --example avatar
 ```
 
 Hold-to-confirm buttons sharing one `HoldSettings` window (fill shift, bursts):

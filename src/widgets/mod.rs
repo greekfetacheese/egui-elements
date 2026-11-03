@@ -8,6 +8,7 @@
 //! the theme stored on [`egui::Context`] by [`Theme::install`](crate::theme::Theme::install)
 //! → stock [`egui::Style`].
 
+pub mod avatar;
 pub mod badge;
 pub mod button;
 pub mod combo_box;
@@ -20,6 +21,7 @@ pub mod spinner;
 pub mod toggle;
 pub mod window;
 
+pub use avatar::{Avatar, AvatarGroup, AvatarVisuals};
 pub use badge::{Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner, BadgePulse};
 pub use button::{Button, HoldBurst, HoldSettings};
 pub use combo_box::ComboBox;

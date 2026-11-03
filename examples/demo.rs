@@ -10,8 +10,8 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
-   Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox, Label, Modal, Radio, SecureTextEdit,
-   Spinner, Switch, Window,
+   Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox,
+   Label, Modal, Radio, SecureTextEdit, Spinner, Switch, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -641,6 +641,31 @@ impl DemoApp {
                .badge(Badge::new("3").color(colors.error).straddle().pulse(BadgePulse::new()))
                .min_size(button_size),
          );
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 18.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+
+         // The ring has to match the surface the stack sits on, or the overlap reads as a gap.
+         let ring = if id_salt == "bg" {
+            self.theme.colors.bg
+         } else {
+            self.theme.colors.widget_bg
+         };
+         let visuals = AvatarVisuals {
+            ring,
+            ..AvatarVisuals::from_theme(self.theme.colors)
+         };
+         let stack = [
+            Avatar::initials("A"),
+            Avatar::initials("S"),
+            Avatar::initials("B"),
+            Avatar::initials("M"),
+         ];
+         ui.add(AvatarGroup::new(&stack).size(32.0).visuals(visuals));
       });
 
       ui.add_space(8.0);

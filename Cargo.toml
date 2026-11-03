@@ -90,6 +90,9 @@ name = "radio"
 name = "switch"
 
 [[example]]
+name = "avatar"
+
+[[example]]
 name = "badge"
 
 [package.metadata.docs.rs]
