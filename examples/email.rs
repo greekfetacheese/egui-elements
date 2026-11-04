@@ -597,18 +597,7 @@ impl MailApp {
    }
 
    fn filled_button_visuals(&self, fill: Color32) -> ButtonVisuals {
-      let colors = self.theme.colors;
-      ButtonVisuals {
-         text: colors.bg,
-         bg: fill,
-         bg_hover: utils::mix(fill, colors.bg, 0.16),
-         bg_click: utils::mix(fill, colors.bg, 0.28),
-         bg_selected: fill,
-         border: Stroke::NONE,
-         border_hover: Stroke::NONE,
-         border_click: Stroke::NONE,
-         ..self.theme.button_visuals()
-      }
+      self.theme.button_visuals().filled(fill, self.theme.colors)
    }
 
    fn card(&self, surface: Surface) -> Frame {
@@ -1378,16 +1367,11 @@ impl MailApp {
                   Some(TagRole::Error) => colors.error,
                   None => colors.accent,
                };
-               let ink = if !self.theme.dark
-                  && matches!(
-                     message.tags.first().map(|tag| tag.role),
-                     Some(TagRole::Warning)
-                  ) {
-                  colors.text
-               } else {
-                  colors.bg
-               };
-               let people = [account_avatar(&initial(message.from), plate, ink)];
+               let people = [account_avatar(
+                  &initial(message.from),
+                  plate,
+                  colors.ink_on(plate),
+               )];
                ui.add(
                   AvatarGroup::new(&people)
                      .size(34.0)

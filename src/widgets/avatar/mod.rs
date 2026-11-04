@@ -34,7 +34,7 @@
 //! # });
 //! ```
 //!
-//! The fallback plate follows the theme rule for chromatic fills — `accent` with `bg` text — while the
+//! The fallback plate follows the theme rule for chromatic fills — `accent` with its `ink_on` text — while the
 //! reference paints a 35 % tint of the accent with the accent as ink; pass [`Avatar::plate`] and
 //! [`Avatar::ink`] (or a whole [`AvatarVisuals`]) for the pastel. Initials shrink to fit when the text is
 //! wider than the plate, so two letters never spill out of the circle.
@@ -162,12 +162,12 @@ impl AvatarVisuals {
    }
 
    /// The palette-derived default: the ring is the page (`colors.bg`), and the plate is `colors.accent`
-   /// carrying `colors.bg` text, like every other chromatic fill in this crate.
+   /// carrying [`ThemeColors::ink_on`] text, like every other chromatic fill in this crate.
    pub fn from_theme(colors: ThemeColors) -> Self {
       Self {
          ring: colors.bg,
          fallback_fill: colors.accent,
-         fallback_text: colors.bg,
+         fallback_text: colors.ink_on(colors.accent),
       }
    }
 }

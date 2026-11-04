@@ -159,9 +159,11 @@ Native `Visuals.window_shadow` may use `border` at reduced alpha (Tokyo Night `F
 
 | Fill | Text on fill |
 |------|----------------|
-| `accent` / `error` / `warning` / `success` / `info` | `bg` |
+| `accent` / `error` / `warning` / `success` / `info` | `ink_on(fill)` — `bg` on every built-in palette |
 
-Powder / `text` on a chromatic fill is forbidden.
+Powder / `text` on a chromatic fill is forbidden: it is 1.06:1 on Tokyo Night's accent and
+misses AA on all seven palettes. Build the pair with `ButtonVisuals::filled(fill, colors)`
+rather than by hand; §9 lists the pairs `ThemeColors::audit` checks.
 
 Hyperlinks use `info`, not `accent`. Focus rings and text-edit open borders use `accent`, not `info`.
 
@@ -206,7 +208,7 @@ WCAG 2.x relative luminance, sRGB.
 | `text` on `highlight` | **4.5:1** | Selected rows / buttons |
 | `text_muted` on `bg` and `widget_bg` | **4.5:1** | Hints are functional in this crate (wallets, forms) |
 | Chromatic **as glyph** on `bg` and `widget_bg` | **4.5:1** | `error` / `info` may sit just under 4.5 on `hover`; prefer not to perturb the semantic set for that one surface |
-| `bg` on chromatic fills | **4.5:1** | `on_*` |
+| `ink_on(fill)` on chromatic fills | **4.5:1** | `bg` on every built-in palette; the audit checks all five |
 | `bg` vs `widget_bg` | no floor | Tiny step is OK |
 | `hover` vs `bg` / `widget_bg` | visible, not a new plane | ~1.3:1 is enough with shadow |
 | `highlight` vs `hover` | distinguishable | Selected must not look hovered |
@@ -247,7 +249,7 @@ Do not run `cargo fmt` on the crate. Format only files you touch; match local in
 - Keep one widget visual set for canvas and window.
 - Keep selected, hover, and muted as three paints.
 - Use `window_frame` / `frame1` / `frame2`.
-- Put dark (`bg`) text on chromatic fills.
+- Ink chromatic fills with `ThemeColors::ink_on(fill)` (see §7).
 
 **Don’t**
 

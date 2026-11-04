@@ -631,8 +631,10 @@ impl ThemeColors {
 
    /// [`Self::text`] or [`Self::bg`], whichever has more contrast against `fill`.
    ///
-   /// For solid accent fills where [`Self::text`] may not be the right ink. Alpha is ignored;
-   /// pass an opaque fill.
+   /// The ink rule for every solid chromatic fill: [`Self::text`] is a surface ink and does not
+   /// read on `accent`, `error`, `warning`, `success` or `info` in any built-in palette
+   /// (Tokyo Night's `text` on `accent` is 1.06:1). [`Self::audit`] checks the result against
+   /// each of those fills. Alpha is ignored; pass an opaque fill.
    pub fn ink_on(&self, fill: Color32) -> Color32 {
       if contrast_ratio(self.text, fill) >= contrast_ratio(self.bg, fill) {
          self.text
@@ -643,10 +645,11 @@ impl ThemeColors {
 
    /// Every text/surface pairing worth checking, in a stable order.
    ///
-   /// Covers body and muted text on the canvas, widget, title-bar and hover surfaces; the five
-   /// semantic roles used as text; and the tinted chip ink against the fill [`Self::tint`]
-   /// returns. Each entry carries the measured ratio and the threshold it needs, so callers can
-   /// filter failures or render the whole report.
+   /// Covers body and muted text on the canvas, widget, title-bar and hover surfaces, text on the
+   /// selection fill; the five semantic roles used as text; the same five used as fills against
+   /// [`Self::ink_on`]; and the tinted chip ink against the fill [`Self::tint`] returns. Each
+   /// entry carries the measured ratio and the threshold it needs, so callers can filter failures
+   /// or render the whole report.
    pub fn audit(&self) -> Vec<ContrastCheck> {
       let check = |label, foreground, background| ContrastCheck {
          label,
@@ -661,6 +664,7 @@ impl ThemeColors {
          check("text on widget_bg", self.text, self.widget_bg),
          check("text on title_bar", self.text, self.title_bar),
          check("text on hover", self.text, self.hover),
+         check("text on highlight", self.text, self.highlight),
          check("muted text on bg", self.text_muted, self.bg),
          check(
             "muted text on widget_bg",
@@ -690,12 +694,28 @@ impl ThemeColors {
          ),
          check("error on bg", self.error, self.bg),
          check("error on widget_bg", self.error, self.widget_bg),
+         self.ink_check("ink on accent", self.accent),
+         self.ink_check("ink on error", self.error),
+         self.ink_check("ink on warning", self.warning),
+         self.ink_check("ink on success", self.success),
+         self.ink_check("ink on info", self.info),
          self.tinted_check("tinted accent", self.accent),
          self.tinted_check("tinted info", self.info),
          self.tinted_check("tinted success", self.success),
          self.tinted_check("tinted warning", self.warning),
          self.tinted_check("tinted error", self.error),
       ]
+   }
+
+   fn ink_check(&self, label: &'static str, fill: Color32) -> ContrastCheck {
+      let foreground = self.ink_on(fill);
+      ContrastCheck {
+         label,
+         foreground,
+         background: fill,
+         ratio: contrast_ratio(foreground, fill),
+         required: CONTRAST_AA_TEXT,
+      }
    }
 
    fn tinted_check(&self, label: &'static str, role: Color32) -> ContrastCheck {
@@ -830,12 +850,35 @@ mod tests {
    #[test]
    fn audit_flags_a_broken_palette() {
       let colors = Theme::new(ThemeKind::TokyoNight).colors;
-      assert_eq!(colors.audit().len(), 22);
+      assert_eq!(colors.audit().len(), 28);
 
       let mut broken = colors;
       broken.text = broken.bg;
       let failures = broken.audit().into_iter().filter(|check| !check.passes()).count();
       assert!(failures >= 4, "only {failures} pairs failed");
+   }
+
+   #[test]
+   fn chromatic_fills_carry_readable_ink_on_every_builtin_theme() {
+      for kind in ThemeKind::to_vec() {
+         let name = kind.to_str().to_owned();
+         let colors = Theme::new(kind).colors;
+
+         for fill in [
+            colors.accent,
+            colors.error,
+            colors.warning,
+            colors.success,
+            colors.info,
+         ] {
+            let ink = colors.ink_on(fill);
+            let ratio = contrast_ratio(ink, fill);
+            assert!(
+               ratio >= CONTRAST_AA_TEXT,
+               "{name}: ink {ink:?} on fill {fill:?} is {ratio:.2}:1"
+            );
+         }
+      }
    }
 
    #[test]

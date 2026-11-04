@@ -50,6 +50,17 @@ fn ui(ctx: &Context, ui: &mut Ui) {
 
 `Theme::install` writes the `egui::Style` and the per-widget visuals onto `ctx`. Custom widgets then pick them up automatically. You can still override a single widget with `.visuals(...)`.
 
+A fill that is not a surface — a primary button in `accent`, a destructive one in `error` — needs its
+own ink. `ButtonVisuals::filled(fill, colors)` supplies it: the label becomes `colors.ink_on(fill)`, so
+the copy is AA on every theme without a second palette.
+
+```rust
+let primary = theme.button_visuals().filled(theme.colors.accent, theme.colors);
+let danger = theme.button_visuals().filled(theme.colors.error, theme.colors);
+ui.add(Button::new("Send").visuals(primary));
+ui.add(Button::new("Delete").visuals(danger));
+```
+
 Always call `Theme::install` if you switch themes so egui sees the new look:
 
 ```rust

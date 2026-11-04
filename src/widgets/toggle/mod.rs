@@ -143,7 +143,7 @@ impl ToggleVisuals {
    /// The defaults a plate toggle derives from an installed palette.
    ///
    /// `bg` is transparent so the plate sits on any surface; the checked fill is the accent and the mark is
-   /// the page colour, which is the crate's rule for text on a chromatic fill.
+   /// [`ThemeColors::ink_on`]`(accent)` — the crate's rule for text on a chromatic fill.
    pub fn from_theme(colors: ThemeColors) -> Self {
       Self {
          bg: Color32::TRANSPARENT,
@@ -152,7 +152,7 @@ impl ToggleVisuals {
          border: colors.border,
          border_hover: colors.border.lerp_to_gamma(colors.accent, 0.5),
          border_checked: colors.accent,
-         mark: colors.bg,
+         mark: colors.ink_on(colors.accent),
          shadow: ToggleShadow::derived(),
       }
    }
