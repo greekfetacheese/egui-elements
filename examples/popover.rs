@@ -105,6 +105,9 @@ impl PopoverApp {
                      .min_size(vec2(200.0, 36.0)),
                );
                let mut open = self.picker_open;
+               if button.clicked() {
+                  open = !open;
+               }
                let mut picked = None;
                let _ = Popover::new("picker", &mut open)
                   .width(220.0)
@@ -125,6 +128,9 @@ impl PopoverApp {
                // Menu: full-width rows.
                let button = ui.add(Button::new("Actions").min_size(vec2(120.0, 36.0)));
                let mut open = self.menu_open;
+               if button.clicked() {
+                  open = !open;
+               }
                let mut action = None;
                let _ = Popover::new("menu", &mut open)
                   .width(200.0)
@@ -145,6 +151,9 @@ impl PopoverApp {
                // Above: bottom-left pivot on the anchor's top edge.
                let button = ui.add(Button::new("About").min_size(vec2(110.0, 36.0)));
                let mut open = self.above_open;
+               if button.clicked() {
+                  open = !open;
+               }
                let _ = Popover::new("above", &mut open)
                   .side(PopoverSide::Above)
                   .width(280.0)
