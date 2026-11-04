@@ -5,6 +5,8 @@
 //! written by [`Theme::install`](crate::theme::Theme::install) → stock
 //! [`egui::Style`].
 
+use crate::theme::ThemeColors;
+use crate::utils::mix;
 use egui::{
    Color32, CornerRadius, Painter, Rect, Response, Shadow, Shape, Stroke, StrokeKind,
    epaint::RectShape,
@@ -75,6 +77,25 @@ impl ButtonVisuals {
       } else {
          self.border
       }
+   }
+
+   /// This set filled with `fill`, and inked with whatever reads on it.
+   ///
+   /// [`Self::text`] becomes [`ThemeColors::ink_on`]`(fill)`, so a chromatic fill can never
+   /// ship label copy under [`crate::utils::CONTRAST_AA_TEXT`]: on every built-in palette that
+   /// ink is `bg` (10.6:1 on Tokyo Night's accent, 4.9:1 on Wasp's error). Hover and press mix
+   /// the fill 16 % / 28 % toward [`ThemeColors::bg`], and every border clears. Corner radius and
+   /// shadow are kept, so start from [`Theme::button_visuals`](crate::theme::Theme::button_visuals).
+   pub fn filled(mut self, fill: Color32, colors: ThemeColors) -> Self {
+      self.text = colors.ink_on(fill);
+      self.bg = fill;
+      self.bg_hover = mix(fill, colors.bg, 0.16);
+      self.bg_click = mix(fill, colors.bg, 0.28);
+      self.bg_selected = fill;
+      self.border = Stroke::NONE;
+      self.border_hover = Stroke::NONE;
+      self.border_click = Stroke::NONE;
+      self
    }
 }
 
@@ -297,5 +318,47 @@ pub(crate) fn paint_shape(
       0 => Shape::Noop,
       1 => shapes.remove(0),
       _ => Shape::Vec(shapes),
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use crate::theme::{Theme, ThemeKind};
+   use crate::utils::CONTRAST_AA_TEXT;
+
+   #[test]
+   fn filled_buttons_ink_reads_on_every_builtin_theme() {
+      for kind in ThemeKind::to_vec() {
+         let name = kind.to_str().to_owned();
+         let theme = Theme::new(kind);
+         let colors = theme.colors;
+
+         for fill in [
+            colors.accent,
+            colors.error,
+            colors.warning,
+            colors.success,
+            colors.info,
+         ] {
+            let visuals = theme.button_visuals().filled(fill, colors);
+            let ratio = crate::utils::contrast_ratio(visuals.text, fill);
+            assert!(
+               ratio >= CONTRAST_AA_TEXT,
+               "{name}: {ratio:.2}:1 on {fill:?}"
+            );
+            assert_eq!(visuals.text, colors.ink_on(fill));
+            assert_eq!(visuals.bg, fill);
+            assert_eq!(visuals.bg_selected, fill);
+            assert!(
+               visuals.border.is_empty(),
+               "{name}: the fill needs no border"
+            );
+            assert_ne!(
+               visuals.bg_hover, fill,
+               "{name}: hover must lift the fill"
+            );
+         }
+      }
    }
 }
