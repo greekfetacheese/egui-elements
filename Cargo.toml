@@ -95,5 +95,10 @@ name = "avatar"
 [[example]]
 name = "badge"
 
+[[example]]
+name = "telegram"
+path = "examples/telegram/main.rs"
+required-features = ["full"]
+
 [package.metadata.docs.rs]
 all-features = true
