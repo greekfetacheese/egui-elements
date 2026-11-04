@@ -587,6 +587,96 @@ impl ThemeColors {
          self.bg
       }
    }
+
+   /// Every text/surface pairing worth checking, in a stable order.
+   ///
+   /// Covers body and muted text on the canvas, widget, title-bar and hover surfaces; the five
+   /// semantic roles used as text; and the tinted chip ink against the fill [`Self::tint`]
+   /// returns. Each entry carries the measured ratio and the threshold it needs, so callers can
+   /// filter failures or render the whole report.
+   pub fn audit(&self) -> Vec<ContrastCheck> {
+      let check = |label, foreground, background| ContrastCheck {
+         label,
+         foreground,
+         background,
+         ratio: contrast_ratio(foreground, background),
+         required: CONTRAST_AA_TEXT,
+      };
+
+      vec![
+         check("text on bg", self.text, self.bg),
+         check("text on widget_bg", self.text, self.widget_bg),
+         check("text on title_bar", self.text, self.title_bar),
+         check("text on hover", self.text, self.hover),
+         check("muted text on bg", self.text_muted, self.bg),
+         check(
+            "muted text on widget_bg",
+            self.text_muted,
+            self.widget_bg,
+         ),
+         check(
+            "muted text on title_bar",
+            self.text_muted,
+            self.title_bar,
+         ),
+         check("accent on bg", self.accent, self.bg),
+         check("accent on widget_bg", self.accent, self.widget_bg),
+         check("info on bg", self.info, self.bg),
+         check("info on widget_bg", self.info, self.widget_bg),
+         check("success on bg", self.success, self.bg),
+         check(
+            "success on widget_bg",
+            self.success,
+            self.widget_bg,
+         ),
+         check("warning on bg", self.warning, self.bg),
+         check(
+            "warning on widget_bg",
+            self.warning,
+            self.widget_bg,
+         ),
+         check("error on bg", self.error, self.bg),
+         check("error on widget_bg", self.error, self.widget_bg),
+         self.tinted_check("tinted accent", self.accent),
+         self.tinted_check("tinted info", self.info),
+         self.tinted_check("tinted success", self.success),
+         self.tinted_check("tinted warning", self.warning),
+         self.tinted_check("tinted error", self.error),
+      ]
+   }
+
+   fn tinted_check(&self, label: &'static str, role: Color32) -> ContrastCheck {
+      let (background, foreground) = self.tint(role);
+      ContrastCheck {
+         label,
+         foreground,
+         background,
+         ratio: contrast_ratio(foreground, background),
+         required: CONTRAST_AA_TEXT,
+      }
+   }
+}
+
+/// One foreground/background pair from [`ThemeColors::audit`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ContrastCheck {
+   /// Pair name, e.g. `"text on bg"`.
+   pub label: &'static str,
+   /// Text or icon colour.
+   pub foreground: Color32,
+   /// Surface behind it.
+   pub background: Color32,
+   /// WCAG 2.2 ratio, from [`crate::utils::contrast_ratio`].
+   pub ratio: f32,
+   /// Minimum ratio this pair needs.
+   pub required: f32,
+}
+
+impl ContrastCheck {
+   /// `true` when the pair meets its threshold.
+   pub fn passes(&self) -> bool {
+      self.ratio >= self.required
+   }
 }
 
 /// Layout rhythm in points. Jobs, not one-off gaps.
@@ -682,6 +772,17 @@ mod tests {
             );
          }
       }
+   }
+
+   #[test]
+   fn audit_flags_a_broken_palette() {
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      assert_eq!(colors.audit().len(), 22);
+
+      let mut broken = colors;
+      broken.text = broken.bg;
+      let failures = broken.audit().into_iter().filter(|check| !check.passes()).count();
+      assert!(failures >= 4, "only {failures} pairs failed");
    }
 
    #[test]

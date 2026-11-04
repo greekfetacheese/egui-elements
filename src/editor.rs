@@ -5,9 +5,9 @@
 //! call [`crate::theme::Theme::install`] after `show`, not only on `Some`.
 
 use egui::{
-   Align, Button, CollapsingHeader, Color32, ComboBox, CornerRadius, DragValue, Frame, Layout,
-   Margin, Order, Popup, PopupCloseBehavior, Rect, Response, RichText, ScrollArea, Sense,
-   SetOpenCommand, Shadow, Slider, Stroke, StrokeKind, TextEdit, Ui, Vec2,
+   Align, Align2, Button, CollapsingHeader, Color32, ComboBox, CornerRadius, DragValue, FontId,
+   Frame, Layout, Margin, Order, Popup, PopupCloseBehavior, Rect, Response, RichText, ScrollArea,
+   Sense, SetOpenCommand, Shadow, Slider, Stroke, StrokeKind, TextEdit, Ui, Vec2,
    color_picker::{Alpha, color_edit_button_srgba},
    ecolor::HexColor,
    vec2,
@@ -238,6 +238,10 @@ impl ThemeEditor {
       ui.vertical_centered(|ui| {
          ui.spacing_mut().item_spacing.y = 10.0;
          let colors = theme.colors.clone();
+
+         CollapsingHeader::new("Contrast Audit").default_open(true).show(ui, |ui| {
+            Self::contrast_audit(&colors, ui);
+         });
 
          CollapsingHeader::new("Theme Frames").show(ui, |ui| {
             CollapsingHeader::new("Window Frame").show(ui, |ui| {
@@ -500,6 +504,41 @@ impl ThemeEditor {
             self.tesellation_settings(theme, ui);
          });
       });
+   }
+
+   /// AA failures from [`ThemeColors::audit`], worst ratio first.
+   fn contrast_audit(colors: &ThemeColors, ui: &mut Ui) {
+      let mut checks = colors.audit();
+      let total = checks.len();
+      checks.sort_by(|a, b| a.ratio.total_cmp(&b.ratio));
+      checks.retain(|check| !check.passes());
+
+      let summary = if checks.is_empty() {
+         format!("All {total} pairs pass AA")
+      } else {
+         format!("{} of {total} pairs below AA", checks.len())
+      };
+      let summary_color = if checks.is_empty() {
+         colors.success
+      } else {
+         colors.error
+      };
+      ui.label(RichText::new(summary).color(summary_color).size(11.0));
+
+      for check in &checks {
+         ui.horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(vec2(30.0, 16.0), Sense::hover());
+            ui.painter().rect_filled(rect, 3.0, check.background);
+            ui.painter().text(
+               rect.center(),
+               Align2::CENTER_CENTER,
+               "Aa",
+               FontId::proportional(11.0),
+               check.foreground,
+            );
+            ui.label(RichText::new(format!("{} {:.1}:1", check.label, check.ratio)).size(11.0));
+         });
+      }
    }
 
    fn tesellation_settings(&mut self, theme: &Theme, ui: &mut Ui) {
