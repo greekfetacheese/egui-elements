@@ -662,6 +662,12 @@ Capability gallery (palette, widgets, components):
 cargo run --example demo --features full
 ```
 
+Anchored popover proof (a symbol picker, an action menu and an above-side inspector):
+
+```sh
+cargo run --example popover
+```
+
 Product-framed reference client (mail UI):
 
 ```sh
