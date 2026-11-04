@@ -21,6 +21,7 @@ pub mod multi_label;
 pub mod scroll;
 pub mod secure_text_edit;
 pub mod spinner;
+pub mod tabs;
 pub mod toggle;
 pub mod window;
 
@@ -37,6 +38,7 @@ pub use multi_label::MultiLabel;
 pub use scroll::Scroll;
 pub use secure_text_edit::SecureTextEdit;
 pub use spinner::{Spinner, SpinnerShadow};
+pub use tabs::Tabs;
 pub use toggle::{
    Checkbox, CheckboxShadow, CheckboxVisuals, Radio, Switch, ToggleShadow, ToggleVisuals,
 };

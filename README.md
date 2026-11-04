@@ -674,6 +674,12 @@ Telegram Desktop replica: a two-pane `Flex` shell (chat list, conversation, over
 cargo run --features secure-types --example telegram
 ```
 
+Segmented tabs, filled and fitted:
+
+```sh
+cargo run --example tabs
+```
+
 Interactive snow with the public settings window:
 
 ```sh
