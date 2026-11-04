@@ -553,6 +553,42 @@ pub struct ThemeColors {
    pub info: Color32,
 }
 
+impl ThemeColors {
+   /// Share of the surface colour in a tinted fill.
+   const FILL_MIX: f32 = 0.86;
+   /// Share of [`Self::text`] in tinted ink.
+   const INK_MIX: f32 = 0.30;
+
+   /// Tinted fill and readable ink for `role` on the canvas.
+   ///
+   /// `fill` is [`Self::bg`] pulled most of the way toward `role`; `ink` is `role` pulled a
+   /// little of the way toward [`Self::text`], so the chip keeps the role's hue instead of
+   /// reading as plain text. If that ink misses [`CONTRAST_AA_TEXT`] on the fill, it falls back
+   /// to [`Self::ink_on`], which picks whichever of [`Self::text`] / [`Self::bg`] reads best.
+   pub fn tint(&self, role: Color32) -> (Color32, Color32) {
+      let fill = mix(role, self.bg, Self::FILL_MIX);
+      let ink = mix(role, self.text, Self::INK_MIX);
+      let ink = if contrast_ratio(ink, fill) >= CONTRAST_AA_TEXT {
+         ink
+      } else {
+         self.ink_on(fill)
+      };
+      (fill, ink)
+   }
+
+   /// [`Self::text`] or [`Self::bg`], whichever has more contrast against `fill`.
+   ///
+   /// For solid accent fills where [`Self::text`] may not be the right ink. Alpha is ignored;
+   /// pass an opaque fill.
+   pub fn ink_on(&self, fill: Color32) -> Color32 {
+      if contrast_ratio(self.text, fill) >= contrast_ratio(self.bg, fill) {
+         self.text
+      } else {
+         self.bg
+      }
+   }
+}
+
 /// Layout rhythm in points. Jobs, not one-off gaps.
 ///
 /// | Token | Default | Job |
@@ -619,4 +655,42 @@ pub struct Typography {
    pub very_large: f32,
    /// Page / modal headings.
    pub heading: f32,
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn tinted_ink_is_readable_on_every_builtin_theme() {
+      for kind in ThemeKind::to_vec() {
+         let name = kind.to_str().to_owned();
+         let colors = Theme::new(kind).colors;
+
+         for role in [
+            colors.accent,
+            colors.info,
+            colors.success,
+            colors.warning,
+            colors.error,
+         ] {
+            let (fill, ink) = colors.tint(role);
+            let ratio = contrast_ratio(fill, ink);
+            assert!(
+               ratio >= CONTRAST_AA_TEXT,
+               "{name} role {role:?}: {ratio:.2} on {fill:?}"
+            );
+         }
+      }
+   }
+
+   #[test]
+   fn ink_on_picks_the_higher_contrast() {
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      assert_eq!(
+         colors.ink_on(Color32::from_rgb(90, 90, 90)),
+         colors.text
+      );
+      assert_eq!(colors.ink_on(colors.text), colors.bg);
+   }
 }

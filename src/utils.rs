@@ -152,6 +152,59 @@ fn channel_to_u8(channel: f32) -> u8 {
    (channel.clamp(0.0, 1.0) * 255.0) as u8
 }
 
+/// WCAG 2.2 AA contrast for normal-size text.
+pub const CONTRAST_AA_TEXT: f32 = 4.5;
+
+/// WCAG 2.2 AA contrast for large text and UI component boundaries.
+pub const CONTRAST_AA_UI: f32 = 3.0;
+
+/// Mix two colours in unpremultiplied sRGB; `t = 0` returns `a`, `t = 1` returns `b`.
+///
+/// Channels are mixed gamma-encoded, which is what palette tinting wants: halfway between a role
+/// colour and the canvas reads as halfway. Alpha is interpolated too.
+pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
+   let t = t.clamp(0.0, 1.0);
+   let (ar, ag, ab) = unpremultiply_srgb(a);
+   let (br, bg, bb) = unpremultiply_srgb(b);
+   let alpha = a.a() as f32 / 255.0;
+   let other_alpha = b.a() as f32 / 255.0;
+
+   let channel = |x: f32, y: f32| channel_to_u8(x + (y - x) * t);
+   Color32::from_rgba_unmultiplied(
+      channel(ar, br),
+      channel(ag, bg),
+      channel(ab, bb),
+      channel(alpha, other_alpha),
+   )
+}
+
+/// WCAG 2.2 contrast ratio between two opaque colours, from 1.0 to 21.0.
+///
+/// Use [`CONTRAST_AA_TEXT`] for body text and [`CONTRAST_AA_UI`] for large text and component
+/// boundaries. Alpha is ignored: composite a translucent colour over its surface first.
+pub fn contrast_ratio(a: Color32, b: Color32) -> f32 {
+   let (first, second) = (relative_luminance(a), relative_luminance(b));
+   let (lighter, darker) = if first >= second {
+      (first, second)
+   } else {
+      (second, first)
+   };
+   (lighter + 0.05) / (darker + 0.05)
+}
+
+fn relative_luminance(c: Color32) -> f32 {
+   let (r, g, b) = unpremultiply_srgb(c);
+   0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+}
+
+fn linearize(s: f32) -> f32 {
+   if s <= 0.04045 {
+      s / 12.92
+   } else {
+      ((s + 0.055) / 1.055).powf(2.4)
+   }
+}
+
 /// `true` if any frame-related palette slot changed.
 pub fn frame_palette_changed(old: &ThemeColors, new: &ThemeColors) -> bool {
    old.title_bar != new.title_bar
@@ -307,5 +360,31 @@ mod tests {
       let hsla = Hsla::from_hex("#7aa2f780").unwrap();
       assert!((hsla.a - 128.0 / 255.0).abs() < 1e-5);
       assert_eq!(hsla.to_color32().a(), 128);
+   }
+
+   #[test]
+   fn mix_runs_between_the_endpoints() {
+      let red = Color32::from_rgb(255, 0, 0);
+      let blue = Color32::from_rgb(0, 0, 255);
+      assert_eq!(mix(red, blue, 0.0), red);
+      assert_eq!(mix(red, blue, 1.0), blue);
+      assert_eq!(
+         mix(red, blue, 0.5),
+         Color32::from_rgb(127, 0, 127)
+      );
+   }
+
+   #[test]
+   fn mix_interpolates_alpha() {
+      let opaque = Color32::from_rgba_unmultiplied(255, 0, 0, 255);
+      let clear = Color32::from_rgba_unmultiplied(255, 0, 0, 0);
+      assert!((mix(opaque, clear, 0.5).a() as i16 - 127).abs() <= 1);
+   }
+
+   #[test]
+   fn contrast_ratio_matches_wcag_extremes() {
+      assert!((contrast_ratio(Color32::BLACK, Color32::WHITE) - 21.0).abs() < 0.01);
+      assert!((contrast_ratio(Color32::WHITE, Color32::BLACK) - 21.0).abs() < 0.01);
+      assert!((contrast_ratio(Color32::WHITE, Color32::WHITE) - 1.0).abs() < 0.001);
    }
 }

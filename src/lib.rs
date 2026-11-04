@@ -49,7 +49,8 @@
 //!   [`CrossAlign`](crate::layout::CrossAlign))
 //! - [`motion`] — eased value animation ([`Motion`], [`Easing`],
 //!   [`animate`]) and interpolation ([`Lerp`])
-//! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), HSLA helpers
+//! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), [`mix`],
+//!   [`contrast_ratio`], HSLA helpers
 //! - [`visuals`] — per-widget chrome (`ButtonVisuals`, `TextEditVisuals`, …)
 //!
 //! # Features
@@ -98,6 +99,7 @@ pub use particles::{
    SnowSettings,
 };
 pub use theme::{Theme, ThemeKind};
+pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, ComboBox, Frame,
