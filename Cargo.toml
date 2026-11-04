@@ -98,7 +98,7 @@ name = "badge"
 [[example]]
 name = "telegram"
 path = "examples/telegram/main.rs"
-required-features = ["full"]
+required-features = ["secure-types"]
 
 [package.metadata.docs.rs]
 all-features = true
