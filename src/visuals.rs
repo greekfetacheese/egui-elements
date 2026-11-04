@@ -323,7 +323,6 @@ pub(crate) fn paint_shape(
 
 #[cfg(test)]
 mod tests {
-   use super::*;
    use crate::theme::{Theme, ThemeKind};
    use crate::utils::CONTRAST_AA_TEXT;
 

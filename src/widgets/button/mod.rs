@@ -36,14 +36,23 @@ pub(crate) const HOLD_GLOW_END: f32 = 2.2;
 /// `text` on `accent` is 1.06:1 — so the fill stops at the last step that keeps
 /// [`CONTRAST_AA_TEXT`], while the leading edge keeps the full colour. `base` must be
 /// opaque; callers pass the button fill, or the page when that fill is transparent.
+///
+/// The check measures what the label actually sits on, so a target with alpha is composited
+/// over `base` first. When the fill as given already reads it is returned untouched — `accent`
+/// at 80 alpha is 4.98:1 on Tokyo Night and keeps its own colour; only an unreadable fill is
+/// walked toward `base`.
 fn sweep_fill(base: Color32, target: Color32, ink: Color32) -> Color32 {
    const STEPS: u8 = 12;
+
+   if contrast_ratio(base.blend(target), ink) >= CONTRAST_AA_TEXT {
+      return target;
+   }
 
    let mut best = base;
    for step in 1..=STEPS {
       let t = f32::from(step) / f32::from(STEPS);
       let candidate = mix(base, target, t);
-      if contrast_ratio(candidate, ink) < CONTRAST_AA_TEXT {
+      if contrast_ratio(base.blend(candidate), ink) < CONTRAST_AA_TEXT {
          break;
       }
       best = candidate;
@@ -1632,7 +1641,7 @@ mod tests {
                colors.info,
             ] {
                let fill = sweep_fill(surface, role, colors.text);
-               let ratio = contrast_ratio(fill, colors.text);
+               let ratio = contrast_ratio(surface.blend(fill), colors.text);
                assert!(
                   ratio >= CONTRAST_AA_TEXT,
                   "{name}: sweep {fill:?} under text is {ratio:.2}:1"
@@ -1646,5 +1655,20 @@ mod tests {
             "{name}: the sweep must still advance toward the accent"
          );
       }
+
+      // A translucent fill that already reads is painted exactly as given: this is the
+      // accent at 80 alpha preset, which composites to 4.7:1 under text on Tokyo Night.
+      let colors = Theme::new(crate::theme::ThemeKind::TokyoNight).colors;
+      let translucent = Color32::from_rgba_unmultiplied(
+         colors.accent.r(),
+         colors.accent.g(),
+         colors.accent.b(),
+         80,
+      );
+      assert_eq!(
+         sweep_fill(colors.widget_bg, translucent, colors.text),
+         translucent,
+         "the 80-alpha accent sweep must keep its own fill"
+      );
    }
 }
