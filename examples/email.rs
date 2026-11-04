@@ -1032,6 +1032,7 @@ impl MailApp {
                   )
                   .expand(Some(space.xs))
                   .selected(account == index)
+                  .interactive(true)
                   .sense(Sense::click())
                   .fill_width(true);
                   if ui.add(row).clicked() {
