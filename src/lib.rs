@@ -33,7 +33,8 @@
 //!   [`HoldSettings`] for configurable hold-to-confirm
 //!   fills and completion bursts), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
-//!   [`Checkbox`], [`Radio`], [`ComboBox`], [`Chip`], [`Modal`], [`AvatarGroup`],
+//!   [`Checkbox`], [`Radio`], [`ComboBox`], [`Chip`], [`Divider`], [`Scroll`],
+//!   [`Modal`], [`AvatarGroup`],
 //!   [`SecureTextEdit`], [`MultiLabel`], [`Spinner`],
 //!   [`Window`]
 //! - [`particles`] — [`Snow`],
@@ -103,8 +104,8 @@ pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
-   ComboBox, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel, Radio, Spinner,
-   SpinnerShadow, Switch, ToggleShadow, ToggleVisuals, Window,
+   ComboBox, Divider, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel, Radio,
+   Scroll, Spinner, SpinnerShadow, Switch, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

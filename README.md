@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Chip`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Chip`, `Divider`, `Scroll`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -146,6 +146,33 @@ ui.add(Chip::new("Archived").outline(true));
 `Error`). `.dot(true)` prefixes a status dot in the role colour; `.outline(true)` swaps the
 tinted fill for a role-coloured border with theme text. Sizing knobs: `.padding(Vec2)`,
 `.corner_radius(f32)` (default is a pill) and `.text_style(TextStyle)`.
+
+### Scroll areas and dividers
+
+`Scroll` is a `ScrollArea` with desktop-panel geometry: a 6-point bar, a 2-point inner margin
+and a 4-point outer margin, with the handle colours still coming from the theme. `.bars(...)`
+hides it for panes that scroll with the wheel only.
+
+```rust
+use egui::scroll_area::ScrollBarVisibility;
+use egui_elements::widgets::Scroll;
+
+Scroll::vertical("reading")
+    .bars(ScrollBarVisibility::AlwaysHidden)
+    .show(ui, |ui| {
+        ui.label("Wheel-scrolled body");
+    });
+```
+
+`Divider` is a one-pixel rule in `colors.border` — horizontal across the available width, or a
+short vertical one between toolbar items. `.inset(f32)` skips space at the start edge.
+
+```rust
+use egui_elements::widgets::Divider;
+
+ui.add(Divider::new().inset(8.0));
+ui.add(Divider::vertical().length(14.0));
+```
 
 ### Badges
 
