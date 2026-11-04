@@ -582,7 +582,7 @@ Capability gallery (palette, widgets, components):
 cargo run --example demo --features full
 ```
 
-Product-framed placeholder (mail client UI):
+Product-framed reference client (mail UI):
 
 ```sh
 cargo run --example email
