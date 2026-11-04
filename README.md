@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Chip`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -104,6 +104,25 @@ fn gallery(ui: &mut Ui, text: &mut String, modal_open: &mut bool) {
 Give each `ComboBox` / `SecureTextEdit` a unique `id_salt` if you repeat the same gallery on several surfaces (bg, frame, window). Otherwise their persistent state collides.
 
 Long option lists can be virtualized: `show_rows_ui(ui, row_height, total_rows, |ui, range| …)` builds only the rows in the viewport, and every row must lay out at exactly `row_height` (without `item_spacing.y`, which egui adds itself). The popup chrome is adjustable with `.popup_gap(points)` (default `ThemeSpacing::xs`) and `.popup_content_margin(points)` (default `5`), and its surface is themed through `ComboBoxVisuals::popup_bg` / `popup_border`. See `cargo run --example combo_box`.
+
+### Chips
+
+`Chip` is an auto-width pill for one short label — tags, filters, statuses. It sizes itself to
+the text (unlike `Badge`, whose circle grows with the label) and takes its fill and ink from
+`ThemeColors::tint`, so the label keeps AA contrast in every theme.
+
+```rust
+use egui_elements::widgets::{Chip, ChipRole};
+
+ui.add(Chip::new("Design").role(ChipRole::Info));
+ui.add(Chip::new("Needs reply").role(ChipRole::Warning).dot(true));
+ui.add(Chip::new("Archived").outline(true));
+```
+
+`ChipRole` picks the palette slot (`Neutral`, `Accent`, `Info`, `Success`, `Warning`,
+`Error`). `.dot(true)` prefixes a status dot in the role colour; `.outline(true)` swaps the
+tinted fill for a role-coloured border with theme text. Sizing knobs: `.padding(Vec2)`,
+`.corner_radius(f32)` (default is a pill) and `.text_style(TextStyle)`.
 
 ### Badges
 

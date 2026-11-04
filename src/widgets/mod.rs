@@ -11,6 +11,7 @@
 pub mod avatar;
 pub mod badge;
 pub mod button;
+pub mod chip;
 pub mod combo_box;
 pub mod frame;
 pub mod label;
@@ -24,6 +25,7 @@ pub mod window;
 pub use avatar::{Avatar, AvatarGroup, AvatarVisuals};
 pub use badge::{Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner, BadgePulse};
 pub use button::{Button, HoldBurst, HoldSettings};
+pub use chip::{Chip, ChipRole};
 pub use combo_box::ComboBox;
 pub use frame::Frame;
 pub use label::Label;

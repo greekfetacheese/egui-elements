@@ -21,8 +21,9 @@ use egui_elements::theme::{Theme, ThemeColors, ThemeKind};
 use egui_elements::utils;
 use egui_elements::visuals::ButtonVisuals;
 use egui_elements::widgets::{
-   Avatar, AvatarGroup, AvatarVisuals, Badge, Button, Checkbox, ComboBox, Frame as Card, HoldBurst,
-   Label, Modal, MultiLabel, Radio, SecureTextEdit, Spinner, SpinnerShadow, Switch, Window,
+   Avatar, AvatarGroup, AvatarVisuals, Badge, Button, Checkbox, Chip, ChipRole, ComboBox,
+   Frame as Card, HoldBurst, Label, Modal, MultiLabel, Radio, SecureTextEdit, Spinner,
+   SpinnerShadow, Switch, Window,
 };
 
 fn main() -> eframe::Result {
@@ -142,13 +143,13 @@ enum TagRole {
 }
 
 impl TagRole {
-   fn color(self, colors: ThemeColors) -> Color32 {
+   fn chip(self) -> ChipRole {
       match self {
-         TagRole::Accent => colors.accent,
-         TagRole::Info => colors.info,
-         TagRole::Warning => colors.warning,
-         TagRole::Success => colors.success,
-         TagRole::Error => colors.error,
+         TagRole::Accent => ChipRole::Accent,
+         TagRole::Info => ChipRole::Info,
+         TagRole::Warning => ChipRole::Warning,
+         TagRole::Success => ChipRole::Success,
+         TagRole::Error => ChipRole::Error,
       }
    }
 }
@@ -721,7 +722,7 @@ impl MailApp {
                         );
                      });
                      f.item(Item::new(), |ui| {
-                        tag_chip(ui, self, "Reference", colors.info);
+                        tag_chip(ui, self, "Reference", ChipRole::Info);
                      });
                   });
             });
@@ -1478,7 +1479,7 @@ impl MailApp {
                         .show(ui, |f| {
                            for tag in message.tags.iter().take(2) {
                               f.item(Item::new(), |ui| {
-                                 tag_chip(ui, self, tag.text, tag.role.color(colors));
+                                 tag_chip(ui, self, tag.text, tag.role.chip());
                               });
                            }
                            if !message.attachments.is_empty() {
@@ -1487,7 +1488,7 @@ impl MailApp {
                                     ui,
                                     self,
                                     &format!("{} files", message.attachments.len()),
-                                    colors.info,
+                                    ChipRole::Info,
                                  );
                               });
                            }
@@ -1628,11 +1629,11 @@ impl MailApp {
                            .align_items(CrossAlign::Center)
                            .show(ui, |f| {
                               f.item(Item::new(), |ui| {
-                                 tag_chip(ui, self, "Inbox", colors.accent);
+                                 tag_chip(ui, self, "Inbox", ChipRole::Accent);
                               });
                               for tag in message.tags {
                                  f.item(Item::new(), |ui| {
-                                    tag_chip(ui, self, tag.text, tag.role.color(colors));
+                                    tag_chip(ui, self, tag.text, tag.role.chip());
                                  });
                               }
                            });
@@ -2286,15 +2287,9 @@ impl MailApp {
    }
 }
 
-fn tag_chip(ui: &mut Ui, app: &MailApp, text: &str, color: Color32) {
-   let (fill, ink) = app.theme.colors.tint(color);
-   Frame::new()
-      .fill(fill)
-      .corner_radius(4)
-      .inner_margin(Margin::symmetric(6, 2))
-      .show(ui, |ui| {
-         ui.label(RichText::new(text).size(app.theme.typography.very_small).color(ink));
-      });
+fn tag_chip(ui: &mut Ui, app: &MailApp, text: &str, role: ChipRole) {
+   let text = RichText::new(text).size(app.theme.typography.very_small);
+   ui.add(Chip::new(text).role(role));
 }
 
 fn activity_row(ui: &mut Ui, app: &MailApp, color: Color32, text: &str, time: &str) {
