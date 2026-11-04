@@ -5,8 +5,8 @@
 //! The checks live in the composition, not the inbox data:
 //! - Flex distributes every header, row, and footer.
 //! - Table lays out the attachment list in the details rail.
-//! - frame1 sits on bg, frame2 sits on frame1, and frame1 nests on frame2
-//!   in the quoted reply.
+//! - a Panel sits on the canvas, a Well sits on a Panel, and a Panel nests on
+//!   a Well in the quoted reply.
 //! - Every ThemeColors slot appears in a job: title_bar chrome, canvas,
 //!   elevated cards, hover rows, selection, muted metadata, borders, the five
 //!   semantic colours, and accent as the primary action.
@@ -17,7 +17,7 @@ use eframe::egui::scroll_area::ScrollBarVisibility;
 use eframe::egui::*;
 use egui_elements::editor::ThemeEditor;
 use egui_elements::layout::{Column, CrossAlign, Flex, Item, Justify, Table};
-use egui_elements::theme::{Theme, ThemeColors, ThemeKind};
+use egui_elements::theme::{Surface, Theme, ThemeColors, ThemeKind};
 use egui_elements::utils;
 use egui_elements::visuals::ButtonVisuals;
 use egui_elements::widgets::{
@@ -611,12 +611,11 @@ impl MailApp {
       }
    }
 
-   fn card1(&self) -> Frame {
-      self.theme.frame1.inner_margin(self.theme.spacing.margin(self.theme.spacing.md))
-   }
-
-   fn card2(&self) -> Frame {
-      self.theme.frame2.inner_margin(self.theme.spacing.margin(self.theme.spacing.md))
+   fn card(&self, surface: Surface) -> Frame {
+      self
+         .theme
+         .surface_frame(surface)
+         .inner_margin(self.theme.spacing.margin(self.theme.spacing.md))
    }
 }
 
@@ -980,7 +979,7 @@ impl MailApp {
       let space = self.theme.spacing;
       let account = self.account;
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          Flex::row("account_head")
             .gap(space.sm)
@@ -1166,7 +1165,7 @@ impl MailApp {
       let colors = self.theme.colors;
       let space = self.theme.spacing;
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          Flex::row("storage_head")
             .justify(Justify::SpaceBetween)
@@ -1207,7 +1206,10 @@ impl MailApp {
 
 impl MailApp {
    fn thread_panel(&mut self, ui: &mut Ui) {
-      let card = self.theme.frame1.inner_margin(self.theme.spacing.margin(self.theme.spacing.sm));
+      let card = self
+         .theme
+         .surface_frame(Surface::Panel)
+         .inner_margin(self.theme.spacing.margin(self.theme.spacing.sm));
       card.show(ui, |ui| {
          ui.set_width(ui.available_width());
          Flex::column("thread_column")
@@ -1588,7 +1590,10 @@ impl MailApp {
          return;
       };
 
-      let card = self.theme.frame1.inner_margin(self.theme.spacing.margin(self.theme.spacing.md));
+      let card = self
+         .theme
+         .surface_frame(Surface::Panel)
+         .inner_margin(self.theme.spacing.margin(self.theme.spacing.md));
       card.show(ui, |ui| {
          ui.set_width(ui.available_width());
          Flex::column("reading_column")
@@ -1817,7 +1822,7 @@ impl MailApp {
       let colors = self.theme.colors;
       let space = self.theme.spacing;
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          ScrollArea::vertical()
             .id_salt(("reading_scroll", message.id))
@@ -1852,36 +1857,39 @@ impl MailApp {
                      .show(ui, |f| {
                         for file in message.attachments {
                            f.item(Item::grow(1.0), |ui| {
-                              self.card1().inner_margin(space.margin(space.sm)).show(ui, |ui| {
-                                 ui.set_width(ui.available_width());
-                                 Flex::row(("file_chip", file.name))
-                                    .gap(space.sm)
-                                    .align_items(CrossAlign::Center)
-                                    .show(ui, |f| {
-                                       f.item(Item::fixed(34.0), |ui| {
-                                          Badge::new(file.kind)
-                                             .color(colors.info)
-                                             .text_color(colors.bg)
-                                             .min_diameter(26.0)
-                                             .padding(4.0)
-                                             .show(ui);
-                                       });
-                                       f.item(Item::grow(1.0), |ui| {
-                                          ui.vertical(|ui| {
-                                             ui.label(
-                                                RichText::new(file.name)
-                                                   .size(self.theme.typography.very_small)
-                                                   .color(colors.text),
-                                             );
-                                             ui.label(
-                                                RichText::new(file.size)
-                                                   .size(self.theme.typography.very_small)
-                                                   .color(colors.text_muted),
-                                             );
+                              self.card(Surface::Panel).inner_margin(space.margin(space.sm)).show(
+                                 ui,
+                                 |ui| {
+                                    ui.set_width(ui.available_width());
+                                    Flex::row(("file_chip", file.name))
+                                       .gap(space.sm)
+                                       .align_items(CrossAlign::Center)
+                                       .show(ui, |f| {
+                                          f.item(Item::fixed(34.0), |ui| {
+                                             Badge::new(file.kind)
+                                                .color(colors.info)
+                                                .text_color(colors.bg)
+                                                .min_diameter(26.0)
+                                                .padding(4.0)
+                                                .show(ui);
+                                          });
+                                          f.item(Item::grow(1.0), |ui| {
+                                             ui.vertical(|ui| {
+                                                ui.label(
+                                                   RichText::new(file.name)
+                                                      .size(self.theme.typography.very_small)
+                                                      .color(colors.text),
+                                                );
+                                                ui.label(
+                                                   RichText::new(file.size)
+                                                      .size(self.theme.typography.very_small)
+                                                      .color(colors.text_muted),
+                                                );
+                                             });
                                           });
                                        });
-                                    });
-                              });
+                                 },
+                              );
                            });
                         }
                      });
@@ -1895,7 +1903,7 @@ impl MailApp {
       let colors = self.theme.colors;
       let space = self.theme.spacing;
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          ui.spacing_mut().item_spacing.y = space.sm;
 
@@ -1920,9 +1928,9 @@ impl MailApp {
                });
             });
 
-         // frame1 on frame2: the quoted reply sits inside the inset composer.
+         // Panel on Well: the quoted reply sits inside the inset composer.
          self
-            .card1()
+            .card(Surface::Panel)
             .inner_margin(space.margin_xy(space.sm, space.xs))
             .stroke(Stroke::new(
                1.0,
@@ -2004,7 +2012,10 @@ impl MailApp {
 
 impl MailApp {
    fn details_panel(&mut self, ui: &mut Ui) {
-      let card = self.theme.frame1.inner_margin(self.theme.spacing.margin(self.theme.spacing.sm));
+      let card = self
+         .theme
+         .surface_frame(Surface::Panel)
+         .inner_margin(self.theme.spacing.margin(self.theme.spacing.sm));
       card.show(ui, |ui| {
          ui.set_width(ui.available_width());
          Flex::column("details_column")
@@ -2058,7 +2069,7 @@ impl MailApp {
       let colors = self.theme.colors;
       let space = self.theme.spacing;
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          ui.spacing_mut().item_spacing.y = space.sm;
          Flex::row("people_head")
@@ -2106,7 +2117,7 @@ impl MailApp {
          );
       });
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          ui.spacing_mut().item_spacing.y = space.sm;
          ui.label(
@@ -2165,7 +2176,7 @@ impl MailApp {
             });
       });
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          ui.spacing_mut().item_spacing.y = space.sm;
          Flex::row("attachments_head")
@@ -2244,7 +2255,7 @@ impl MailApp {
          }
       });
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          ui.spacing_mut().item_spacing.y = space.sm;
          ui.label(
@@ -2270,7 +2281,7 @@ impl MailApp {
          );
       });
 
-      self.card2().show(ui, |ui| {
+      self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
          Flex::row("details_footer")
             .justify(Justify::SpaceBetween)
@@ -2557,8 +2568,8 @@ impl MailApp {
 
       Window::new("Keyboard shortcuts")
          .open(&mut open)
-         .frame(self.theme.window_frame)
-         .title_frame(self.theme.window_frame.stroke(Stroke::NONE))
+         .frame(self.theme.surface_frame(Surface::Overlay))
+         .title_frame(self.theme.surface_frame(Surface::Overlay).stroke(Stroke::NONE))
          .default_width(380.0)
          .resizable(false)
          .collapsible(false)
@@ -2633,7 +2644,7 @@ fn shortcut_row(ui: &mut Ui, app: &MailApp, key: &str, description: &str) {
       .show(ui, |f| {
          f.item(Item::fixed(44.0), |ui| {
             app.theme
-               .frame2
+               .surface_frame(Surface::Well)
                .inner_margin(space.margin_xy(space.sm, space.xs))
                .show(ui, |ui| {
                   ui.set_width(28.0);

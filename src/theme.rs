@@ -232,6 +232,30 @@ impl Theme {
       self.visuals.frame2_visuals
    }
 
+   /// The frame for a [`Surface`].
+   pub fn surface_frame(&self, surface: Surface) -> Frame {
+      match surface {
+         Surface::Canvas => Frame::NONE.fill(self.colors.bg),
+         Surface::Panel => self.frame1,
+         Surface::Well => self.frame2,
+         Surface::Overlay => self.window_frame,
+      }
+   }
+
+   /// Fill colour of a [`Surface`].
+   pub fn surface_fill(&self, surface: Surface) -> Color32 {
+      self.surface_frame(surface).fill
+   }
+
+   /// Hover/click visuals when a surface is interactive.
+   pub fn surface_visuals(&self, surface: Surface) -> Option<FrameVisuals> {
+      match surface {
+         Surface::Panel => Some(self.visuals.frame1_visuals),
+         Surface::Well => Some(self.visuals.frame2_visuals),
+         Surface::Canvas | Surface::Overlay => None,
+      }
+   }
+
    /// Button visuals from [`ThemeVisuals`].
    pub fn button_visuals(&self) -> ButtonVisuals {
       self.visuals.button_visuals
@@ -497,6 +521,35 @@ pub struct ThemeVisuals {
    pub frame1_visuals: FrameVisuals,
    /// Hover/click fills for [`Theme::frame2`].
    pub frame2_visuals: FrameVisuals,
+}
+
+/// Named layer in the surface ladder.
+///
+/// Frames carry fill and chrome; this names the role, so nesting can be described without
+/// remembering which of `frame1` / `frame2` goes on which.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Surface {
+   /// Page background ([`ThemeColors::bg`]).
+   #[default]
+   Canvas,
+   /// Major card on the canvas ([`Theme::frame1`]).
+   Panel,
+   /// Recessed area inside a panel ([`Theme::frame2`]).
+   Well,
+   /// Window or modal surface ([`Theme::window_frame`]).
+   Overlay,
+}
+
+impl Surface {
+   /// The surface a card placed on this one should use.
+   ///
+   /// Alternates panel ↔ well, so a card stays distinguishable from the surface under it.
+   pub fn card(self) -> Surface {
+      match self {
+         Surface::Canvas | Surface::Well | Surface::Overlay => Surface::Panel,
+         Surface::Panel => Surface::Well,
+      }
+   }
 }
 
 /// This is the color palette of the theme
@@ -783,6 +836,33 @@ mod tests {
       broken.text = broken.bg;
       let failures = broken.audit().into_iter().filter(|check| !check.passes()).count();
       assert!(failures >= 4, "only {failures} pairs failed");
+   }
+
+   #[test]
+   fn the_surface_ladder_matches_the_theme_frames() {
+      let theme = Theme::new(ThemeKind::TokyoNight);
+
+      assert_eq!(
+         theme.surface_fill(Surface::Canvas),
+         theme.colors.bg
+      );
+      assert_eq!(
+         theme.surface_fill(Surface::Panel),
+         theme.frame1.fill
+      );
+      assert_eq!(
+         theme.surface_fill(Surface::Well),
+         theme.frame2.fill
+      );
+      assert_eq!(
+         theme.surface_fill(Surface::Overlay),
+         theme.window_frame.fill
+      );
+
+      assert_eq!(Surface::Canvas.card(), Surface::Panel);
+      assert_eq!(Surface::Panel.card(), Surface::Well);
+      assert_eq!(Surface::Well.card(), Surface::Panel);
+      assert_eq!(Surface::Overlay.card(), Surface::Panel);
    }
 
    #[test]
