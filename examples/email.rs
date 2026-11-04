@@ -600,8 +600,8 @@ impl MailApp {
       ButtonVisuals {
          text: colors.bg,
          bg: fill,
-         bg_hover: mix(fill, colors.bg, 0.16),
-         bg_click: mix(fill, colors.bg, 0.28),
+         bg_hover: utils::mix(fill, colors.bg, 0.16),
+         bg_click: utils::mix(fill, colors.bg, 0.28),
          bg_selected: fill,
          border: Stroke::NONE,
          border_hover: Stroke::NONE,
@@ -2287,14 +2287,9 @@ impl MailApp {
 }
 
 fn tag_chip(ui: &mut Ui, app: &MailApp, text: &str, color: Color32) {
-   let colors = app.theme.colors;
-   let ink = if app.theme.dark {
-      color
-   } else {
-      mix(color, colors.text, 0.28)
-   };
+   let (fill, ink) = app.theme.colors.tint(color);
    Frame::new()
-      .fill(mix(color, colors.bg, 0.82))
+      .fill(fill)
       .corner_radius(4)
       .inner_margin(Margin::symmetric(6, 2))
       .show(ui, |ui| {
@@ -2677,17 +2672,6 @@ fn initial(name: &str) -> String {
       .next()
       .map(|character| character.to_uppercase().collect())
       .unwrap_or_else(|| "?".to_owned())
-}
-
-fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
-   let t = t.clamp(0.0, 1.0);
-   let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
-   Color32::from_rgba_unmultiplied(
-      lerp(a.r(), b.r()),
-      lerp(a.g(), b.g()),
-      lerp(a.b(), b.b()),
-      a.a(),
-   )
 }
 
 #[derive(Clone, Copy)]
