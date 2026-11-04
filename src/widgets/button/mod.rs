@@ -8,7 +8,6 @@ use crate::glow::{GlowProfile, glow_mesh_with, size_attenuation};
 use crate::motion::{InteractT, Motion};
 use crate::particles::Lightning;
 use crate::theme::Theme;
-use crate::utils::{CONTRAST_AA_TEXT, contrast_ratio, mix};
 use crate::visuals::ButtonVisuals;
 use crate::widgets::badge::Badge;
 
@@ -29,36 +28,6 @@ pub(crate) const HOLD_GLOW_START: f32 = 1.0;
 /// [`HoldBurst::Glow`] radius at the end of the burst, as a multiple of the
 /// button's shorter side; the default of [`HoldSettings::burst_glow_to`].
 pub(crate) const HOLD_GLOW_END: f32 = 2.2;
-
-/// Sweep fill for a hold: `base` walked toward `target` only as far as `ink` stays readable.
-///
-/// A solid sweep under the label is unreadable on every built-in palette — Tokyo Night's
-/// `text` on `accent` is 1.06:1 — so the fill stops at the last step that keeps
-/// [`CONTRAST_AA_TEXT`], while the leading edge keeps the full colour. `base` must be
-/// opaque; callers pass the button fill, or the page when that fill is transparent.
-///
-/// The check measures what the label actually sits on, so a target with alpha is composited
-/// over `base` first. When the fill as given already reads it is returned untouched — `accent`
-/// at 80 alpha is 4.98:1 on Tokyo Night and keeps its own colour; only an unreadable fill is
-/// walked toward `base`.
-fn sweep_fill(base: Color32, target: Color32, ink: Color32) -> Color32 {
-   const STEPS: u8 = 12;
-
-   if contrast_ratio(base.blend(target), ink) >= CONTRAST_AA_TEXT {
-      return target;
-   }
-
-   let mut best = base;
-   for step in 1..=STEPS {
-      let t = f32::from(step) / f32::from(STEPS);
-      let candidate = mix(base, target, t);
-      if contrast_ratio(base.blend(candidate), ink) < CONTRAST_AA_TEXT {
-         break;
-      }
-      best = candidate;
-   }
-   best
-}
 
 /// Per-button hold-to-confirm state, keyed by the button's response [`Id`].
 #[derive(Clone, Copy, Default)]
@@ -702,14 +671,13 @@ impl<'a> Button<'a> {
          // The fill clears the moment the hold fires; the burst takes over.
          let sweep_active = hold.progress > 0.0 && !hold.fired;
          let burst_active = hold.burst_age.is_some();
-         // Palette colours are read only while a hold paints something.
-         let hold_paint = hold_settings.filter(|_| sweep_active || burst_active).map(|settings| {
+         let hold_color = hold_settings.filter(|_| sweep_active || burst_active).map(|settings| {
             let colors = Theme::colors_from_ctx(ui.ctx());
-            let fill = settings.fill_color(colors.accent, hold.progress);
-            (fill, colors)
+            let accent = colors.accent;
+            settings.fill_color(accent, hold.progress)
          });
 
-         if let Some((hold_color, colors)) = hold_paint {
+         if let Some(hold_color) = hold_color {
             if visible_frame {
                // Give up the frame's own fill *and* shadow so the base fill,
                // sweep and edge can be painted under the frame; the frame's
@@ -739,15 +707,10 @@ impl<'a> Button<'a> {
                      ),
                   );
                   let clip = ui.painter().clip_rect().intersect(sweep_clip);
-                  // The sweep is a progress cue, not a second fill: it stops short of
-                  // `hold_color` wherever that would leave the label under AA. The edge
-                  // below still carries the full colour.
-                  let base = if fill.a() == 255 { fill } else { colors.bg };
-                  let swept = sweep_fill(base, hold_color, text_color);
                   ui.painter().with_clip_rect(clip).add(Shape::rect_filled(
                      expanded,
                      corner_radius,
-                     swept,
+                     hold_color,
                   ));
 
                   let edge_x = rect.left() + hold.progress * rect.width();
@@ -901,24 +864,13 @@ mod tests {
       ctx.options(|o| o.input_options.max_click_duration)
    }
 
-   /// The swept span, as `(clip_width, clip_left)`; `None` when no sweep painted.
-   ///
-   /// The sweep is the one rect painted under a narrower clip than its own, so it is found by
-   /// geometry: its fill is a contrast-capped mix, not the raw hold colour.
-   fn sweep_span(output: &FullOutput) -> Option<(f32, f32)> {
+   /// The clipped fill of the sweep shape, as `(clip_width, clip_left)`.
+   fn sweep_shape(output: &FullOutput, color: Color32) -> Option<(f32, f32)> {
       output.shapes.iter().find_map(|clipped| match &clipped.shape {
-         Shape::Rect(rect) if clipped.clip_rect.width() < rect.rect.width() - 0.5 => Some((
+         Shape::Rect(rect) if rect.fill == color => Some((
             clipped.clip_rect.width(),
             clipped.clip_rect.left(),
          )),
-         _ => None,
-      })
-   }
-
-   /// Colour of the sweep's leading edge, which always keeps the raw hold colour.
-   fn sweep_edge_color(output: &FullOutput) -> Option<Color32> {
-      output.shapes.iter().find_map(|clipped| match &clipped.shape {
-         Shape::LineSegment { stroke, .. } => Some(stroke.color),
          _ => None,
       })
    }
@@ -1277,7 +1229,7 @@ mod tests {
          "a button without `hold` requested a repaint after {delay:?}"
       );
       assert!(
-         sweep_span(&output).is_none(),
+         sweep_shape(&output, SWEEP).is_none(),
          "a button without `hold` must not paint a sweep"
       );
       assert!(
@@ -1598,14 +1550,12 @@ mod tests {
          f64::from(STEP),
          build,
       );
-      assert_eq!(
-         sweep_edge_color(&pressed),
-         Some(SETTINGS_FILL),
+      assert!(
+         sweep_shape(&pressed, SETTINGS_FILL).is_some(),
          "`.hold_fill(a).hold_settings(&s)` must use the settings' fill"
       );
-      assert_ne!(
-         sweep_edge_color(&pressed),
-         Some(SHORTCUT_FILL),
+      assert!(
+         sweep_shape(&pressed, SHORTCUT_FILL).is_none(),
          "the earlier shortcut fill must have been replaced"
       );
 
@@ -1619,56 +1569,9 @@ mod tests {
          f64::from(STEP),
          before_hold,
       );
-      assert_eq!(
-         sweep_edge_color(&pressed),
-         Some(SHORTCUT_FILL),
+      assert!(
+         sweep_shape(&pressed, SHORTCUT_FILL).is_some(),
          "`.hold_fill(a).hold(seconds)` must keep the earlier fill"
-      );
-   }
-
-   #[test]
-   fn the_sweep_keeps_the_label_readable_on_every_builtin_theme() {
-      for kind in crate::theme::ThemeKind::to_vec() {
-         let name = kind.to_str().to_owned();
-         let colors = Theme::new(kind).colors;
-
-         for surface in [colors.bg, colors.widget_bg, colors.hover, colors.highlight] {
-            for role in [
-               colors.accent,
-               colors.error,
-               colors.warning,
-               colors.success,
-               colors.info,
-            ] {
-               let fill = sweep_fill(surface, role, colors.text);
-               let ratio = contrast_ratio(surface.blend(fill), colors.text);
-               assert!(
-                  ratio >= CONTRAST_AA_TEXT,
-                  "{name}: sweep {fill:?} under text is {ratio:.2}:1"
-               );
-            }
-         }
-
-         assert_ne!(
-            sweep_fill(colors.widget_bg, colors.accent, colors.text),
-            colors.widget_bg,
-            "{name}: the sweep must still advance toward the accent"
-         );
-      }
-
-      // A translucent fill that already reads is painted exactly as given: this is the
-      // accent at 80 alpha preset, which composites to 4.7:1 under text on Tokyo Night.
-      let colors = Theme::new(crate::theme::ThemeKind::TokyoNight).colors;
-      let translucent = Color32::from_rgba_unmultiplied(
-         colors.accent.r(),
-         colors.accent.g(),
-         colors.accent.b(),
-         80,
-      );
-      assert_eq!(
-         sweep_fill(colors.widget_bg, translucent, colors.text),
-         translucent,
-         "the 80-alpha accent sweep must keep its own fill"
       );
    }
 }

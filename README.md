@@ -402,10 +402,6 @@ left-to-right sweep for `seconds` and only then reports
 > under `seconds` — never reports `clicked()`. Use it for destructive or
 > irreversible actions where a misclick must not fire.
 
-The sweep never hides the label: it blends from the button fill toward `fill_from` only as far
-as the label's ink stays at AA, and keeps the full colour for its leading edge. A fill that
-already reads — `accent` at 80 alpha, say — is painted exactly as given, alpha included.
-
 ```rust
 use egui_elements::{Button, HoldBurst, HoldSettings};
 
