@@ -105,6 +105,29 @@ Give each `ComboBox` / `SecureTextEdit` a unique `id_salt` if you repeat the sam
 
 Long option lists can be virtualized: `show_rows_ui(ui, row_height, total_rows, |ui, range| …)` builds only the rows in the viewport, and every row must lay out at exactly `row_height` (without `item_spacing.y`, which egui adds itself). The popup chrome is adjustable with `.popup_gap(points)` (default `ThemeSpacing::xs`) and `.popup_content_margin(points)` (default `5`), and its surface is themed through `ComboBoxVisuals::popup_bg` / `popup_border`. See `cargo run --example combo_box`.
 
+### Surfaces
+
+Theme chrome has four named layers, so nesting is described by role instead of remembering
+which of `frame1` / `frame2` goes where.
+
+| Surface | Fill | Use |
+|---|---|---|
+| `Canvas` | `colors.bg` | page background |
+| `Panel` | `frame1` (`widget_bg`) | major card on the canvas |
+| `Well` | `frame2` (`bg`) | recessed area inside a panel |
+| `Overlay` | `window_frame` | windows and modals |
+
+`Surface::Panel.card()` is `Well` and `Surface::Well.card()` is `Panel`, so a card always
+contrasts with the surface under it. `Frame::surface` returns the crate frame with that
+surface's hover / click visuals already applied.
+
+```rust
+use egui_elements::{Frame, Surface};
+
+let card = Frame::surface(&theme, Surface::Panel);
+let well = Frame::surface(&theme, Surface::Panel.card());
+```
+
 ### Chips
 
 `Chip` is an auto-width pill for one short label — tags, filters, statuses. It sizes itself to

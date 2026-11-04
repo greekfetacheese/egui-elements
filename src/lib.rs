@@ -98,7 +98,7 @@ pub use particles::{
    Light, LightMotion, LightSettings, Lightning, LightningSettings, ParticleLayer, Snow,
    SnowSettings,
 };
-pub use theme::{Theme, ThemeKind};
+pub use theme::{Surface, Theme, ThemeKind};
 pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,

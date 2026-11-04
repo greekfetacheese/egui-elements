@@ -5,6 +5,7 @@ use egui::{
 };
 
 use crate::motion::{InteractT, Motion};
+use crate::theme::{Surface, Theme};
 use crate::visuals::FrameVisuals;
 
 /// A frame around some content: margin, fill, stroke, rounding, shadow.
@@ -92,6 +93,27 @@ impl Frame {
          fill_width: false,
          corner_radius_override: None,
       }
+   }
+
+   /// A themed [`Surface`] frame, with that surface's hover / click visuals applied.
+   ///
+   /// ```
+   /// # use egui::__run_test_ui;
+   /// # use egui_elements::{Frame, Surface};
+   /// # use egui_elements::theme::{Theme, ThemeKind};
+   /// # __run_test_ui(|ui| {
+   /// let theme = Theme::new(ThemeKind::TokyoNight);
+   /// Frame::surface(&theme, Surface::Panel.card()).show(ui, |ui| {
+   ///    ui.label("A well inside a panel");
+   /// });
+   /// # });
+   /// ```
+   pub fn surface(theme: &Theme, surface: Surface) -> Self {
+      let mut frame = Self::from_egui(theme.surface_frame(surface));
+      if let Some(visuals) = theme.surface_visuals(surface) {
+         frame = frame.visuals(visuals);
+      }
+      frame
    }
 
    #[inline]
