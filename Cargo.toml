@@ -103,5 +103,8 @@ name = "telegram"
 path = "examples/telegram/main.rs"
 required-features = ["secure-types"]
 
+[[example]]
+name = "tabs"
+
 [package.metadata.docs.rs]
 all-features = true
