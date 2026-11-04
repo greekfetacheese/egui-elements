@@ -2562,6 +2562,7 @@ impl MailApp {
       }
       let colors = self.theme.colors;
       let space = self.theme.spacing;
+      let mut close = false;
 
       Window::new("Keyboard shortcuts")
          .open(&mut open)
@@ -2605,11 +2606,16 @@ impl MailApp {
                      );
                   });
                   f.item(Item::new(), |ui| {
-                     ui.add(Button::new("Close").small().min_size(vec2(64.0, 26.0)));
+                     if ui.add(Button::new("Close").small().min_size(vec2(64.0, 26.0))).clicked() {
+                        close = true;
+                     }
                   });
                });
          });
 
+      if close {
+         open = false;
+      }
       self.shortcuts_open = open;
    }
 }
