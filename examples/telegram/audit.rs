@@ -165,23 +165,8 @@ fn summary(ui: &mut Ui, theme: &Theme) {
 
 /// One tile per ThemeColors slot, three to a row, in struct order.
 fn swatches(ui: &mut Ui, theme: &Theme) {
-   let colors = theme.colors;
    let space = theme.spacing;
-   let slots: [(&str, Color32); 13] = [
-      ("title_bar", colors.title_bar),
-      ("bg", colors.bg),
-      ("widget_bg", colors.widget_bg),
-      ("hover", colors.hover),
-      ("text", colors.text),
-      ("text_muted", colors.text_muted),
-      ("highlight", colors.highlight),
-      ("border", colors.border),
-      ("accent", colors.accent),
-      ("error", colors.error),
-      ("warning", colors.warning),
-      ("success", colors.success),
-      ("info", colors.info),
-   ];
+   let slots = theme.colors.slots();
 
    section_heading(
       ui,
@@ -196,9 +181,9 @@ fn swatches(ui: &mut Ui, theme: &Theme) {
          .gap(space.sm)
          .align_items(CrossAlign::Stretch)
          .show(ui, |f| {
-            for (name, color) in chunk {
+            for slot in chunk {
                f.item(Item::grow(1.0), |ui| {
-                  swatch(ui, theme, name, *color)
+                  swatch(ui, theme, slot.name, slot.color)
                });
             }
             for _ in chunk.len()..4 {
