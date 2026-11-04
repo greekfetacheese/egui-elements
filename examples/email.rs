@@ -706,11 +706,9 @@ impl MailApp {
          .gap(space.md)
          .show(ui, |f| {
             f.item(Item::new(), |ui| {
-               Flex::row("brand")
-                  .fill_main(false)
-                  .gap(space.sm)
-                  .align_items(CrossAlign::Center)
-                  .show(ui, |f| {
+               Flex::row_auto("brand").gap(space.sm).align_items(CrossAlign::Center).show(
+                  ui,
+                  |f| {
                      f.item(Item::new(), |ui| brand_mark(ui, colors));
                      f.item(Item::new(), |ui| {
                         ui.label(
@@ -723,12 +721,12 @@ impl MailApp {
                      f.item(Item::new(), |ui| {
                         tag_chip(ui, self, "Reference", ChipRole::Info);
                      });
-                  });
+                  },
+               );
             });
 
             f.item(Item::new(), |ui| {
-               Flex::row("sync")
-                  .fill_main(false)
+               Flex::row_auto("sync")
                   .gap(space.sm)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -760,8 +758,7 @@ impl MailApp {
             });
 
             f.item(Item::new(), |ui| {
-               Flex::row("title_actions")
-                  .fill_main(false)
+               Flex::row_auto("title_actions")
                   .gap(space.sm)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -870,8 +867,7 @@ impl MailApp {
          .gap(self.theme.spacing.md)
          .show(ui, |f| {
             f.item(Item::new(), |ui| {
-               Flex::row("status_left")
-                  .fill_main(false)
+               Flex::row_auto("status_left")
                   .gap(self.theme.spacing.sm)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -897,8 +893,7 @@ impl MailApp {
             });
 
             f.item(Item::new(), |ui| {
-               Flex::row("status_center")
-                  .fill_main(false)
+               Flex::row_auto("status_center")
                   .gap(self.theme.spacing.sm)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -916,8 +911,7 @@ impl MailApp {
             });
 
             f.item(Item::new(), |ui| {
-               Flex::row("status_right")
-                  .fill_main(false)
+               Flex::row_auto("status_right")
                   .gap(self.theme.spacing.md)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -994,20 +988,18 @@ impl MailApp {
                         .visuals(self.avatar_visuals(colors.bg)),
                   );
                });
-               f.item(Item::grow(1.0), |ui| {
-                  ui.vertical(|ui| {
-                     ui.label(
-                        RichText::new("Mike Molfetas")
-                           .size(self.theme.typography.small)
-                           .color(colors.text)
-                           .strong(),
-                     );
-                     ui.label(
-                        RichText::new(self.account_email())
-                           .size(self.theme.typography.very_small)
-                           .color(colors.text_muted),
-                     );
-                  });
+               f.item(Item::grow(1.0).stack(), |ui| {
+                  ui.label(
+                     RichText::new("Mike Molfetas")
+                        .size(self.theme.typography.small)
+                        .color(colors.text)
+                        .strong(),
+                  );
+                  ui.label(
+                     RichText::new(self.account_email())
+                        .size(self.theme.typography.very_small)
+                        .color(colors.text_muted),
+                  );
                });
                f.item(Item::new(), |ui| {
                   Badge::dot().color(colors.success).min_diameter(7.0).show(ui);
@@ -1238,8 +1230,7 @@ impl MailApp {
          .gap(space.sm)
          .show(ui, |f| {
             f.item(Item::new(), |ui| {
-               Flex::row("thread_title")
-                  .fill_main(false)
+               Flex::row_auto("thread_title")
                   .gap(space.sm)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -1300,8 +1291,7 @@ impl MailApp {
          .gap(space.sm)
          .show(ui, |f| {
             f.item(Item::new(), |ui| {
-               Flex::row("filter_buttons")
-                  .fill_main(false)
+               Flex::row_auto("filter_buttons")
                   .gap(space.xs)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -1319,8 +1309,7 @@ impl MailApp {
                   });
             });
             f.item(Item::new(), |ui| {
-               Flex::row("filter_counts")
-                  .fill_main(false)
+               Flex::row_auto("filter_counts")
                   .gap(space.xs)
                   .align_items(CrossAlign::Center)
                   .show(ui, |f| {
@@ -1474,8 +1463,7 @@ impl MailApp {
                      || message.thread_count > 1
                   {
                      ui.add_space(space.xs);
-                     Flex::row(("thread_meta", message.id))
-                        .fill_main(false)
+                     Flex::row_auto(("thread_meta", message.id))
                         .gap(space.xs)
                         .align_items(CrossAlign::Center)
                         .show(ui, |f| {
@@ -1562,18 +1550,17 @@ impl MailApp {
                );
             });
             f.item(Item::new(), |ui| {
-               Flex::row("pager")
-                  .fill_main(false)
-                  .gap(space.xs)
-                  .align_items(CrossAlign::Center)
-                  .show(ui, |f| {
+               Flex::row_auto("pager").gap(space.xs).align_items(CrossAlign::Center).show(
+                  ui,
+                  |f| {
                      f.item(Item::new(), |ui| {
                         ui.add(Button::new("Previous").small().min_size(vec2(72.0, 26.0)));
                      });
                      f.item(Item::new(), |ui| {
                         ui.add(Button::new("Next").small().min_size(vec2(54.0, 26.0)));
                      });
-                  });
+                  },
+               );
             });
          });
    }
@@ -1628,8 +1615,7 @@ impl MailApp {
                   .gap(space.sm)
                   .show(ui, |f| {
                      f.item(Item::new(), |ui| {
-                        Flex::row("reading_tags")
-                           .fill_main(false)
+                        Flex::row_auto("reading_tags")
                            .gap(space.xs)
                            .align_items(CrossAlign::Center)
                            .show(ui, |f| {
@@ -1740,8 +1726,7 @@ impl MailApp {
                      });
 
                      f.item(Item::new(), |ui| {
-                        Flex::row("sender_meta")
-                           .fill_main(false)
+                        Flex::row_auto("sender_meta")
                            .gap(space.sm)
                            .align_items(CrossAlign::Center)
                            .show(ui, |f| {
@@ -1981,11 +1966,9 @@ impl MailApp {
                   );
                });
                f.item(Item::new(), |ui| {
-                  Flex::row("reply_send")
-                     .fill_main(false)
-                     .gap(space.xs)
-                     .align_items(CrossAlign::Center)
-                     .show(ui, |f| {
+                  Flex::row_auto("reply_send").gap(space.xs).align_items(CrossAlign::Center).show(
+                     ui,
+                     |f| {
                         f.item(Item::new(), |ui| {
                            ui.add(Button::new("Attach").small().min_size(vec2(58.0, 26.0)));
                         });
@@ -1999,7 +1982,8 @@ impl MailApp {
                            .min_size(vec2(86.0, 26.0));
                            ui.add(send);
                         });
-                     });
+                     },
+                  );
                });
             });
       });
@@ -2362,8 +2346,7 @@ impl MailApp {
                      );
                   });
                   f.item(Item::new(), |ui| {
-                     Flex::row("compose_actions")
-                        .fill_main(false)
+                     Flex::row_auto("compose_actions")
                         .gap(space.sm)
                         .align_items(CrossAlign::Center)
                         .show(ui, |f| {

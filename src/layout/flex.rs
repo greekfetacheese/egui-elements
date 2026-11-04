@@ -16,6 +16,7 @@ pub struct Item {
    size: ItemSize,
    align: Option<CrossAlign>,
    content: CrossAlign,
+   stack: bool,
 }
 
 impl Item {
@@ -25,6 +26,7 @@ impl Item {
          size: ItemSize::Auto,
          align: None,
          content: CrossAlign::Start,
+         stack: false,
       }
    }
 
@@ -34,6 +36,7 @@ impl Item {
          size: ItemSize::Fixed(main),
          align: None,
          content: CrossAlign::Start,
+         stack: false,
       }
    }
 
@@ -44,6 +47,7 @@ impl Item {
          size: ItemSize::Grow(weight),
          align: None,
          content: CrossAlign::Start,
+         stack: false,
       }
    }
 
@@ -65,10 +69,22 @@ impl Item {
       Self { content, ..self }
    }
 
+   /// Stack the cell's children vertically.
+   ///
+   /// A row cell starts `left_to_right`, so two labels in one cell sit side by side; `.stack()`
+   /// lays them out top-down in the same cell (a title over its caption).
+   pub fn stack(self) -> Self {
+      Self {
+         stack: true,
+         ..self
+      }
+   }
+
    pub(crate) fn spec(self) -> ItemSpec {
       ItemSpec {
          size: self.size,
          align: self.align,
+         stack: self.stack,
       }
    }
 }
@@ -88,6 +104,7 @@ pub struct Flex {
    justify: Justify,
    align: CrossAlign,
    fill_main: bool,
+   debug_overflow: bool,
 }
 
 /// Whether the container is placing cached items or measuring them for the first time.
@@ -98,7 +115,10 @@ enum Mode {
 }
 
 /// The layout a cell's child `Ui` starts from.
-fn cell_layout(axis: Axis) -> Layout {
+fn cell_layout(axis: Axis, stack: bool) -> Layout {
+   if stack {
+      return Layout::top_down(Align::Min);
+   }
    match axis {
       Axis::Row => Layout::left_to_right(Align::Center),
       Axis::Column => Layout::top_down(Align::Min),
@@ -148,6 +168,7 @@ pub struct FlexUi<'a> {
    justify: Justify,
    align: CrossAlign,
    fill_main: bool,
+   debug_overflow: bool,
    avail: Vec2,
    specs: Vec<ItemSpec>,
    sizes: Vec<Vec2>,
@@ -167,6 +188,7 @@ impl Flex {
          justify: Justify::Start,
          align: CrossAlign::Start,
          fill_main: true,
+         debug_overflow: false,
       }
    }
 
@@ -178,7 +200,16 @@ impl Flex {
          justify: Justify::Start,
          align: CrossAlign::Start,
          fill_main: false,
+         debug_overflow: false,
       }
+   }
+
+   /// A row that hugs its content instead of spanning the available width.
+   ///
+   /// Use it for a group nested in a row cell: a spanning row there silently claims the width
+   /// that belongs to the content after it.
+   pub fn row_auto(id_salt: impl Hash + std::fmt::Debug) -> Self {
+      Self::row(id_salt).fill_main(false)
    }
 
    pub fn gap(self, gap: f32) -> Self {
@@ -201,6 +232,17 @@ impl Flex {
    pub fn fill_main(self, fill: bool) -> Self {
       Self {
          fill_main: fill,
+         ..self
+      }
+   }
+
+   /// Paint a red outline when a cell's content exceeds its box.
+   ///
+   /// Off by default. Turn it on while composing a layout: overflow is otherwise clipped
+   /// silently, and a screenshot only tells you *that* something disappeared.
+   pub fn debug_overflow(self, debug: bool) -> Self {
+      Self {
+         debug_overflow: debug,
          ..self
       }
    }
@@ -228,6 +270,7 @@ impl Flex {
          justify: self.justify,
          align: self.align,
          fill_main: self.fill_main,
+         debug_overflow: self.debug_overflow,
          avail,
          specs: Vec::new(),
          sizes: Vec::new(),
@@ -361,9 +404,24 @@ impl FlexUi<'_> {
                      self.origin + child_min.to_vec2(),
                      child_size,
                   ))
-                  .layout(cell_layout(self.axis)),
+                  .layout(cell_layout(self.axis, item.stack)),
             );
             let inner = add(&mut child);
+
+            if self.debug_overflow {
+               // `max_rect` grows with the content, so measure against the cell we allocated.
+               let box_rect = Rect::from_min_size(self.origin + child_min.to_vec2(), child_size);
+               let used = child.min_rect();
+               if used.width() > child_size.x + 0.5 || used.height() > child_size.y + 0.5 {
+                  self.ui.painter().rect_stroke(
+                     box_rect,
+                     0.0,
+                     egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 90, 90)),
+                     egui::StrokeKind::Outside,
+                  );
+               }
+            }
+
             self.sizes.push(prev.sizes[i]);
 
             let effective = item.align.unwrap_or(self.align);
@@ -390,7 +448,7 @@ impl FlexUi<'_> {
       let mut child = self.ui.new_child(
          UiBuilder::new()
             .max_rect(self.ui.available_rect_before_wrap())
-            .layout(cell_layout(self.axis))
+            .layout(cell_layout(self.axis, item.stack))
             .sizing_pass()
             .invisible(),
       );
@@ -512,6 +570,115 @@ mod tests {
          extra_passes(&third),
          0,
          "steady frame still ran a second pass"
+      );
+   }
+
+   #[test]
+   fn row_auto_hugs_its_items() {
+      let ctx = themed_ctx();
+      let widths = std::cell::RefCell::new(Vec::new());
+      frame(&ctx, vec2(500.0, 400.0), |ui| {
+         ui.scope_builder(
+            UiBuilder::new().max_rect(Rect::from_min_size(
+               egui::Pos2::ZERO,
+               vec2(500.0, 400.0),
+            )),
+            |ui| {
+               let spanned = Flex::row("spanned").show(ui, |f| {
+                  f.item(Item::new(), |ui| {
+                     ui.add(crate::widgets::Label::new("Hi", None));
+                  });
+               });
+               widths.borrow_mut().push(spanned.response.rect.width());
+
+               let hugged = Flex::row_auto("hugged").show(ui, |f| {
+                  f.item(Item::new(), |ui| {
+                     ui.add(crate::widgets::Label::new("Hi", None));
+                  });
+               });
+               widths.borrow_mut().push(hugged.response.rect.width());
+            },
+         );
+      });
+      let widths = widths.borrow();
+      assert!((widths[0] - 500.0).abs() < 0.5, "{widths:?}");
+      assert!(widths[1] < 100.0, "{widths:?}");
+   }
+
+   #[test]
+   fn a_stacked_item_lays_its_children_out_top_down() {
+      let ctx = themed_ctx();
+      let sizes = std::cell::RefCell::new(Vec::new());
+      frame(&ctx, vec2(500.0, 400.0), |ui| {
+         ui.scope_builder(
+            UiBuilder::new().max_rect(Rect::from_min_size(
+               egui::Pos2::ZERO,
+               vec2(500.0, 400.0),
+            )),
+            |ui| {
+               let stacked = Flex::row_auto("stacked").show(ui, |f| {
+                  f.item(Item::new().stack(), |ui| {
+                     ui.add(crate::widgets::Label::new("Title", None));
+                     ui.add(crate::widgets::Label::new("Caption", None));
+                  });
+               });
+               sizes.borrow_mut().push(stacked.response.rect.size());
+
+               let beside = Flex::row_auto("beside").show(ui, |f| {
+                  f.item(Item::new(), |ui| {
+                     ui.add(crate::widgets::Label::new("Title", None));
+                     ui.add(crate::widgets::Label::new("Caption", None));
+                  });
+               });
+               sizes.borrow_mut().push(beside.response.rect.size());
+            },
+         );
+      });
+      let sizes = sizes.borrow();
+      assert!(sizes[0].y > sizes[1].y * 1.5, "{sizes:?}");
+      assert!(sizes[0].x < sizes[1].x, "{sizes:?}");
+   }
+
+   /// Count marker strokes in one frame. The first frame measures, the second places.
+   fn overflow_marker_frames(debug: bool) -> bool {
+      let ctx = themed_ctx();
+      let mut seen = false;
+      for _ in 0..2 {
+         let out = frame(&ctx, vec2(500.0, 400.0), |ui| {
+            ui.scope_builder(
+               UiBuilder::new().max_rect(Rect::from_min_size(
+                  egui::Pos2::ZERO,
+                  vec2(500.0, 400.0),
+               )),
+               |ui| {
+                  Flex::row_auto("overflow").debug_overflow(debug).show(ui, |f| {
+                     f.item(Item::fixed(10.0), |ui| {
+                        ui.add(crate::widgets::Label::new(
+                           "Wider than ten points",
+                           None,
+                        ));
+                     });
+                  });
+               },
+            );
+         });
+         seen |= out.shapes.iter().any(|clipped| match &clipped.shape {
+            egui::Shape::Rect(rect) => rect.stroke.color == egui::Color32::from_rgb(255, 90, 90),
+            _ => false,
+         });
+      }
+      seen
+   }
+
+   #[test]
+   fn debug_overflow_marks_only_when_enabled() {
+      assert!(
+         overflow_marker_frames(true),
+         "no marker for overflowing cell"
+      );
+      assert!(
+         !overflow_marker_frames(false),
+         "marker painted with debug_overflow off"
       );
    }
 
