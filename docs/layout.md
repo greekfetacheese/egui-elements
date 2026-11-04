@@ -40,6 +40,8 @@ write the row without reading this module's source.
 | `flex: <n>` | `Item::grow(n)` (basis 0) |
 | `width: Npx` | `Item::fixed(N)` |
 | `flex-basis: auto` | `Item::new()` (measured content size) |
+| `width: max-content` | `Flex::row_auto(id)` (hugs its items) |
+| a stacked cell | `Item::stack()` (children top-down in one cell) |
 | `flex-wrap`, `order`, `flex-grow` with `basis: auto`, percentages, baseline alignment | **not supported** |
 
 Gaps come from the theme, never from a literal: `theme.spacing` is `xs` 4, `sm` 8, `md` 12, `lg` 16, `xl` 24.
@@ -82,6 +84,26 @@ That is the difference from egui's `ui.horizontal`, which seeds the row's height
 any item has been measured. A themed `Button` is taller than that seed, so it overflows the row and the label
 beside it is never re-centred on the button. A flex row measures both items with no seed at all and centres on
 the tallest one.
+
+A row that should hug its content instead of spanning the parent is `Flex::row_auto` — the right
+choice for a group nested inside a row cell, where a spanning row would claim the width that belongs to
+everything after it.
+
+A cell's child `Ui` continues the container's axis, so a row cell starts `left_to_right` and two labels
+inside one cell sit side by side. `Item::stack()` lays that cell's children out top-down instead, without
+hand-wrapping the body in `ui.vertical`:
+
+```rust
+Flex::row_auto("account").gap(8.0).show(ui, |f| {
+   f.item(Item::new().stack(), |ui| {
+      ui.label("Mike");
+      ui.label("you@example.com");
+   });
+});
+```
+
+Overflow is clipped silently by default. `Flex::debug_overflow(true)` paints a red outline on any cell
+whose content is larger than its box, which is the fastest way to find the cell that ate a label.
 
 ---
 

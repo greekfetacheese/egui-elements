@@ -71,12 +71,16 @@ pub enum ItemSize {
    Grow(f32),
 }
 
-/// What the solver needs to know about one item.
+/// What the solver and the cell cache need to know about one item.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ItemSpec {
    pub size: ItemSize,
    /// `align-self` override; `None` inherits the container's `align-items`.
    pub align: Option<CrossAlign>,
+   /// Lay the cell's children out top-down instead of the axis default.
+   ///
+   /// The solver ignores this; it is part of the spec so a cached cell re-measures when it flips.
+   pub stack: bool,
 }
 
 /// The placed container: one rect per item (relative to the container's top-left) plus the
@@ -302,7 +306,11 @@ mod tests {
    use super::*;
 
    fn spec(size: ItemSize) -> ItemSpec {
-      ItemSpec { size, align: None }
+      ItemSpec {
+         size,
+         align: None,
+         stack: false,
+      }
    }
 
    fn sizes(v: &[(f32, f32)]) -> Vec<Vec2> {
