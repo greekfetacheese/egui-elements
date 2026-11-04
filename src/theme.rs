@@ -256,6 +256,32 @@ impl Theme {
       }
    }
 
+   /// Fill for `surface` in `state`, on the themed button recipe.
+   ///
+   /// Hover and press pull the surface 16 % / 28 % toward [`ThemeColors::bg`] (the mixes
+   /// [`ButtonVisuals::filled`] uses); selection is [`ThemeColors::highlight`]; disabled keeps
+   /// the idle fill and only mutes the ink ([`Self::state_ink`]).
+   pub fn state_fill(&self, surface: Surface, state: SurfaceState) -> Color32 {
+      let fill = self.surface_fill(surface);
+      match state {
+         SurfaceState::Idle | SurfaceState::Disabled => fill,
+         SurfaceState::Hover => mix(fill, self.colors.bg, 0.16),
+         SurfaceState::Pressed => mix(fill, self.colors.bg, 0.28),
+         SurfaceState::Selected => self.colors.highlight,
+      }
+   }
+
+   /// Readable ink for [`Self::state_fill`] on `surface` in `state`.
+   pub fn state_ink(&self, surface: Surface, state: SurfaceState) -> Color32 {
+      match state {
+         SurfaceState::Selected => self.colors.ink_on(self.colors.highlight),
+         SurfaceState::Disabled => self.colors.text_muted,
+         SurfaceState::Idle | SurfaceState::Hover | SurfaceState::Pressed => {
+            self.colors.ink_on(self.surface_fill(surface))
+         }
+      }
+   }
+
    /// Button visuals from [`ThemeVisuals`].
    pub fn button_visuals(&self) -> ButtonVisuals {
       self.visuals.button_visuals
@@ -552,6 +578,25 @@ impl Surface {
    }
 }
 
+/// Interaction state of a hand-rolled surface.
+///
+/// Use with [`Theme::state_fill`] / [`Theme::state_ink`] so a row, plate or icon button that
+/// paints itself still follows the themed button recipe.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SurfaceState {
+   /// Nothing interacting with it.
+   #[default]
+   Idle,
+   /// Pointer over it.
+   Hover,
+   /// Pointer held on it.
+   Pressed,
+   /// Chosen / active.
+   Selected,
+   /// Not interactive, but still shown.
+   Disabled,
+}
+
 /// This is the color palette of the theme
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -643,6 +688,67 @@ impl ThemeColors {
       }
    }
 
+   /// Every colour slot, in struct order, with the field name attached.
+   ///
+   /// The name is the field's, so an audit panel or a usage map can label a swatch without
+   /// hard-coding the slot list.
+   pub fn slots(&self) -> [ColorSlot; 13] {
+      [
+         ColorSlot {
+            name: "title_bar",
+            color: self.title_bar,
+         },
+         ColorSlot {
+            name: "bg",
+            color: self.bg,
+         },
+         ColorSlot {
+            name: "widget_bg",
+            color: self.widget_bg,
+         },
+         ColorSlot {
+            name: "hover",
+            color: self.hover,
+         },
+         ColorSlot {
+            name: "text",
+            color: self.text,
+         },
+         ColorSlot {
+            name: "text_muted",
+            color: self.text_muted,
+         },
+         ColorSlot {
+            name: "highlight",
+            color: self.highlight,
+         },
+         ColorSlot {
+            name: "border",
+            color: self.border,
+         },
+         ColorSlot {
+            name: "accent",
+            color: self.accent,
+         },
+         ColorSlot {
+            name: "error",
+            color: self.error,
+         },
+         ColorSlot {
+            name: "warning",
+            color: self.warning,
+         },
+         ColorSlot {
+            name: "success",
+            color: self.success,
+         },
+         ColorSlot {
+            name: "info",
+            color: self.info,
+         },
+      ]
+   }
+
    /// Every text/surface pairing worth checking, in a stable order.
    ///
    /// Covers body and muted text on the canvas, widget, title-bar and hover surfaces, text on the
@@ -651,15 +757,17 @@ impl ThemeColors {
    /// entry carries the measured ratio and the threshold it needs, so callers can filter failures
    /// or render the whole report.
    pub fn audit(&self) -> Vec<ContrastCheck> {
-      let check = |label, foreground, background| ContrastCheck {
-         label,
-         foreground,
-         background,
-         ratio: contrast_ratio(foreground, background),
-         required: CONTRAST_AA_TEXT,
-      };
+      self.audit_with(std::iter::empty())
+   }
 
-      vec![
+   /// [`Self::audit`] plus application-specific pairs.
+   ///
+   /// A derived fill (a bubble wash, a wallpaper plate) sits outside the palette's fixed pairs;
+   /// append its checks so one report covers the installed theme and the app.
+   pub fn audit_with(&self, extra: impl IntoIterator<Item = ContrastCheck>) -> Vec<ContrastCheck> {
+      let check = ContrastCheck::text;
+
+      let mut checks = vec![
          check("text on bg", self.text, self.bg),
          check("text on widget_bg", self.text, self.widget_bg),
          check("text on title_bar", self.text, self.title_bar),
@@ -704,30 +812,33 @@ impl ThemeColors {
          self.tinted_check("tinted success", self.success),
          self.tinted_check("tinted warning", self.warning),
          self.tinted_check("tinted error", self.error),
-      ]
+      ];
+
+      checks.extend(extra);
+      checks
    }
 
    fn ink_check(&self, label: &'static str, fill: Color32) -> ContrastCheck {
       let foreground = self.ink_on(fill);
-      ContrastCheck {
-         label,
-         foreground,
-         background: fill,
-         ratio: contrast_ratio(foreground, fill),
-         required: CONTRAST_AA_TEXT,
-      }
+      ContrastCheck::text(label, foreground, fill)
    }
 
    fn tinted_check(&self, label: &'static str, role: Color32) -> ContrastCheck {
       let (background, foreground) = self.tint(role);
-      ContrastCheck {
-         label,
-         foreground,
-         background,
-         ratio: contrast_ratio(foreground, background),
-         required: CONTRAST_AA_TEXT,
-      }
+      ContrastCheck::text(label, foreground, background)
    }
+}
+
+/// One named colour slot of [`ThemeColors`].
+///
+/// Returned by [`ThemeColors::slots`]; the name is the struct field, so a palette audit can
+/// label swatches without hard-coding the field list.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColorSlot {
+   /// Field name, e.g. `"bg"`.
+   pub name: &'static str,
+   /// The slot colour.
+   pub color: Color32,
 }
 
 /// One foreground/background pair from [`ThemeColors::audit`].
@@ -746,6 +857,27 @@ pub struct ContrastCheck {
 }
 
 impl ContrastCheck {
+   /// A pair measured against `required`.
+   pub fn new(
+      label: &'static str,
+      foreground: Color32,
+      background: Color32,
+      required: f32,
+   ) -> Self {
+      Self {
+         label,
+         foreground,
+         background,
+         ratio: contrast_ratio(foreground, background),
+         required,
+      }
+   }
+
+   /// A pair measured against [`CONTRAST_AA_TEXT`].
+   pub fn text(label: &'static str, foreground: Color32, background: Color32) -> Self {
+      Self::new(label, foreground, background, CONTRAST_AA_TEXT)
+   }
+
    /// `true` when the pair meets its threshold.
    pub fn passes(&self) -> bool {
       self.ratio >= self.required
@@ -916,5 +1048,57 @@ mod tests {
          colors.text
       );
       assert_eq!(colors.ink_on(colors.text), colors.bg);
+   }
+
+   #[test]
+   fn every_slot_round_trips() {
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      let slots = colors.slots();
+      assert_eq!(slots[0].name, "title_bar");
+      assert_eq!(slots[1].color, colors.bg);
+      let mut names: Vec<&str> = slots.iter().map(|slot| slot.name).collect();
+      let total = names.len();
+      names.sort_unstable();
+      names.dedup();
+      assert_eq!(names.len(), total);
+   }
+
+   #[test]
+   fn extra_pairs_join_the_audit() {
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      let extra = ContrastCheck::new("app pair", colors.text, colors.widget_bg, 3.0);
+      let checks = colors.audit_with([extra]);
+      assert_eq!(checks.len(), colors.audit().len() + 1);
+      assert_eq!(checks.last().copied(), Some(extra));
+   }
+
+   #[test]
+   fn surface_states_follow_the_button_recipe() {
+      let theme = Theme::new(ThemeKind::TokyoNight);
+      let idle = theme.state_fill(Surface::Panel, SurfaceState::Idle);
+      assert_eq!(idle, theme.surface_fill(Surface::Panel));
+      assert_eq!(
+         theme.state_fill(Surface::Panel, SurfaceState::Selected),
+         theme.colors.highlight
+      );
+      assert_ne!(
+         theme.state_fill(Surface::Panel, SurfaceState::Hover),
+         idle
+      );
+      assert_ne!(
+         theme.state_fill(Surface::Panel, SurfaceState::Pressed),
+         theme.state_fill(Surface::Panel, SurfaceState::Hover)
+      );
+      assert_eq!(
+         theme.state_ink(Surface::Panel, SurfaceState::Selected),
+         theme.colors.ink_on(theme.colors.highlight)
+      );
+      assert_eq!(
+         theme.state_ink(Surface::Panel, SurfaceState::Disabled),
+         theme.colors.text_muted
+      );
+      let ink = theme.state_ink(Surface::Well, SurfaceState::Idle);
+      let fill = theme.state_fill(Surface::Well, SurfaceState::Idle);
+      assert!(contrast_ratio(ink, fill) >= CONTRAST_AA_TEXT);
    }
 }
