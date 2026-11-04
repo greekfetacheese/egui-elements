@@ -13,10 +13,12 @@ pub mod badge;
 pub mod button;
 pub mod chip;
 pub mod combo_box;
+pub mod divider;
 pub mod frame;
 pub mod label;
 pub mod modal;
 pub mod multi_label;
+pub mod scroll;
 pub mod secure_text_edit;
 pub mod spinner;
 pub mod toggle;
@@ -27,10 +29,12 @@ pub use badge::{Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger, BadgeCorner
 pub use button::{Button, HoldBurst, HoldSettings};
 pub use chip::{Chip, ChipRole};
 pub use combo_box::ComboBox;
+pub use divider::Divider;
 pub use frame::Frame;
 pub use label::Label;
 pub use modal::{IntoModalId, Modal};
 pub use multi_label::MultiLabel;
+pub use scroll::Scroll;
 pub use secure_text_edit::SecureTextEdit;
 pub use spinner::{Spinner, SpinnerShadow};
 pub use toggle::{

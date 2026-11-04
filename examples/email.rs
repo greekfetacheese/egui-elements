@@ -21,8 +21,8 @@ use egui_elements::theme::{Surface, Theme, ThemeColors, ThemeKind};
 use egui_elements::utils;
 use egui_elements::visuals::ButtonVisuals;
 use egui_elements::widgets::{
-   Avatar, AvatarGroup, AvatarVisuals, Badge, Button, Checkbox, Chip, ChipRole, ComboBox,
-   Frame as Card, HoldBurst, Label, Modal, MultiLabel, Radio, SecureTextEdit, Spinner,
+   Avatar, AvatarGroup, AvatarVisuals, Badge, Button, Checkbox, Chip, ChipRole, ComboBox, Divider,
+   Frame as Card, HoldBurst, Label, Modal, MultiLabel, Radio, Scroll, SecureTextEdit, Spinner,
    SpinnerShadow, Switch, Window,
 };
 
@@ -880,7 +880,7 @@ impl MailApp {
                         );
                      });
                      f.item(Item::new(), |ui| {
-                        ui.label(RichText::new("·").size(small).color(colors.border));
+                        ui.add(Divider::vertical().length(small + 2.0));
                      });
                      f.item(Item::new(), |ui| {
                         ui.label(
@@ -940,32 +940,30 @@ impl MailApp {
       let colors = self.theme.colors;
       let space = self.theme.spacing;
 
-      ScrollArea::vertical()
-         .id_salt("sidebar_scroll")
-         .auto_shrink([false, false])
-         .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.spacing_mut().item_spacing.y = space.sm;
+      Scroll::vertical("sidebar_scroll").auto_shrink([false, false]).show(ui, |ui| {
+         ui.set_width(ui.available_width());
+         ui.spacing_mut().item_spacing.y = space.sm;
 
-            self.account_card(ui);
-            ui.add_space(space.sm);
+         self.account_card(ui);
+         ui.add_space(space.sm);
 
-            let compose = Button::new(
-               RichText::new("+  Compose").size(self.theme.typography.normal).color(colors.bg),
-            )
-            .visuals(self.filled_button_visuals(colors.accent))
-            .min_size(vec2(ui.available_width(), 38.0))
-            .label_align(Align::Center);
-            if ui.add(compose).clicked() {
-               self.compose_open = true;
-            }
+         let compose = Button::new(
+            RichText::new("+  Compose").size(self.theme.typography.normal).color(colors.bg),
+         )
+         .visuals(self.filled_button_visuals(colors.accent))
+         .min_size(vec2(ui.available_width(), 38.0))
+         .label_align(Align::Center);
+         if ui.add(compose).clicked() {
+            self.compose_open = true;
+         }
 
-            ui.add_space(space.md);
-            self.folder_nav(ui);
-            self.label_nav(ui);
-            ui.add_space(space.md);
-            self.storage_card(ui);
-         });
+         ui.add_space(space.md);
+         self.folder_nav(ui);
+         self.label_nav(ui);
+         ui.add_space(space.md);
+         ui.add(Divider::new().inset(space.sm));
+         self.storage_card(ui);
+      });
    }
 
    fn account_card(&mut self, ui: &mut Ui) {
@@ -1334,30 +1332,27 @@ impl MailApp {
       let selected_id = self.selected_id;
       let mut clicked = None;
 
-      ScrollArea::vertical()
-         .id_salt("thread_scroll")
-         .auto_shrink([false, false])
-         .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.spacing_mut().item_spacing.y = space.xs;
+      Scroll::vertical("thread_scroll").auto_shrink([false, false]).show(ui, |ui| {
+         ui.set_width(ui.available_width());
+         ui.spacing_mut().item_spacing.y = space.xs;
 
-            if messages.is_empty() {
-               ui.add_space(space.xl);
-               self.empty_state(ui);
-               return;
-            }
+         if messages.is_empty() {
+            ui.add_space(space.xl);
+            self.empty_state(ui);
+            return;
+         }
 
-            for message in messages {
-               let selected = message.id == selected_id;
-               let row = self.row_frame(selected).show(ui, |ui| {
-                  ui.set_width(ui.available_width());
-                  self.thread_row(ui, message);
-               });
-               if row.response.clicked() {
-                  clicked = Some(message.id);
-               }
+         for message in messages {
+            let selected = message.id == selected_id;
+            let row = self.row_frame(selected).show(ui, |ui| {
+               ui.set_width(ui.available_width());
+               self.thread_row(ui, message);
+            });
+            if row.response.clicked() {
+               clicked = Some(message.id);
             }
-         });
+         }
+      });
 
       if let Some(id) = clicked {
          self.selected_id = id;
@@ -1809,9 +1804,8 @@ impl MailApp {
 
       self.card(Surface::Well).show(ui, |ui| {
          ui.set_width(ui.available_width());
-         ScrollArea::vertical()
-            .id_salt(("reading_scroll", message.id))
-            .scroll_bar_visibility(ScrollBarVisibility::AlwaysHidden)
+         Scroll::vertical(("reading_scroll", message.id))
+            .bars(ScrollBarVisibility::AlwaysHidden)
             .auto_shrink([false, false])
             .show(ui, |ui| {
                ui.set_width(ui.available_width());
@@ -2009,14 +2003,11 @@ impl MailApp {
             .show(ui, |f| {
                f.item(Item::new(), |ui| self.details_header(ui));
                f.item(Item::grow(1.0), |ui| {
-                  ScrollArea::vertical()
-                     .id_salt("details_scroll")
-                     .auto_shrink([false, false])
-                     .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.spacing_mut().item_spacing.y = self.theme.spacing.sm;
-                        self.details_content(ui);
-                     });
+                  Scroll::vertical("details_scroll").auto_shrink([false, false]).show(ui, |ui| {
+                     ui.set_width(ui.available_width());
+                     ui.spacing_mut().item_spacing.y = self.theme.spacing.sm;
+                     self.details_content(ui);
+                  });
                });
             });
       });
