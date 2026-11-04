@@ -142,6 +142,8 @@ pub struct SecureTextEditOutput {
 ///
 /// - Accessability like screen readers is disabled to avoid multiple unsecure allocations of the entered text.
 /// - If you want to make sure the text you enter doesn't stay in memory in any way you have to set [`Self::password`] to `true`.
+/// - Copy and cut are enabled only for non-secure buffers and are disabled on password fields; a
+///   secure buffer ignores both.
 ///
 /// Otherwise egui will make copies of that text and some of the copied allocations will stay in memory.
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
@@ -786,9 +788,20 @@ fn secure_text_edit_events(
       }
 
       let new_ccursor_range_opt: Option<CCursorRange> = match event {
-         // For now don't allow copy/cut on any text
-         Event::Copy => None,
-         Event::Cut => None,
+         Event::Copy => {
+            copy_selection(ui, text, &cursor_range, password);
+            None
+         }
+         Event::Cut => {
+            if copy_selection(ui, text, &cursor_range, password) {
+               let [min, max] = cursor_range.sorted_cursors();
+               text.delete_text_char_range(min.index.0..max.index.0);
+               text_mutated_this_event = true;
+               Some(CCursorRange::one(min))
+            } else {
+               None
+            }
+         }
          #[cfg_attr(not(feature = "secure-types"), allow(unused_mut))]
          Event::Paste(mut text_to_paste) => {
             if !text_to_paste.is_empty() {
@@ -1137,10 +1150,28 @@ fn secure_text_edit_events(
    )
 }
 
+/// Copy the selected text to the clipboard, returning `true` when it was copied.
+///
+/// Password fields and secure buffers never reach the clipboard.
+fn copy_selection(
+   ui: &Ui,
+   text: &dyn TextBuffer,
+   cursor_range: &CCursorRange,
+   password: bool,
+) -> bool {
+   if password || text.is_secure() || cursor_range.is_empty() {
+      return false;
+   }
+
+   let contents = text.to_string();
+   ui.ctx().copy_text(cursor_range.slice_str(&contents).to_owned());
+   true
+}
+
 #[cfg(test)]
 mod tests {
    use super::*;
-   use egui::{Context, Event, Id, ImeEvent, RawInput};
+   use egui::{Context, Event, FullOutput, Id, ImeEvent, Key, Modifiers, OutputCommand, RawInput};
 
    fn run_pass(ctx: &Context, text: &mut String, id: Id, events: Vec<Event>) {
       let output = ctx.run_ui(
@@ -1154,6 +1185,46 @@ mod tests {
          },
       );
       output.drop_without_applying_deltas();
+   }
+
+   fn select_all() -> Event {
+      Event::Key {
+         key: Key::A,
+         physical_key: None,
+         pressed: true,
+         repeat: false,
+         modifiers: Modifiers::COMMAND,
+      }
+   }
+
+   fn copied_text(output: &FullOutput) -> Option<String> {
+      output.platform_output.commands.iter().find_map(|command| match command {
+         OutputCommand::CopyText(text) => Some(text.clone()),
+         _ => None,
+      })
+   }
+
+   /// Run one frame with the editor focused and return what it copied, if anything.
+   fn run_events(
+      ctx: &Context,
+      text: &mut dyn TextBuffer,
+      id: Id,
+      password: bool,
+      events: Vec<Event>,
+   ) -> Option<String> {
+      let output = ctx.run_ui(
+         RawInput {
+            events,
+            ..Default::default()
+         },
+         |ui| {
+            ui.ctx().memory_mut(|mem| mem.request_focus(id));
+            ui.add(SecureTextEdit::singleline(text).password(password).id(id));
+         },
+      );
+      let copied = copied_text(&output);
+      output.drop_without_applying_deltas();
+      copied
    }
 
    fn ime_preedit(text: &str) -> Event {
@@ -1252,5 +1323,97 @@ mod tests {
       assert_eq!(text, "に");
       run_pass(&ctx, &mut text, id, gnome_wayland_keystroke('!'));
       assert_eq!(text, "に!");
+   }
+
+   #[test]
+   fn copies_the_selection_of_a_string_buffer() {
+      let ctx = Context::default();
+      let id = Id::unique("secure_copy_string");
+      let mut text = "hello world".to_owned();
+
+      let copied = run_events(
+         &ctx,
+         &mut text,
+         id,
+         false,
+         vec![select_all(), Event::Copy],
+      );
+
+      assert_eq!(copied.as_deref(), Some("hello world"));
+      assert_eq!(text, "hello world");
+   }
+
+   #[test]
+   fn copies_nothing_without_a_selection() {
+      let ctx = Context::default();
+      let id = Id::unique("secure_copy_empty");
+      let mut text = "hello world".to_owned();
+
+      let copied = run_events(&ctx, &mut text, id, false, vec![Event::Copy]);
+
+      assert_eq!(copied, None);
+   }
+
+   #[test]
+   fn cut_copies_and_deletes_the_selection_of_a_string_buffer() {
+      let ctx = Context::default();
+      let id = Id::unique("secure_cut_string");
+      let mut text = "hello world".to_owned();
+
+      let copied = run_events(
+         &ctx,
+         &mut text,
+         id,
+         false,
+         vec![select_all(), Event::Cut],
+      );
+
+      assert_eq!(copied.as_deref(), Some("hello world"));
+      assert_eq!(text, "");
+   }
+
+   #[test]
+   fn password_field_never_copies() {
+      let ctx = Context::default();
+      let id = Id::unique("secure_copy_password");
+      let mut text = "hunter2".to_owned();
+
+      let copied = run_events(
+         &ctx,
+         &mut text,
+         id,
+         true,
+         vec![select_all(), Event::Copy],
+      );
+
+      assert_eq!(copied, None);
+      assert_eq!(text, "hunter2");
+   }
+
+   #[cfg(feature = "secure-types")]
+   #[test]
+   fn secure_buffer_never_copies_or_cuts() {
+      let ctx = Context::default();
+      let id = Id::unique("secure_copy_secure");
+      let mut text = SecureString::from("top secret".to_owned());
+
+      let copied = run_events(
+         &ctx,
+         &mut text,
+         id,
+         false,
+         vec![select_all(), Event::Copy],
+      );
+      assert_eq!(copied, None);
+
+      let cut = run_events(
+         &ctx,
+         &mut text,
+         id,
+         false,
+         vec![select_all(), Event::Cut],
+      );
+      assert_eq!(cut, None);
+      assert_eq!(text.unlock_str(|s| s.to_owned()), "top secret");
    }
 }
