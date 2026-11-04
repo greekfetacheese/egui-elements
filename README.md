@@ -677,7 +677,7 @@ cargo run --example email
 Telegram Desktop replica: a two-pane `Flex` shell (chat list, conversation, overlays and settings) built from the widget set, with every `ThemeColors` slot in use. The title strip opens a live theme-audit panel that names the installed palette, shows each slot and its contrast checks, and probes the same gallery on `bg`, `frame1` and `frame2`:
 
 ```sh
-cargo run --features full --example telegram
+cargo run --features secure-types --example telegram
 ```
 
 Interactive snow with the public settings window:
