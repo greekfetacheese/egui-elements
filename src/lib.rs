@@ -107,8 +107,8 @@ pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
    ComboBox, Divider, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel,
-   Popover, PopoverSide, Radio, Scroll, Spinner, SpinnerShadow, Switch, Tabs, TextEdit,
-   TextEditOutput, ToggleShadow, ToggleVisuals, Window,
+   Popover, PopoverSide, Radio, Scroll, Spinner, SpinnerShadow, Switch, Tabs, TabsVisuals,
+   TextEdit, TextEditOutput, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

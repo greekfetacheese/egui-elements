@@ -1,16 +1,17 @@
-//! Tabs proof: a filled strip, a fitted strip and two independent strips.
+//! Tabs proof: the sliding indicator, the lift, the hover wash and the knobs that shape them.
 //!
 //! Run with: `cargo run --example tabs`
 
 use eframe::egui::*;
-use egui_elements::widgets::{Frame as Card, Tabs};
+use egui_elements::motion::Motion;
+use egui_elements::widgets::{Frame as Card, Tabs, TabsVisuals, ToggleShadow};
 use egui_elements::{Theme, ThemeKind, utils};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
       viewport: ViewportBuilder::default()
          .with_title("egui-elements tabs")
-         .with_inner_size([680.0, 480.0])
+         .with_inner_size([720.0, 560.0])
          .with_resizable(true),
       ..Default::default()
    };
@@ -28,6 +29,7 @@ struct TabsApp {
    range: usize,
    left: usize,
    right: usize,
+   accent: usize,
 }
 
 impl TabsApp {
@@ -41,6 +43,7 @@ impl TabsApp {
          range: 1,
          left: 0,
          right: 2,
+         accent: 0,
       }
    }
 
@@ -67,6 +70,14 @@ impl TabsApp {
          });
    }
 
+   fn caption(&self, ui: &mut Ui, text: &str) {
+      ui.label(
+         RichText::new(text)
+            .size(self.theme.typography.normal)
+            .color(self.theme.colors.text_muted),
+      );
+   }
+
    fn card(&mut self, ui: &mut Ui) {
       let space = self.theme.spacing;
       let colors = self.theme.colors;
@@ -79,13 +90,13 @@ impl TabsApp {
          .show(ui, |ui| {
             ui.label(RichText::new("Segmented tabs").size(normal).color(colors.text).strong());
             ui.label(
-               RichText::new("The index is written in place and each strip owns its own.")
+               RichText::new("The pill slides to the segment you pick and every state eases.")
                   .size(normal)
                   .color(colors.text_muted),
             );
             ui.add_space(space.lg);
 
-            ui.label(RichText::new("Filled to the row").size(normal).color(colors.text_muted));
+            self.caption(ui, "Filled to the row — the reference strip");
             Tabs::new(
                "filter",
                &mut self.filter,
@@ -94,30 +105,64 @@ impl TabsApp {
             .show(ui);
             ui.add_space(space.lg);
 
-            ui.label(RichText::new("Fitted to its labels").size(normal).color(colors.text_muted));
+            self.caption(ui, "Fitted to its labels");
             Tabs::new("range", &mut self.range, ["Day", "Week", "Month"])
                .fill_width(false)
                .show(ui);
             ui.add_space(space.lg);
 
-            ui.label(
-               RichText::new("Two strips, independent indices")
-                  .size(normal)
-                  .color(colors.text_muted),
+            self.caption(
+               ui,
+               "Taller strip — the inset and the pill scale with .height()",
+            );
+            Tabs::new("tall", &mut self.range, ["Day", "Week", "Month"])
+               .height(44.0)
+               .fill_width(false)
+               .show(ui);
+            ui.add_space(space.lg);
+
+            self.caption(
+               ui,
+               "Accent indicator — TabsVisuals over the palette",
+            );
+            let accent = colors.accent;
+            Tabs::new(
+               "accent",
+               &mut self.accent,
+               ["Bold", "Italic", "Mono"],
+            )
+            .fill_width(false)
+            .visuals(TabsVisuals {
+               indicator: accent,
+               text_selected: colors.ink_on(accent),
+               shadow: ToggleShadow::new(accent),
+               ..TabsVisuals::from_theme(colors)
+            })
+            .show(ui);
+            ui.add_space(space.lg);
+
+            self.caption(
+               ui,
+               "Flat (ToggleShadow::NONE) and instant (Motion::instant())",
             );
             ui.horizontal(|ui| {
-               Tabs::new("left", &mut self.left, ["A", "B"]).fill_width(false).show(ui);
-               Tabs::new("right", &mut self.right, ["x", "y", "z"]).fill_width(false).show(ui);
+               Tabs::new("flat", &mut self.left, ["A", "B"])
+                  .fill_width(false)
+                  .shadow(ToggleShadow::NONE)
+                  .show(ui);
+               Tabs::new("instant", &mut self.right, ["x", "y", "z"])
+                  .fill_width(false)
+                  .motion(Motion::instant())
+                  .show(ui);
             });
 
             ui.add_space(space.md);
-            ui.label(
-               RichText::new(format!(
-                  "filter {} · range {} · left {} · right {}",
-                  self.filter, self.range, self.left, self.right
-               ))
-               .size(normal)
-               .color(colors.text_muted),
+            self.caption(
+               ui,
+               &format!(
+                  "filter {} · range {} · left {} · right {} · accent {}",
+                  self.filter, self.range, self.left, self.right, self.accent
+               ),
             );
          });
    }

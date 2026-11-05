@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Chip`, `Divider`, `Scroll`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, and `AvatarGroup` stacks that fan out on hover
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Tabs`, `Chip`, `Divider`, `Scroll`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, segmented tabs whose indicator slides between segments, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -353,6 +353,32 @@ ui.add(Switch::new(&mut flag, "Instant").motion(Motion::instant()));
 `ToggleVisuals::from_theme(theme.colors)` to keep the rest. A click anywhere in the
 row reports `Response::changed`, Space toggles a focused switch, and
 `ui.add_enabled(false, Switch::new(..))` mutes the whole row.
+
+### Tabs
+
+`Tabs` is a segmented control: one pill indicator on a fully rounded track, and
+the pill *slides* — travelling and stretching — to whichever segment you pick,
+instead of a cell lighting up in place. The selected segment carries the palette's
+`highlight` fill with `ink_on` ink, hover eases the segment's ink toward `text`
+over a `hover` wash, and the pill rides on the toggle family's `ToggleShadow`, so
+a strip and a switch on one card cast the same kind of shadow. The timing is the
+style's `animation_time`, like every other crate widget.
+
+```rust
+use egui_elements::motion::Motion;
+use egui_elements::widgets::{Tabs, TabsVisuals, ToggleShadow};
+
+Tabs::new("filter", &mut selected, ["All", "Media", "Files"]).show(ui);
+Tabs::new("range", &mut selected, ["Day", "Week"]).fill_width(false).show(ui);
+Tabs::new("tall", &mut selected, ["A", "B"]).height(44.0).show(ui);
+Tabs::new("flat", &mut selected, ["A", "B"]).shadow(ToggleShadow::NONE).show(ui);
+Tabs::new("instant", &mut selected, ["A", "B"]).motion(Motion::instant()).show(ui);
+```
+
+`.visuals(TabsVisuals { .. })` replaces the colours for one strip — start from
+`TabsVisuals::from_theme(theme.colors)` to keep the rest. A first-sight strip is
+still (the indicator is seeded at the selection), and a click reports
+`Response::changed`.
 
 ### Avatar groups
 
