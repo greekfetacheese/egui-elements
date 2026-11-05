@@ -145,6 +145,48 @@ let card = Frame::surface(&theme, Surface::Panel);
 let well = Frame::surface(&theme, Surface::Panel.card());
 ```
 
+### Gradient fills
+
+A fill slot holds a `Fill`: a solid `Color32` or a two-stop `Gradient`. egui paints a rect with
+one colour, so a gradient goes through a vertex-coloured mesh; the ramp is exact because the shader
+interpolates the two stops across a convex rounded rect, and the mesh carries a feathered rim so it
+keeps the anti-aliasing of a painted rect.
+
+```rust
+use egui_elements::gradient::{Fill, Gradient};
+
+ui.add(Label::new("Solid", None).visuals(button_visuals.filled(colors.accent, colors)));
+
+let brand = Fill::horizontal(
+   Color32::from_rgb(0x00, 0xc9, 0x96),
+   Color32::from_rgb(0x00, 0x3d, 0x4d),
+);
+brand.show_rounded(ui, vec2(180.0, 64.0), 8);
+
+// Or paint any widget with it, through the visuals it already takes.
+let visuals = ButtonVisuals {
+   bg: brand,
+   ..theme.button_visuals()
+};
+ui.add(Button::new("Branded").visuals(visuals));
+```
+
+`ThemeVariant` paints every themed fill as a gradient without touching a widget:
+`theme.variant = ThemeVariant::Gradient` turns each fill into a soft bevel of its own colour, and
+the bevel *clamps* itself by contrast on every one of the seven palettes — a label never loses
+`CONTRAST_AA_TEXT` because its button became a ramp. `theme.gradient_strength` (default `0.1`) is
+how far the ramp may travel toward white / black before the clamp applies.
+
+```rust
+theme.set_variant(ThemeVariant::Gradient);
+theme.install(ctx);
+```
+
+The editor's **Fill** section flips the same field and shows the bevel depth slider. Panels,
+windows, popups and the modal card stay flat: an `egui::Frame` paints them and it takes one colour.
+
+Full contract — the mesh, the clamp, and what stays solid — in [`docs/gradient.md`](docs/gradient.md).
+
 ### Chips
 
 `Chip` is an auto-width pill for one short label — tags, filters, statuses. It sizes itself to

@@ -7,7 +7,8 @@ use eframe::egui::*;
 use egui_elements::components::{CredentialsForm, QrEncoding, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
 use egui_elements::egui_lucide::Lucide;
-use egui_elements::theme::{Theme, ThemeKind};
+use egui_elements::gradient::Fill;
+use egui_elements::theme::{Theme, ThemeKind, ThemeVariant};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox,
@@ -300,6 +301,8 @@ impl eframe::App for DemoApp {
                   ui.add_space(28.0);
                   self.frames_section(ui);
                   ui.add_space(28.0);
+                  self.gradients_section(ui);
+                  ui.add_space(28.0);
                   self.widgets_on_bg(ui);
                   ui.add_space(28.0);
                   self.widgets_on_frame1(ui);
@@ -587,6 +590,83 @@ impl DemoApp {
                });
             }
          });
+      });
+   }
+
+   fn gradients_section(&mut self, ui: &mut Ui) {
+      self.heading(ui, "Gradient fills");
+      self.muted(
+         ui,
+         "Fill::Gradient paints a two-stop mesh. Theme::variant = Gradient turns every themed \
+          fill into a soft bevel of its own colour, clamped so the ink keeps AA contrast.",
+      );
+      ui.add_space(8.0);
+
+      ui.horizontal(|ui| {
+         ui.label(RichText::new("Variant").color(self.theme.colors.text_muted));
+
+         for variant in ThemeVariant::to_vec() {
+            let picked =
+               ui.selectable_label(self.theme.variant == variant, variant.to_str()).clicked();
+
+            if picked {
+               self.theme.set_variant(variant);
+            }
+         }
+
+         if self.theme.variant == ThemeVariant::Gradient {
+            ui.add(Slider::new(&mut self.theme.gradient_strength, 0.0..=1.0).text("Bevel depth"));
+         }
+      });
+
+      ui.add_space(8.0);
+
+      // Two uigradients pairs and a near-black one: the ramps the primitive is for.
+      let swatches = [
+         (
+            "Visual Blue",
+            Fill::horizontal(
+               Color32::from_rgb(0x00, 0xc9, 0x96),
+               Color32::from_rgb(0x00, 0x3d, 0x4d),
+            ),
+         ),
+         (
+            "Coffee Gold",
+            Fill::horizontal(
+               Color32::from_rgb(0xc9, 0x98, 0x46),
+               Color32::from_rgb(0x55, 0x40, 0x23),
+            ),
+         ),
+         (
+            "Moonwalker",
+            Fill::horizontal(
+               Color32::from_rgb(0x00, 0x00, 0x00),
+               Color32::from_rgb(0x15, 0x23, 0x31),
+            ),
+         ),
+      ];
+
+      ui.horizontal(|ui| {
+         ui.spacing_mut().item_spacing.x = 16.0;
+
+         for (name, fill) in swatches {
+            ui.vertical(|ui| {
+               fill.show_rounded(ui, vec2(180.0, 64.0), 8);
+               ui.label(RichText::new(name).color(self.theme.colors.text_muted));
+            });
+         }
+      });
+
+      ui.add_space(12.0);
+
+      // Real chrome under the same variant, so the clamp is visible on text-bearing fills.
+      let button_visuals = self.theme.button_visuals();
+      let label_visuals = self.theme.label_visuals();
+
+      ui.horizontal(|ui| {
+         ui.add(Button::new("Idle").visuals(button_visuals));
+         ui.add(Button::new("Selected").selected(true).visuals(button_visuals));
+         ui.add(Label::new("Interactive label", None).interactive(true).visuals(label_visuals));
       });
    }
 

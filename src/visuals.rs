@@ -400,9 +400,48 @@ pub(crate) fn paint_shape(
 
 #[cfg(test)]
 mod tests {
+   use super::*;
    use crate::gradient::Fill;
    use crate::theme::{Theme, ThemeKind};
    use crate::utils::CONTRAST_AA_TEXT;
+
+   fn painted_rect() -> Rect {
+      Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(20.0, 10.0))
+   }
+
+   #[test]
+   fn a_gradient_fill_paints_a_mesh_with_the_stroke_on_top() {
+      let fill = Fill::vertical(Color32::RED, Color32::BLUE);
+      let stroke = Stroke::new(1.0, Color32::WHITE);
+      let shape = paint_shape(
+         painted_rect(),
+         fill,
+         stroke,
+         CornerRadius::same(2),
+         Shadow::NONE,
+      );
+
+      let Shape::Vec(shapes) = shape else {
+         panic!("a gradient paints the rim and the stroke");
+      };
+
+      assert!(shapes.iter().any(|shape| matches!(shape, Shape::Mesh(_))));
+      assert!(matches!(shapes.last(), Some(Shape::Rect(_))));
+   }
+
+   #[test]
+   fn a_solid_fill_paints_one_rect() {
+      let fill = Fill::solid(Color32::RED);
+      let shape = paint_shape(
+         painted_rect(),
+         fill,
+         Stroke::NONE,
+         CornerRadius::ZERO,
+         Shadow::NONE,
+      );
+
+      assert!(matches!(shape, Shape::Rect(_)));
+   }
 
    #[test]
    fn filled_buttons_ink_reads_on_every_builtin_theme() {
