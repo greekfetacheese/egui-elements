@@ -7,7 +7,7 @@
 //! Built-in palettes live in [`crate::themes`]. Slot roles are documented
 //! in the crate `docs/theme.md`.
 
-use crate::gradient::DEFAULT_GRADIENT_STRENGTH;
+use crate::gradient::{DEFAULT_GRADIENT_STRENGTH, GradientDir};
 use crate::themes::{
    mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, tokyo_night_light, wasp, wasp_light,
 };
@@ -191,6 +191,13 @@ pub struct Theme {
    #[cfg_attr(feature = "serde", serde(default = "gradient_strength"))]
    pub gradient_strength: f32,
 
+   /// Axis a gradient fill runs along: which edge is lifted toward white.
+   ///
+   /// Ignored while [`Self::variant`] is [`ThemeVariant::Solid`]. A fill that is already a
+   /// gradient keeps its own axis.
+   #[cfg_attr(feature = "serde", serde(default))]
+   pub gradient_dir: GradientDir,
+
    /// Semantic color slots.
    pub colors: ThemeColors,
    /// Per-widget chrome (button, label, combo, text edit, frames).
@@ -239,6 +246,7 @@ impl PartialEq for Theme {
          && self.kind == other.kind
          && self.variant == other.variant
          && self.gradient_strength == other.gradient_strength
+         && self.gradient_dir == other.gradient_dir
          && self.colors == other.colors
          && self.typography == other.typography
          && self.spacing == other.spacing
@@ -299,6 +307,12 @@ impl Theme {
    /// This theme with its fills painted as `variant`.
    pub fn with_variant(mut self, variant: ThemeVariant) -> Self {
       self.variant = variant;
+      self
+   }
+
+   /// This theme with gradient fills aimed along `dir`.
+   pub fn with_gradient_dir(mut self, dir: GradientDir) -> Self {
+      self.gradient_dir = dir;
       self
    }
 
@@ -413,7 +427,7 @@ impl Theme {
 
       match self.variant {
          ThemeVariant::Solid => visuals,
-         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength),
+         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength, self.gradient_dir),
       }
    }
 
@@ -425,7 +439,7 @@ impl Theme {
 
       match self.variant {
          ThemeVariant::Solid => visuals,
-         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength),
+         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength, self.gradient_dir),
       }
    }
 
@@ -507,7 +521,11 @@ impl Theme {
 
       match self.variant {
          ThemeVariant::Solid => visuals,
-         ThemeVariant::Gradient => visuals.graded(visuals.text, self.gradient_strength),
+         ThemeVariant::Gradient => visuals.graded(
+            visuals.text,
+            self.gradient_strength,
+            self.gradient_dir,
+         ),
       }
    }
 
@@ -517,7 +535,11 @@ impl Theme {
 
       match self.variant {
          ThemeVariant::Solid => visuals,
-         ThemeVariant::Gradient => visuals.graded(visuals.text, self.gradient_strength),
+         ThemeVariant::Gradient => visuals.graded(
+            visuals.text,
+            self.gradient_strength,
+            self.gradient_dir,
+         ),
       }
    }
 
@@ -529,7 +551,7 @@ impl Theme {
 
       match self.variant {
          ThemeVariant::Solid => visuals,
-         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength),
+         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength, self.gradient_dir),
       }
    }
 
@@ -539,7 +561,11 @@ impl Theme {
 
       match self.variant {
          ThemeVariant::Solid => visuals,
-         ThemeVariant::Gradient => visuals.graded(visuals.text, self.gradient_strength),
+         ThemeVariant::Gradient => visuals.graded(
+            visuals.text,
+            self.gradient_strength,
+            self.gradient_dir,
+         ),
       }
    }
 
@@ -1354,6 +1380,35 @@ mod tests {
             );
          }
       }
+   }
+
+   #[test]
+   fn the_gradient_direction_reaches_every_graded_fill() {
+      let theme = Theme::new(ThemeKind::TokyoNight)
+         .with_variant(ThemeVariant::Gradient)
+         .with_gradient_dir(GradientDir::LeftToRight);
+
+      for (slot, fill, _ink) in graded_fills(&theme) {
+         let Fill::Gradient(gradient) = fill else {
+            // A fill with no headroom stays solid; the direction cannot apply to it.
+            continue;
+         };
+
+         assert_eq!(gradient.dir, GradientDir::LeftToRight, "{slot}");
+      }
+   }
+
+   #[test]
+   fn the_gradient_direction_defaults_to_top_down() {
+      let theme = Theme::new(ThemeKind::TokyoNight).with_variant(ThemeVariant::Gradient);
+
+      assert_eq!(theme.gradient_dir, GradientDir::TopDown);
+
+      let Fill::Gradient(gradient) = theme.button_visuals().bg else {
+         panic!("the idle fill must be a ramp");
+      };
+
+      assert_eq!(gradient.dir, GradientDir::TopDown);
    }
 
    #[test]

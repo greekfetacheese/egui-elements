@@ -1,6 +1,6 @@
 //! Wasp (light). Source: <https://github.com/santiyounger/Wasp-Obsidian-Theme>.
 
-use crate::gradient::{DEFAULT_GRADIENT_STRENGTH, Fill};
+use crate::gradient::{DEFAULT_GRADIENT_STRENGTH, Fill, GradientDir};
 use crate::theme::{
    Theme, ThemeColors, ThemeKind, ThemeSpacing, ThemeVariant, ThemeVisuals, Typography,
 };
@@ -71,6 +71,7 @@ pub fn theme() -> Theme {
       kind: ThemeKind::WaspLight,
       variant: ThemeVariant::Solid,
       gradient_strength: DEFAULT_GRADIENT_STRENGTH,
+      gradient_dir: GradientDir::TopDown,
       colors: colors(),
       typography: typography(),
       spacing: ThemeSpacing::default(),

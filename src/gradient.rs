@@ -54,6 +54,26 @@ pub enum GradientDir {
    RightToLeft,
 }
 
+impl GradientDir {
+   /// Human-readable name, for selectors and the theme editor.
+   pub fn to_str(&self) -> &'static str {
+      match self {
+         GradientDir::TopDown => "Top down",
+         GradientDir::BottomUp => "Bottom up",
+         GradientDir::LeftToRight => "Left to right",
+         GradientDir::RightToLeft => "Right to left",
+      }
+   }
+
+   /// Every direction, in selector order.
+   pub const ALL: [Self; 4] = [
+      Self::TopDown,
+      Self::BottomUp,
+      Self::LeftToRight,
+      Self::RightToLeft,
+   ];
+}
+
 /// Two-stop linear gradient, painted as a vertex-coloured mesh.
 ///
 /// Cardinal directions sample every vertex in the same space, so barycentric interpolation across
@@ -166,7 +186,8 @@ impl Gradient {
    /// its label unreadable, which is what makes the themed gradient variant safe on every palette.
    ///
    /// `strength` is the fraction of the way to the extreme (`0.1` is a soft sheen, `1.0` a full
-   /// white-to-black ramp); a transparent `base` stays transparent.
+   /// white-to-black ramp); a transparent `base` stays transparent. The ramp runs `TopDown`;
+   /// [`Fill::with_dir`] (or `Fill::graded`'s `dir`) re-aims it.
    pub fn bevel(base: Color32, ink: Color32, strength: f32) -> Self {
       let strength = strength.clamp(0.0, 1.0);
 
@@ -323,14 +344,24 @@ impl Fill {
       }
    }
 
-   /// A bevel of this fill's solid colour, or the fill unchanged when it is already a gradient.
+   /// A bevel of this fill's solid colour aimed along `dir`, or the fill unchanged when it is
+   /// already a gradient.
    ///
    /// This is how the theme paints a solid token as a gradient: an explicit
-   /// [`Fill::Gradient`] outranks the variant.
-   pub fn graded(self, ink: Color32, strength: f32) -> Fill {
+   /// [`Fill::Gradient`] outranks the variant, and [`Theme::gradient_dir`](crate::theme::Theme)
+   /// only aims the ramps it derives itself.
+   pub fn graded(self, ink: Color32, strength: f32, dir: GradientDir) -> Fill {
       match self {
-         Self::Solid(color) => Self::bevel(color, ink, strength),
+         Self::Solid(color) => Self::bevel(color, ink, strength).with_dir(dir),
          gradient => gradient,
+      }
+   }
+
+   /// Re-aim every ramp this fill paints; a solid is unchanged.
+   pub fn with_dir(self, dir: GradientDir) -> Fill {
+      match self {
+         Self::Solid(color) => Self::Solid(color),
+         Self::Gradient(gradient) => Self::Gradient(gradient.with_dir(dir)),
       }
    }
 

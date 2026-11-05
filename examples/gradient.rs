@@ -1,25 +1,19 @@
 //! Gradient directions: one widget set painted four ways.
 //!
-//! Each card builds its visuals from the theme's stored solids and re-aims the bevel at one
-//! [`GradientDir`] — the same `Fill` a host hands to `.visuals(...)`. The theme's own
-//! [`ThemeVariant`] always paints TopDown, so this example is the side-by-side of the alternatives.
+//! Each card clones the theme, sets [`Theme::gradient_dir`] and asks for its visuals — the whole
+//! configuration a host needs. Comparing them side by side is the point of the example; the demo's
+//! Fill section is the same field with one direction at a time.
 //!
 //! Run with: `cargo run --example gradient`
 
 use eframe::egui::*;
 use egui_elements::gradient::{Fill, Gradient, GradientDir};
 use egui_elements::utils;
-use egui_elements::visuals::{ButtonVisuals, TextEditVisuals};
 use egui_elements::widgets::{Button, Frame as Card, Label, TextEdit};
-use egui_elements::{Theme, ThemeKind};
+use egui_elements::{Theme, ThemeKind, ThemeVariant};
 
 /// The four axes, in the order the rack shows them.
-const DIRECTIONS: [GradientDir; 4] = [
-   GradientDir::TopDown,
-   GradientDir::BottomUp,
-   GradientDir::LeftToRight,
-   GradientDir::RightToLeft,
-];
+const DIRECTIONS: [GradientDir; 4] = GradientDir::ALL;
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
@@ -85,8 +79,7 @@ impl GradientApp {
          ui.label(RichText::new("Bevel depth").size(normal).color(colors.text_muted));
          ui.add(Slider::new(&mut self.strength, 0.0..=1.0).max_decimals(2));
 
-         let note =
-            "The variant pins TopDown; these cards pass an explicit Fill::Gradient instead.";
+         let note = "Each card sets Theme::gradient_dir and asks the theme for its visuals.";
          ui.label(RichText::new(note).size(normal).color(colors.text_muted));
       });
    }
@@ -116,11 +109,18 @@ impl GradientApp {
       let heading = self.theme.typography.large;
       let strength = self.strength;
 
-      let button = self.button_visuals(dir, strength);
-      let label = self.label_visuals(dir, strength);
-      let edit = self.text_edit_visuals(dir, strength);
-      let ramp =
-         Fill::Gradient(Gradient::bevel(colors.widget_bg, colors.text, strength).with_dir(dir));
+      // One theme, re-aimed. This is the whole configuration: the variant paints the ramps, the
+      // direction aims them, the strength sets their depth (and the ink clamp trims it).
+      let mut themed = self.theme.clone();
+      themed.variant = ThemeVariant::Gradient;
+      themed.gradient_strength = strength;
+      themed.gradient_dir = dir;
+
+      let button = themed.button_visuals();
+      let label = themed.label_visuals();
+      let edit = themed.text_edit_visuals();
+      let ramp = Gradient::bevel(colors.widget_bg, colors.text, strength).with_dir(dir);
+      let ramp = Fill::Gradient(ramp);
       let text = &mut self.texts[index];
 
       Card::new()
@@ -132,7 +132,7 @@ impl GradientApp {
             ui.spacing_mut().item_spacing.y = space.sm;
 
             ui.horizontal(|ui| {
-               ui.label(RichText::new(dir_name(dir)).size(heading).color(colors.text).strong());
+               ui.label(RichText::new(dir.to_str()).size(heading).color(colors.text).strong());
 
                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                   ui.label(RichText::new(axis_note(dir)).size(normal).color(colors.text_muted));
@@ -159,42 +159,6 @@ impl GradientApp {
             );
          });
    }
-
-   fn button_visuals(&self, dir: GradientDir, strength: f32) -> ButtonVisuals {
-      let visuals = self.theme.visuals.button_visuals;
-      let ink = visuals.text;
-
-      ButtonVisuals {
-         bg: bevel(visuals.bg, ink, dir, strength),
-         bg_hover: bevel(visuals.bg_hover, ink, dir, strength),
-         bg_click: bevel(visuals.bg_click, ink, dir, strength),
-         bg_selected: bevel(visuals.bg_selected, ink, dir, strength),
-         ..visuals
-      }
-   }
-
-   fn label_visuals(&self, dir: GradientDir, strength: f32) -> ButtonVisuals {
-      let visuals = self.theme.visuals.label_visuals;
-      let ink = visuals.text;
-
-      ButtonVisuals {
-         bg: bevel(visuals.bg, ink, dir, strength),
-         bg_hover: bevel(visuals.bg_hover, ink, dir, strength),
-         bg_click: bevel(visuals.bg_click, ink, dir, strength),
-         bg_selected: bevel(visuals.bg_selected, ink, dir, strength),
-         ..visuals
-      }
-   }
-
-   fn text_edit_visuals(&self, dir: GradientDir, strength: f32) -> TextEditVisuals {
-      let visuals = self.theme.visuals.text_edit_visuals;
-      let ink = visuals.text;
-
-      TextEditVisuals {
-         bg: bevel(visuals.bg, ink, dir, strength),
-         ..visuals
-      }
-   }
 }
 
 impl eframe::App for GradientApp {
@@ -219,23 +183,6 @@ impl eframe::App for GradientApp {
          .show(ui, |ui| {
             ScrollArea::vertical().show(ui, |ui| self.rack(ui));
          });
-   }
-}
-
-/// A themed fill as a bevel along `dir` — the derivation the theme variant uses, re-aimed.
-fn bevel(fill: Fill, ink: Color32, dir: GradientDir, strength: f32) -> Fill {
-   match fill.graded(ink, strength) {
-      Fill::Gradient(gradient) => Fill::Gradient(gradient.with_dir(dir)),
-      solid => solid,
-   }
-}
-
-fn dir_name(dir: GradientDir) -> &'static str {
-   match dir {
-      GradientDir::TopDown => "TopDown",
-      GradientDir::BottomUp => "BottomUp",
-      GradientDir::LeftToRight => "LeftToRight",
-      GradientDir::RightToLeft => "RightToLeft",
    }
 }
 

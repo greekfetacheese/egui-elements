@@ -5,7 +5,7 @@
 //! written by [`Theme::install`](crate::theme::Theme::install) → stock
 //! [`egui::Style`].
 
-use crate::gradient::Fill;
+use crate::gradient::{Fill, GradientDir};
 use crate::theme::ThemeColors;
 use crate::utils::mix;
 use egui::{
@@ -63,12 +63,12 @@ impl ButtonVisuals {
    /// `ink` is the label colour: every ramp is clamped so this text keeps
    /// [`CONTRAST_AA_TEXT`](crate::utils::CONTRAST_AA_TEXT). A fill that is already a gradient
    /// is left alone — an explicit gradient outranks the theme's variant.
-   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+   pub fn graded(self, ink: Color32, strength: f32, dir: GradientDir) -> Self {
       Self {
-         bg: self.bg.graded(ink, strength),
-         bg_hover: self.bg_hover.graded(ink, strength),
-         bg_click: self.bg_click.graded(ink, strength),
-         bg_selected: self.bg_selected.graded(ink, strength),
+         bg: self.bg.graded(ink, strength, dir),
+         bg_hover: self.bg_hover.graded(ink, strength, dir),
+         bg_click: self.bg_click.graded(ink, strength, dir),
+         bg_selected: self.bg_selected.graded(ink, strength, dir),
          ..self
       }
    }
@@ -162,9 +162,9 @@ impl TextEditVisuals {
 
 impl TextEditVisuals {
    /// This set painted as a gradient of its field fill — see [`ButtonVisuals::graded`].
-   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+   pub fn graded(self, ink: Color32, strength: f32, dir: GradientDir) -> Self {
       Self {
-         bg: self.bg.graded(ink, strength),
+         bg: self.bg.graded(ink, strength, dir),
          ..self
       }
    }
@@ -248,11 +248,11 @@ impl ComboBoxVisuals {
    /// This set painted as gradients of its own fills — see [`ButtonVisuals::graded`].
    ///
    /// The popup surface stays flat: an `egui::Frame` paints the menu.
-   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+   pub fn graded(self, ink: Color32, strength: f32, dir: GradientDir) -> Self {
       Self {
-         bg: self.bg.graded(ink, strength),
-         bg_hover: self.bg_hover.graded(ink, strength),
-         bg_open: self.bg_open.graded(ink, strength),
+         bg: self.bg.graded(ink, strength, dir),
+         bg_hover: self.bg_hover.graded(ink, strength, dir),
+         bg_open: self.bg_open.graded(ink, strength, dir),
          ..self
       }
    }
@@ -317,12 +317,12 @@ impl FrameVisuals {
    /// `ink` is the label colour: every ramp is clamped so this text keeps
    /// [`CONTRAST_AA_TEXT`](crate::utils::CONTRAST_AA_TEXT). A fill that is already a gradient
    /// is left alone — an explicit gradient outranks the theme's variant.
-   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+   pub fn graded(self, ink: Color32, strength: f32, dir: GradientDir) -> Self {
       Self {
-         bg: self.bg.graded(ink, strength),
-         bg_hover: self.bg_hover.graded(ink, strength),
-         bg_click: self.bg_click.graded(ink, strength),
-         bg_selected: self.bg_selected.graded(ink, strength),
+         bg: self.bg.graded(ink, strength, dir),
+         bg_hover: self.bg_hover.graded(ink, strength, dir),
+         bg_click: self.bg_click.graded(ink, strength, dir),
+         bg_selected: self.bg_selected.graded(ink, strength, dir),
          ..self
       }
    }

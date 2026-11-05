@@ -96,7 +96,8 @@ getters as a widget reads them. So:
   graded value.
 
 `theme.gradient_strength` (default `DEFAULT_GRADIENT_STRENGTH`, `0.1`) is how far a ramp may
-travel. A tight palette simply gets a subtler ramp — never an unreadable one.
+travel; `theme.gradient_dir` is which edge it travels from (`TopDown` by default). A tight palette
+simply gets a subtler ramp — never an unreadable one.
 
 ```rust
 theme.set_variant(ThemeVariant::Gradient);
@@ -109,18 +110,18 @@ The ink each fill is clamped against: `ButtonVisuals::text`, `TextEditVisuals::t
 A fill that is **already a gradient** passes through untouched: an explicit gradient outranks the
 variant.
 
-The variant always paints `TopDown`; a host that wants another axis builds it from the same stored
-solids. `cargo run --example gradient` puts the four directions side by side — each card is
-`theme.visuals.button_visuals` (and the label / text-edit pair) with the bevel re-aimed through
-`Gradient::with_dir`, which is the whole recipe:
+`theme.gradient_dir` chooses the axis — `TopDown` by default. The variant aims the ramps it
+derives; a fill that is already a gradient keeps its own axis, so a host-authored ramp is never
+re-aimed. `theme.with_gradient_dir(dir)` is the builder, and `GradientDir::ALL` is the selector
+order the editor and `cargo run --example gradient` both use:
 
 ```rust
-fn bevel(fill: Fill, ink: Color32, dir: GradientDir, strength: f32) -> Fill {
-   match fill.graded(ink, strength) {
-      Fill::Gradient(gradient) => Fill::Gradient(gradient.with_dir(dir)),
-      solid => solid,
-   }
-}
+let mut themed = theme.clone();
+themed.variant = ThemeVariant::Gradient;
+themed.gradient_dir = GradientDir::LeftToRight;
+themed.gradient_strength = 0.1;
+
+let button = themed.button_visuals(); // ramps left to right, ink-clamped
 ```
 
 ## What stays flat

@@ -20,7 +20,7 @@ use egui::{
    vec2,
 };
 
-use crate::gradient::Fill;
+use crate::gradient::{Fill, GradientDir};
 use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVariant};
 use crate::utils::{self, Hsla};
 use crate::visuals::*;
@@ -353,6 +353,18 @@ impl ThemeEditor {
 
             if theme.variant == ThemeVariant::Gradient {
                ui.add(Slider::new(&mut theme.gradient_strength, 0.0..=1.0).text("Bevel depth"));
+
+               ui.horizontal(|ui| {
+                  ui.label("Direction");
+
+                  ComboBox::from_id_salt("gradient_dir")
+                     .selected_text(theme.gradient_dir.to_str())
+                     .show_ui(ui, |ui| {
+                        for dir in GradientDir::ALL {
+                           ui.selectable_value(&mut theme.gradient_dir, dir, dir.to_str());
+                        }
+                     });
+               });
             }
          });
 

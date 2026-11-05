@@ -1,6 +1,6 @@
 //! Shade Sanctuary. Source: <https://github.com/Elevict/Shade-Sanctuary>.
 
-use crate::gradient::{DEFAULT_GRADIENT_STRENGTH, Fill};
+use crate::gradient::{DEFAULT_GRADIENT_STRENGTH, Fill, GradientDir};
 use crate::theme::{
    Theme, ThemeColors, ThemeKind, ThemeSpacing, ThemeVariant, ThemeVisuals, Typography,
 };
@@ -71,6 +71,7 @@ pub fn theme() -> Theme {
       kind: ThemeKind::ShadeSanctuary,
       variant: ThemeVariant::Solid,
       gradient_strength: DEFAULT_GRADIENT_STRENGTH,
+      gradient_dir: GradientDir::TopDown,
       colors: colors(),
       typography: typography(),
       spacing: ThemeSpacing::default(),

@@ -7,7 +7,7 @@ use eframe::egui::*;
 use egui_elements::components::{CredentialsForm, QrEncoding, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
 use egui_elements::egui_lucide::Lucide;
-use egui_elements::gradient::Fill;
+use egui_elements::gradient::{Fill, GradientDir};
 use egui_elements::theme::{Theme, ThemeKind, ThemeVariant};
 use egui_elements::utils;
 use egui_elements::widgets::{
@@ -616,6 +616,17 @@ impl DemoApp {
 
          if self.theme.variant == ThemeVariant::Gradient {
             ui.add(Slider::new(&mut self.theme.gradient_strength, 0.0..=1.0).text("Bevel depth"));
+
+            ui.label(RichText::new("Direction").color(self.theme.colors.text_muted));
+
+            for dir in GradientDir::ALL {
+               let picked =
+                  ui.selectable_label(self.theme.gradient_dir == dir, dir.to_str()).clicked();
+
+               if picked {
+                  self.theme.gradient_dir = dir;
+               }
+            }
          }
       });
 
