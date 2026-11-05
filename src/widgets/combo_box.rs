@@ -1,13 +1,12 @@
 use super::label::Label;
+use crate::gradient::Fill;
 use crate::motion::{InteractT, Motion, animate_with};
 use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use egui::{
    Align2, Frame, Id, InnerResponse, NumExt, Painter, Popup, PopupCloseBehavior, PopupKind, Pos2,
-   Rect, Response, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
-   emath::Rot2,
-   epaint::{RectShape, Shape, StrokeKind},
-   style::WidgetVisuals,
+   Rect, Response, ScrollArea, Sense, Shadow, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
+   emath::Rot2, epaint::Shape, style::WidgetVisuals,
 };
 
 use std::{fmt::Debug, hash::Hash, ops::Range};
@@ -309,9 +308,9 @@ fn combo_box_with_image_button(
          .map(|v| weights.blend(v.bg, v.bg_hover, v.bg_open))
          .unwrap_or_else(|| {
             weights.blend(
-               widgets.inactive.weak_bg_fill,
-               widgets.hovered.weak_bg_fill,
-               widgets.open.weak_bg_fill,
+               Fill::solid(widgets.inactive.weak_bg_fill),
+               Fill::solid(widgets.hovered.weak_bg_fill),
+               Fill::solid(widgets.open.weak_bg_fill),
             )
          });
 
@@ -325,20 +324,10 @@ fn combo_box_with_image_button(
             )
          });
 
-      if let Some(vis) = combo_box_visuals {
-         let shadow_shape = vis.shadow.as_shape(background_rect, corner);
-         ui.painter().add(shadow_shape);
-      }
+      let shadow = combo_box_visuals.map(|vis| vis.shadow).unwrap_or(Shadow::NONE);
+      let shape = crate::visuals::paint_shape(background_rect, fill, stroke, corner, shadow);
 
-      let rect_shape = RectShape::new(
-         background_rect,
-         corner,
-         fill,
-         stroke,
-         StrokeKind::Inside,
-      );
-
-      ui.painter().add(rect_shape);
+      ui.painter().add(shape);
 
       // Area for content (label + image) inside padding
       let content_total_rect = rect.shrink2(button_padding);
@@ -458,7 +447,7 @@ mod tests {
       // The idle button is the only rect painted with `bg` on a bare screen, so the frame
       // itself supplies the rect to click — never assume the ui starts at the origin.
       let idle = run_frame(ctx, Vec::new(), 10.0, &mut build);
-      let button = rect_with_fill(&idle, combo_visuals(ctx).bg, -10.0)
+      let button = rect_with_fill(&idle, combo_visuals(ctx).bg.to_solid(), -10.0)
          .map(|(rect, _)| rect)
          .expect("the idle button paints `bg`");
 

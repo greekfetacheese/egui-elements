@@ -4,6 +4,8 @@ use std::hash::Hash;
 
 use egui::{Color32, Id, Pos2, Rect, Stroke, Ui, Vec2};
 
+use crate::gradient::{Fill, Gradient};
+
 use super::{Motion, state::AnimState};
 
 /// Linear interpolation, so an animated `0..=1` progress can drive anything, not just a bare `f32`.
@@ -49,6 +51,31 @@ impl Lerp for Stroke {
       Self {
          width: self.width.lerp(to.width, t),
          color: self.color.lerp(to.color, t),
+      }
+   }
+}
+
+impl Lerp for Fill {
+   /// A solid blends into a flat ramp first, so a hover transition into or out of a gradient eases
+   /// its stops instead of snapping to one colour.
+   fn lerp(self, to: Self, t: f32) -> Self {
+      match (self, to) {
+         (Fill::Solid(from), Fill::Solid(to)) => Fill::Solid(from.lerp(to, t)),
+         (from, to) => Fill::Gradient(from.gradient().lerp(to.gradient(), t)),
+      }
+   }
+}
+
+impl Lerp for Gradient {
+   /// Blends the two stops; the receiver's axis wins unless it is a flat ramp standing in for a
+   /// solid (which has no axis of its own).
+   fn lerp(self, to: Self, t: f32) -> Self {
+      let dir = if self.is_flat() { to.dir } else { self.dir };
+
+      Self {
+         from: self.from.lerp(to.from, t),
+         to: self.to.lerp(to.to, t),
+         dir,
       }
    }
 }

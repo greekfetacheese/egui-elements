@@ -121,5 +121,8 @@ name = "tabs"
 [[example]]
 name = "text_edit"
 
+[[example]]
+name = "gradient"
+
 [package.metadata.docs.rs]
 all-features = true

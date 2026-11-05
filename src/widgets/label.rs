@@ -1,11 +1,10 @@
+use crate::gradient::Fill;
 use crate::motion::{InteractT, Lerp, Motion};
 use crate::theme::Theme;
 use crate::visuals::LabelVisuals;
 use egui::{
-   Align, Color32, FontSelection, Image, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind,
-   TextWrapMode, Ui, Vec2, Widget, WidgetText,
-   epaint::{RectShape, TextShape},
-   style::WidgetVisuals,
+   Align, FontSelection, Image, Pos2, Rect, Response, RichText, Sense, Shadow, Stroke,
+   TextWrapMode, Ui, Vec2, Widget, WidgetText, epaint::TextShape, style::WidgetVisuals,
    text::LayoutJob,
 };
 use std::sync::Arc;
@@ -426,15 +425,20 @@ impl Widget for Label {
          // One weight, not three colours: a label has never painted a pressed face, and pressing implies hovering.
          let hot = across.hover.max(across.press);
 
-         let idle_fill = label_visuals.as_ref().map(|v| v.bg).unwrap_or(Color32::TRANSPARENT);
-         let hover_fill =
-            label_visuals.as_ref().map(|v| v.bg_hover).unwrap_or(visuals.weak_bg_fill);
+         let idle_fill = label_visuals.as_ref().map(|v| v.bg).unwrap_or_default();
+         let hover_fill = label_visuals
+            .as_ref()
+            .map(|v| v.bg_hover)
+            .unwrap_or(Fill::solid(visuals.weak_bg_fill));
          let idle_stroke = label_visuals.as_ref().map(|v| v.border).unwrap_or(Stroke::NONE);
          let hover_stroke =
             label_visuals.as_ref().map(|v| v.border_hover).unwrap_or(visuals.bg_stroke);
 
          let fill = if self.selected {
-            label_visuals.as_ref().map(|v| v.bg_selected).unwrap_or(visuals.bg_fill)
+            label_visuals
+               .as_ref()
+               .map(|v| v.bg_selected)
+               .unwrap_or(Fill::solid(visuals.bg_fill))
          } else {
             idle_fill.lerp(hover_fill, hot)
          };
@@ -450,12 +454,12 @@ impl Widget for Label {
             label_visuals.as_ref().map(|v| v.corner_radius).unwrap_or(visuals.corner_radius);
          let background_rect = rect.expand(expansion);
 
-         ui.painter().add(RectShape::new(
+         ui.painter().add(crate::visuals::paint_shape(
             background_rect,
-            corner,
             fill,
             stroke,
-            StrokeKind::Inside,
+            corner,
+            Shadow::NONE,
          ));
 
          // Layout and Paint Content

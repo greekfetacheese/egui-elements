@@ -583,7 +583,7 @@ impl MailApp {
 
    fn row_frame(&self, selected: bool) -> Card {
       let mut visuals = self.theme.frame2_visuals();
-      visuals.bg = Color32::TRANSPARENT;
+      visuals.bg = Color32::TRANSPARENT.into();
       visuals.border = Stroke::NONE;
       visuals.shadow = Shadow::NONE;
       visuals.corner_radius = CornerRadius::same(8);

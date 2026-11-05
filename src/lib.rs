@@ -53,6 +53,7 @@
 //! - [`utils`] — [`theme_switcher`](crate::utils::theme_switcher), [`mix`],
 //!   [`contrast_ratio`], HSLA helpers
 //! - [`visuals`] — per-widget chrome (`ButtonVisuals`, `TextEditVisuals`, …)
+//! - [`gradient`] — [`Fill`] (a solid colour or a [`Gradient`]) and the two-stop mesh it paints
 //!
 //! # Features
 //!
@@ -82,6 +83,7 @@ mod glow;
 
 pub mod components;
 pub mod editor;
+pub mod gradient;
 pub mod layout;
 pub mod motion;
 pub mod particles;
@@ -91,6 +93,7 @@ pub mod utils;
 pub mod visuals;
 pub mod widgets;
 
+pub use gradient::{Fill, Gradient, GradientDir};
 pub use layout::{Column, Flex, Item, Table};
 pub use motion::{
    Collapse, Easing, Fade, FadeMode, InteractT, Lerp, Motion, animate, animate_from, animate_with,
@@ -101,6 +104,7 @@ pub use particles::{
 };
 pub use theme::{
    ColorRole, ColorSlot, DerivedColor, Elevation, Surface, SurfaceState, Theme, ThemeKind,
+   ThemeVariant,
 };
 pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
