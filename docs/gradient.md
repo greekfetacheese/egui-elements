@@ -39,9 +39,15 @@ places a colour is chosen, and there is nothing to band.
 - an inner outline, inset by one point, sampled in the gradient and fanned into a solid interior;
 - an outer outline on the rect, left fully transparent, whose triangles are the anti-aliased rim.
 
-Both rings share the outer ring's corner step counts, so vertex `i` lines up with vertex `i` and
-the rim triangles never cross. epaint feathers its own rects, so a mesh without a rim reads as a
-hard, jaggied edge next to them — that is the one piece of work a gradient fill cannot skip.
+Both rings use **one** corner step count, taken from the outer radii, so vertex `i` lines up with
+vertex `i` and every rim triangle stays a thin slice at the edge. A corner whose inset radius
+collapses to zero keeps its slot by repeating the sharp point — without that, the inset radius can
+fall into a lower segment bucket (3 pt → 2 pt is enough) and the rings end up different lengths,
+which draws the rim as long triangles across the fill. `the_inset_ring_pairs_with_the_outer_ring_at_every_radius`
+pins it.
+
+epaint feathers its own rects, so a mesh without a rim reads as a hard, jaggied edge next to them —
+that is the one piece of work a gradient fill cannot skip.
 
 A 4 pt corner costs ~40 vertices; a pill costs ~130. That is the same order as the tessellated
 rounded rect it replaces, and there is no cache: a mesh is rebuilt per paint, like every other

@@ -215,7 +215,13 @@ impl Gradient {
       }
 
       let corner_radius = corner_radius.into();
-      let outer = outline(rect, corner_radius);
+      let outer_radii = clamped_corners(rect, corner_radius);
+
+      // One step count for both rings: the inset radius is a point smaller and can fall into a
+      // lower segment bucket, which would leave the rings different lengths and make the rim wrap
+      // across the fill.
+      let steps = corner_steps(outer_radii);
+      let outer = outline(rect, outer_radii, steps);
       let feather = FEATHER.min(rect.width() * 0.5).min(rect.height() * 0.5);
       let inner_rect = rect.shrink(feather);
 
@@ -229,9 +235,8 @@ impl Gradient {
          return mesh;
       }
 
-      // The inset ring shares the outer ring's corner steps, so vertex `i` on one lines up with
-      // vertex `i` on the other and the rim triangles never cross.
-      let inner = outline(inner_rect, inset_corners(corner_radius, feather));
+      let inner_radii = clamped_corners(inner_rect, inset_corners(corner_radius, feather));
+      let inner = outline(inner_rect, inner_radii, steps);
 
       for point in &inner {
          mesh.colored_vertex(*point, self.sample_at(rect, *point));
@@ -487,23 +492,43 @@ fn clamp_reach(base: Color32, ink: Color32, extreme: Color32, ceiling: f32) -> f
    low
 }
 
-/// Clockwise outline, y-down: NW → NE → SE → SW.
-///
-/// Segment counts follow the radius, so a pill and a 3 pt corner both keep their silhouette; the
-/// inset ring of [`Gradient::mesh_rounded`] shares them vertex for vertex.
-fn outline(rect: Rect, corner_radius: CornerRadius) -> Vec<Pos2> {
+/// Corner radii clamped to what the rect can carry, in NW → NE → SE → SW order.
+fn clamped_corners(rect: Rect, corner_radius: CornerRadius) -> [f32; 4] {
    let limit = (rect.width() * 0.5).min(rect.height() * 0.5).max(0.0);
-   let nw = (corner_radius.nw as f32).clamp(0.0, limit);
-   let ne = (corner_radius.ne as f32).clamp(0.0, limit);
-   let se = (corner_radius.se as f32).clamp(0.0, limit);
-   let sw = (corner_radius.sw as f32).clamp(0.0, limit);
+   let clamp = |radius: u8| (radius as f32).clamp(0.0, limit);
 
+   [
+      clamp(corner_radius.nw),
+      clamp(corner_radius.ne),
+      clamp(corner_radius.se),
+      clamp(corner_radius.sw),
+   ]
+}
+
+/// Segments per corner, shared by both rings of a mesh so vertex `i` lines up with vertex `i`.
+fn corner_steps(radii: [f32; 4]) -> [u32; 4] {
+   radii.map(|radius| {
+      if radius <= 0.0 {
+         0
+      } else {
+         quadrant_steps(radius)
+      }
+   })
+}
+
+/// Clockwise outline, y-down: NW → NE → SE → SW, `steps[corner] + 1` points per corner.
+///
+/// The step counts are the caller's, so two rings with different radii still pair up point for
+/// point; a corner whose radius collapsed to zero repeats its sharp point and keeps its slot.
+fn outline(rect: Rect, radii: [f32; 4], steps: [u32; 4]) -> Vec<Pos2> {
+   let [nw, ne, se, sw] = radii;
    let mut path = Vec::new();
 
    push_corner(
       &mut path,
       pos2(rect.left() + nw, rect.top() + nw),
       nw,
+      steps[0],
       PI,
       PI + FRAC_PI_2,
    );
@@ -511,6 +536,7 @@ fn outline(rect: Rect, corner_radius: CornerRadius) -> Vec<Pos2> {
       &mut path,
       pos2(rect.right() - ne, rect.top() + ne),
       ne,
+      steps[1],
       PI + FRAC_PI_2,
       TAU,
    );
@@ -518,6 +544,7 @@ fn outline(rect: Rect, corner_radius: CornerRadius) -> Vec<Pos2> {
       &mut path,
       pos2(rect.right() - se, rect.bottom() - se),
       se,
+      steps[2],
       0.0,
       FRAC_PI_2,
    );
@@ -525,6 +552,7 @@ fn outline(rect: Rect, corner_radius: CornerRadius) -> Vec<Pos2> {
       &mut path,
       pos2(rect.left() + sw, rect.bottom() - sw),
       sw,
+      steps[3],
       FRAC_PI_2,
       PI,
    );
@@ -532,14 +560,17 @@ fn outline(rect: Rect, corner_radius: CornerRadius) -> Vec<Pos2> {
    path
 }
 
-/// One corner arc, always `steps + 1` points so two rings with the same radii line up.
-fn push_corner(path: &mut Vec<Pos2>, center: Pos2, radius: f32, start: f32, end: f32) {
+/// One corner arc: exactly `steps + 1` points, a repeated sharp corner when the radius is zero.
+fn push_corner(path: &mut Vec<Pos2>, center: Pos2, radius: f32, steps: u32, start: f32, end: f32) {
    if radius <= 0.0 {
-      path.push(center);
+      for _ in 0..=steps {
+         path.push(center);
+      }
+
       return;
    }
 
-   let steps = quadrant_steps(radius);
+   let steps = steps.max(1);
 
    for step in 0..=steps {
       let t = step as f32 / steps as f32;
@@ -681,6 +712,40 @@ mod tests {
             "{:?}",
             vertex.pos
          );
+      }
+   }
+
+   #[test]
+   fn the_inset_ring_pairs_with_the_outer_ring_at_every_radius() {
+      // A radius whose inset lands in a lower segment bucket (3 → 2, 6 → 5, 18 → 17) used to give
+      // the two rings different lengths, so the rim wrapped around and spanned the fill as long
+      // triangles.
+      let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(80.0, 30.0));
+
+      for radius in [1u8, 2, 3, 4, 5, 6, 8, 17, 18, 50, 255] {
+         let mesh = Gradient::vertical(Color32::WHITE, Color32::BLACK).mesh_rounded(rect, radius);
+         let ring = mesh.vertices.len() / 2;
+
+         assert!(
+            ring > 4,
+            "radius {radius}: a two-ring mesh is expected"
+         );
+         assert_eq!(
+            mesh.indices.len(),
+            3 * (ring - 2 + 2 * ring),
+            "radius {radius}: one fan plus one rim quad per edge"
+         );
+
+         for index in 0..ring {
+            let inner = mesh.vertices[index].pos;
+            let outer = mesh.vertices[ring + index].pos;
+            let gap = (inner - outer).length();
+
+            assert!(
+               gap <= 2.0,
+               "radius {radius}: rim vertex {index} is {gap:.2} pt from its inner pair"
+            );
+         }
       }
    }
 
