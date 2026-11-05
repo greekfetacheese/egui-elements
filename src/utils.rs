@@ -266,18 +266,21 @@ pub fn remap_frame_visuals(
    );
 }
 
-/// Button width and popup floor for the switcher: the longest palette name plus chrome.
+/// Button width and popup floor for the switcher: the longest name plus chrome.
+///
+/// The current kind is measured too: a [`ThemeKind::Custom`] name is not in
+/// [`ThemeKind::to_vec`] and may be longer than every built-in.
 fn switcher_width(ui: &Ui, theme: &Theme) -> (f32, f32) {
    let font = egui::FontId::proportional(theme.typography.normal);
-   let widest = ThemeKind::to_vec()
+   let mut names: Vec<String> =
+      ThemeKind::to_vec().iter().map(|kind| kind.to_str().to_owned()).collect();
+   names.push(theme.kind.to_str().to_owned());
+
+   let widest = names
       .iter()
-      .map(|kind| {
+      .map(|name| {
          ui.painter()
-            .layout_no_wrap(
-               kind.to_str().to_owned(),
-               font.clone(),
-               theme.colors.text,
-            )
+            .layout_no_wrap(name.clone(), font.clone(), theme.colors.text)
             .size()
             .x
       })
@@ -290,6 +293,10 @@ fn switcher_width(ui: &Ui, theme: &Theme) -> (f32, f32) {
 ///
 /// The button and its popup are sized to the longest palette name, so names like
 /// "McLaren 650GTS" and "Shade Sanctuary" are not truncated.
+///
+/// Only built-in kinds are offered. A custom kind's definition is the app's
+/// serialized [`Theme`], so it shows in the button but cannot be rebuilt from
+/// the popup; reinstall the app's own theme instead.
 ///
 /// Returns the new theme if we select one, the new theme is installed to the [egui::Context]
 pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
