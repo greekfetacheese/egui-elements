@@ -686,6 +686,12 @@ Segmented tabs, filled and fitted:
 cargo run --example tabs
 ```
 
+Themed text edits — hint text, character limit, multiline:
+
+```sh
+cargo run --example text_edit
+```
+
 Interactive snow with the public settings window:
 
 ```sh

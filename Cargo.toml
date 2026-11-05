@@ -106,5 +106,8 @@ required-features = ["secure-types"]
 [[example]]
 name = "tabs"
 
+[[example]]
+name = "text_edit"
+
 [package.metadata.docs.rs]
 all-features = true
