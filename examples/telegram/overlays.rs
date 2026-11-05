@@ -137,7 +137,7 @@ fn new_contact(app: &mut TelegramApp, ctx: &Context) {
    let heading = RichText::new("New Contact").size(20.0).color(colors.text);
    Modal::new("new_contact", &mut open)
       .heading(heading)
-      .max_width(style::MODAL_W)
+      .width(style::MODAL_W)
       .footer(|ui| {
          Flex::row("contact_footer")
             .justify(Justify::End)

@@ -84,7 +84,7 @@ pub fn show(app: &mut TelegramApp, ctx: &Context) {
 
    Modal::new("settings", &mut open)
       .heading(heading)
-      .max_width(style::MODAL_W)
+      .width(style::MODAL_W)
       .footer(|ui| {
          let button = Button::new("Close").small().min_size(vec2(88.0, 32.0));
          if ui.add(button).clicked() {
