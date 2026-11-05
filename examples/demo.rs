@@ -11,7 +11,7 @@ use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox,
-   Label, Modal, Radio, SecureTextEdit, Spinner, Switch, Tabs, Window,
+   Label, Modal, Radio, SecureTextEdit, Spinner, Switch, Tabs, TabsStyle, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -725,6 +725,14 @@ impl DemoApp {
             &mut self.tabs,
             ["All", "Media", "Files"],
          )
+         .fill_width(false)
+         .show(ui);
+         Tabs::new(
+            format!("{id_salt}_tabs_underlined"),
+            &mut self.tabs,
+            ["All", "Media", "Files"],
+         )
+         .style(TabsStyle::Underline)
          .fill_width(false)
          .show(ui);
       });

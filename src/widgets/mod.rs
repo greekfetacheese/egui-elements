@@ -41,7 +41,7 @@ pub use popover::{Popover, PopoverSide};
 pub use scroll::Scroll;
 pub use secure_text_edit::SecureTextEdit;
 pub use spinner::{Spinner, SpinnerShadow};
-pub use tabs::{Tabs, TabsVisuals};
+pub use tabs::{Tabs, TabsStyle, TabsVisuals};
 pub use text_edit::{TextEdit, TextEditOutput};
 pub use toggle::{
    Checkbox, CheckboxShadow, CheckboxVisuals, Radio, Switch, ToggleShadow, ToggleVisuals,

@@ -255,6 +255,8 @@ that number. Two consequences worth keeping:
 - Only two neighbours are ever blended, so the pill **stretches** across the gap while it travels and lands
   as the exact segment rect. That is the reference segmented control's motion, and it is why a strip does not
   need a per-segment fade at all.
+- The underline style reads the same number: its bar is the same lerp, seated on the baseline instead of
+  filling the segment, and the clicked tab keeps its hover wash until that number has reached it.
 
 Prove it: `cargo run --example tabs`, and the `Tabs` tests, which read the painted shapes rather than the
 widget's state — the indicator is the one `Shape::Rect` carrying `highlight` in an `Instant`-free frame.
