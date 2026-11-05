@@ -12,7 +12,7 @@ use crate::themes::{
 };
 use crate::utils::*;
 use crate::visuals::*;
-use egui::{Color32, Context, Frame, Id, Margin, Style, Vec2, vec2};
+use egui::{Color32, Context, Frame, Id, Margin, Shadow, Style, Vec2, vec2};
 
 #[cfg(feature = "elegance")]
 use elegance::{Palette, Theme as EleganceTheme, Typography as EleganceTypography};
@@ -279,6 +279,25 @@ impl Theme {
          SurfaceState::Idle | SurfaceState::Hover | SurfaceState::Pressed => {
             self.colors.ink_on(self.surface_fill(surface))
          }
+      }
+   }
+
+   /// Shadow for an [`Elevation`] step, scaled from the palette's window shadow.
+   ///
+   /// Raised is half the shadow, Floating is the window shadow itself, Overlay is double. The
+   /// colour is untouched, so a light palette keeps its soft neutral shadow.
+   pub fn shadow(&self, elevation: Elevation) -> Shadow {
+      let base = self.style().visuals.window_shadow;
+      let scale = elevation.scale();
+
+      Shadow {
+         offset: [
+            (f32::from(base.offset[0]) * scale).round() as i8,
+            (f32::from(base.offset[1]) * scale).round() as i8,
+         ],
+         blur: (f32::from(base.blur) * scale).round() as u8,
+         spread: (f32::from(base.spread) * scale).round() as u8,
+         color: base.color,
       }
    }
 
@@ -595,6 +614,32 @@ pub enum SurfaceState {
    Selected,
    /// Not interactive, but still shown.
    Disabled,
+}
+
+/// Shadow weight for an elevated surface.
+///
+/// Each step scales the palette's `egui::Visuals::window_shadow`, so the colour stays the
+/// theme's (a light palette's soft shadow does not become a black drop shadow) and only the
+/// spread grows with the layer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Elevation {
+   /// Resting card: half the window shadow.
+   Raised,
+   /// Floating layer: the window shadow itself.
+   #[default]
+   Floating,
+   /// Modal or popover: twice the window shadow.
+   Overlay,
+}
+
+impl Elevation {
+   fn scale(self) -> f32 {
+      match self {
+         Self::Raised => 0.5,
+         Self::Floating => 1.0,
+         Self::Overlay => 2.0,
+      }
+   }
 }
 
 /// This is the color palette of the theme
@@ -1100,5 +1145,27 @@ mod tests {
       let ink = theme.state_ink(Surface::Well, SurfaceState::Idle);
       let fill = theme.state_fill(Surface::Well, SurfaceState::Idle);
       assert!(contrast_ratio(ink, fill) >= CONTRAST_AA_TEXT);
+   }
+
+   #[test]
+   fn elevation_scales_the_window_shadow() {
+      let theme = Theme::new(ThemeKind::TokyoNight);
+      let raised = theme.shadow(Elevation::Raised);
+      let floating = theme.shadow(Elevation::Floating);
+      let overlay = theme.shadow(Elevation::Overlay);
+
+      assert_eq!(floating, theme.style().visuals.window_shadow);
+      assert!(
+         raised.blur < floating.blur,
+         "raised must sit below floating"
+      );
+      assert!(
+         floating.blur < overlay.blur,
+         "overlay must sit above floating"
+      );
+      assert_eq!(
+         raised.color, overlay.color,
+         "the palette keeps the shadow colour"
+      );
    }
 }
