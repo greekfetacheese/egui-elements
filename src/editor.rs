@@ -323,11 +323,11 @@ impl ThemeEditor {
          ui.spacing_mut().item_spacing.y = 10.0;
          let colors = theme.colors.clone();
 
-         CollapsingHeader::new("Theme").default_open(true).show(ui, |ui| {
+         CollapsingHeader::new("Theme").default_open(false).show(ui, |ui| {
             self.identity_section(theme, ui);
          });
 
-         CollapsingHeader::new("Preview").default_open(true).show(ui, |ui| {
+         CollapsingHeader::new("Preview").default_open(false).show(ui, |ui| {
             self.preview(theme, ui);
          });
 
