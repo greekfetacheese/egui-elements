@@ -1,55 +1,121 @@
-//! A segmented tab strip: a pill track, one indicator that slides between segments, and a lift
-//! under it.
+//! Tab strips in two styles: a segmented control, and an underline bar.
 //!
-//! The look is measured from the reference segmented control
+//! [TabsStyle::Segmented] is the measured reference segmented control
 //! (<https://uiverse.io/uiverse-astronaut/odd-bobcat-3>, MIT): a fully rounded track that holds the
 //! segments, the selected one painted as a pill on a soft shadow, and every state change eased rather
 //! than switched. The reference's 6-of-48 ring around the pill becomes the strip's inset, so one
-//! [Tabs::height] scales the whole strip.
+//! [Tabs::height] scales the whole strip. The indicator does not fade in place: one pill travels from
+//! the old segment to the new one and stretches between the two while it is in flight, which is what
+//! reads as a segmented control rather than as a highlighted cell.
 //!
-//! The indicator does not fade in place: one pill travels from the old segment to the new one and
-//! stretches between the two while it is in flight, which is what reads as a segmented control rather
-//! than as a highlighted cell. It is seeded at the current selection, so a strip that first appears is
-//! still, and the selection itself lands instantly — only the chrome eases, the crate's rule
-//! everywhere.
+//! [TabsStyle::Underline] is the page-tab shape measured from the BoardUI tabs reference
+//! (<https://www.boardui.com/components/tabs>): fitted tabs on a one-point baseline that spans the
+//! row, the selected tab's ink in the accent colour, and a two-point accent bar sitting on the
+//! baseline under exactly that tab. The bar travels to its neighbour the same way the pill does.
 //!
-//! Every colour comes from the palette: the track is the canvas ([ThemeColors::bg]), the pill is
-//! [ThemeColors::highlight] with [ThemeColors::ink_on] ink, and hover washes the segment with
+//! Both styles keep one rule for the click: the segment under the pointer keeps its hover (or press)
+//! wash until the indicator has landed on it, so a click never falls back to the bare surface while
+//! the motion is still running.
+//!
+//! Every colour comes from the palette. The segmented track is the canvas ([ThemeColors::bg]), its
+//! pill is [ThemeColors::highlight] with [ThemeColors::ink_on] ink, and hover washes the segment with
 //! [ThemeColors::hover] and lifts its ink toward [ThemeColors::text] — never `highlight`, which stays
-//! the selection. The lift is the toggle family's [ToggleShadow], so a strip and a switch on one card
-//! cast the same kind of shadow.
+//! the selection. The underline strip's baseline is [ThemeColors::border], its bar and selected ink
+//! are [ThemeColors::accent]. The segmented lift is the toggle family's [ToggleShadow], so a strip and
+//! a switch on one card cast the same kind of shadow.
 
 use std::hash::Hash;
 use std::sync::Arc;
 
 use egui::{
-   Color32, CornerRadius, FontId, Galley, IdSalt, Rect, Response, Role, Sense, Shadow, Stroke,
-   StrokeKind, Ui, WidgetInfo, pos2, vec2,
+   Color32, CornerRadius, FontId, Galley, IdSalt, Rect, Response, Role, Sense, Stroke, Ui,
+   WidgetInfo, pos2, vec2,
 };
 
 use crate::motion::{InteractT, Lerp, Motion, animate_from};
 use crate::theme::{Theme, ThemeColors};
 use crate::widgets::toggle::ToggleShadow;
 
-/// Segment inset as a share of the strip height; the pill rides inside this ring.
-///
-/// The reference pads a 48-point track with 6 points all round, i.e. 0.125 of the track. Held at 0.09
-/// because the crate's strip is shorter than the reference's, and the ring has to survive the
-/// `fill_width` row: [`Tabs::height`] scales the whole geometry.
-const INSET_RATIO: f32 = 0.09;
+mod segmented;
+mod underline;
+
 /// Hover wash alpha at full hover.
 const HOVER_WASH: f32 = 0.55;
-/// Hover wash alpha while the pointer is down on an unselected segment.
+/// Hover wash alpha while the pointer is down on a segment.
 const PRESS_WASH: f32 = 0.85;
 /// Alpha multiplier applied to a disabled strip.
 const DISABLED_ALPHA: f32 = 0.5;
-/// Floor of an indicator radius derived from the strip, in points.
-const MIN_RADIUS: f32 = 2.0;
+/// An indicator closer than this to the selected segment has landed.
+const SETTLED: f32 = 0.001;
+
+/// Mute a colour on a disabled strip.
+pub(super) fn shade(color: Color32, enabled: bool) -> Color32 {
+   if enabled {
+      color
+   } else {
+      color.gamma_multiply(DISABLED_ALPHA)
+   }
+}
+
+/// The measured, unpainted strip handed to a style module.
+#[derive(Clone, Copy)]
+pub(super) struct Strip<'a> {
+   /// The whole strip: the track (segmented) or the baseline row (underline).
+   pub rect: Rect,
+   /// One hit rect per label, left to right.
+   pub segments: &'a [Rect],
+   /// Each segment's eased hover and press weights.
+   pub faces: &'a [InteractT],
+   pub visuals: TabsVisuals,
+   pub shadow: ToggleShadow,
+   /// The segment the index points at, already clamped to the labels.
+   pub selected: usize,
+   /// The eased indicator position, in segment units.
+   pub t: f32,
+   pub corner_radius: CornerRadius,
+   /// The label size the strip is built on.
+   pub font_size: f32,
+   pub enabled: bool,
+}
+
+/// How a [Tabs] strip paints.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TabsStyle {
+   /// A pill track with one indicator that slides between segments. The default, and the strip
+   /// [TabsStyle::Segmented] has always painted.
+   #[default]
+   Segmented,
+   /// Fitted tabs on a full-width baseline, the selected one marked by an accent underline.
+   Underline,
+}
+
+impl TabsStyle {
+   /// The palette-derived visuals this style starts from.
+   ///
+   /// A strip that sets no [Tabs::visuals] uses this; [TabsVisuals::from_theme] is the segmented
+   /// answer and [TabsVisuals::underline_from_theme] the underline one.
+   pub fn visuals(self, colors: ThemeColors) -> TabsVisuals {
+      match self {
+         TabsStyle::Segmented => TabsVisuals::from_theme(colors),
+         TabsStyle::Underline => TabsVisuals::underline_from_theme(colors),
+      }
+   }
+
+   /// Space below the labels this style keeps for its own chrome.
+   fn reserve(self, font_size: f32) -> f32 {
+      match self {
+         TabsStyle::Segmented => 0.0,
+         TabsStyle::Underline => underline::reserve(font_size),
+      }
+   }
+}
 
 /// Per-widget colours for a [Tabs] strip.
 ///
 /// [Default] is inert — a transparent track with no ink and [ToggleShadow::NONE] — so a struct literal
-/// starts from [TabsVisuals::from_theme] and overrides the one slot it wants to change.
+/// starts from [TabsVisuals::from_theme] (or [TabsVisuals::underline_from_theme]) and overrides the one
+/// slot it wants to change.
 ///
 /// ```no_run
 /// # use egui::{__run_test_ui, Color32};
@@ -69,13 +135,14 @@ const MIN_RADIUS: f32 = 2.0;
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TabsVisuals {
-   /// Fill of the track the segments sit on.
+   /// Fill of the track the segments sit on. Unused by [TabsStyle::Underline].
    pub track: Color32,
-   /// Outline drawn inside the track.
+   /// Outline drawn inside the track. An underline strip reads only its colour and width, as the
+   /// baseline the accent bar sits on.
    pub track_border: Stroke,
    /// Wash behind a hovered, unselected segment.
    pub hover: Color32,
-   /// Fill of the sliding indicator, i.e. the selected segment.
+   /// Fill of the sliding indicator: the segmented pill, or the underline bar.
    pub indicator: Color32,
    /// Ink of an unselected segment.
    pub text: Color32,
@@ -83,12 +150,13 @@ pub struct TabsVisuals {
    pub text_hover: Color32,
    /// Ink of the selected segment.
    pub text_selected: Color32,
-   /// The lift under the indicator; [ToggleShadow::NONE] makes it flat.
+   /// The lift under the segmented indicator; [ToggleShadow::NONE] makes it flat. An underline strip
+   /// ignores it.
    pub shadow: ToggleShadow,
 }
 
 impl TabsVisuals {
-   /// The palette-derived defaults, also used when a widget sets no visuals.
+   /// The segmented style's palette-derived defaults, also used when a widget sets no visuals.
    pub fn from_theme(colors: ThemeColors) -> Self {
       Self {
          track: colors.bg,
@@ -99,6 +167,21 @@ impl TabsVisuals {
          text_hover: colors.text,
          text_selected: colors.ink_on(colors.highlight),
          shadow: ToggleShadow::derived(),
+      }
+   }
+
+   /// The underline style's palette-derived defaults: a [ThemeColors::border] baseline, an
+   /// [ThemeColors::accent] bar and selected ink, no track and no lift.
+   pub fn underline_from_theme(colors: ThemeColors) -> Self {
+      Self {
+         track: Color32::TRANSPARENT,
+         track_border: Stroke::new(1.0, colors.border),
+         hover: colors.hover,
+         indicator: colors.accent,
+         text: colors.text_muted,
+         text_hover: colors.text,
+         text_selected: colors.accent,
+         shadow: ToggleShadow::NONE,
       }
    }
 }
@@ -118,18 +201,21 @@ impl Default for TabsVisuals {
    }
 }
 
-/// A horizontal segmented control: one selected segment, index written back.
+/// A horizontal tab strip: one selected segment, index written back.
 ///
-/// The strip eases the indicator between segments and lifts it on a shadow; the duration comes from the
-/// installed style's `animation_time`, so [Tabs::motion] is the per-widget override and
-/// [Motion::instant] the reduce-motion answer.
+/// The strip eases the indicator between segments and, in the segmented style, lifts it on a shadow;
+/// the duration comes from the installed style's `animation_time`, so [Tabs::motion] is the per-widget
+/// override and [Motion::instant] the reduce-motion answer.
 ///
 /// ```rust
 /// # use egui::__run_test_ui;
-/// # use egui_elements::widgets::Tabs;
+/// # use egui_elements::widgets::{Tabs, TabsStyle};
 /// # __run_test_ui(|ui| {
 /// let mut selected = 0;
 /// Tabs::new("kind", &mut selected, ["All", "Media", "Files"]).show(ui);
+/// Tabs::new("page", &mut selected, ["Banners", "Posts", "Members"])
+///    .style(TabsStyle::Underline)
+///    .show(ui);
 /// # });
 /// ```
 #[must_use = "You should call .show()"]
@@ -139,11 +225,12 @@ pub struct Tabs<'a> {
    labels: Vec<&'a str>,
    fill_width: bool,
    height: Option<f32>,
-   gap: f32,
+   gap: Option<f32>,
    visuals: Option<TabsVisuals>,
    shadow: Option<ToggleShadow>,
    motion: Option<Motion>,
    corner_radius: Option<CornerRadius>,
+   style: TabsStyle,
 }
 
 impl<'a> Tabs<'a> {
@@ -159,29 +246,46 @@ impl<'a> Tabs<'a> {
          labels: labels.into_iter().collect(),
          fill_width: true,
          height: None,
-         gap: 2.0,
+         gap: None,
          visuals: None,
          shadow: None,
          motion: None,
          corner_radius: None,
+         style: TabsStyle::Segmented,
       }
    }
 
+   /// Paint the segmented track (default) or an underline bar.
+   ///
+   /// The style picks the default [TabsVisuals] (an underline strip starts on [ThemeColors::accent]
+   /// over [ThemeColors::border], with no lift), the default gap, and the strip height that leaves
+   /// room under the labels for the underline.
+   pub fn style(mut self, style: TabsStyle) -> Self {
+      self.style = style;
+      self
+   }
+
    /// Stretch the strip across the available width. Default `true`.
+   ///
+   /// Segmented tabs split the row evenly; underline tabs are always fitted to their labels, and this
+   /// only decides whether the baseline spans the row (as the reference does) or stops at the last tab.
    pub fn fill_width(mut self, fill: bool) -> Self {
       self.fill_width = fill;
       self
    }
 
-   /// Strip height in points. Default: body text plus the button padding.
+   /// Strip height in points.
+   ///
+   /// Default: body text plus the button padding, plus the underline's own room in the underline
+   /// style.
    pub fn height(mut self, height: f32) -> Self {
       self.height = Some(height);
       self
    }
 
-   /// Space between segments, in points. Default `2.0`.
+   /// Space between segments, in points. Default `2.0` segmented, `ThemeSpacing::md` underlined.
    pub fn gap(mut self, gap: f32) -> Self {
-      self.gap = gap;
+      self.gap = Some(gap);
       self
    }
 
@@ -191,7 +295,7 @@ impl<'a> Tabs<'a> {
       self
    }
 
-   /// Replace the lift under the indicator; [ToggleShadow::NONE] turns it off.
+   /// Replace the lift under the segmented indicator; [ToggleShadow::NONE] turns it off.
    pub fn shadow(mut self, shadow: ToggleShadow) -> Self {
       self.shadow = Some(shadow);
       self
@@ -204,9 +308,10 @@ impl<'a> Tabs<'a> {
       self
    }
 
-   /// Corner radius of the track. Default `u8::MAX`, which clamps to a pill.
+   /// Corner radius of the segmented track. Default `u8::MAX`, which clamps to a pill.
    ///
    /// The indicator's radius is this radius minus the inset, so a pill track always holds a pill.
+   /// The underline style ignores it.
    pub fn corner_radius(mut self, corner_radius: CornerRadius) -> Self {
       self.corner_radius = Some(corner_radius);
       self
@@ -225,19 +330,25 @@ impl<'a> Tabs<'a> {
          shadow,
          motion,
          corner_radius,
+         style,
       } = self;
 
       let theme = Theme::current(ui.ctx());
       let colors = theme.colors;
-      let visuals = visuals.unwrap_or_else(|| TabsVisuals::from_theme(colors));
+      let visuals = visuals.unwrap_or_else(|| style.visuals(colors));
       let shadow = shadow.unwrap_or(visuals.shadow);
       let motion = motion.unwrap_or_else(|| Motion::from_ui(ui));
       let enabled = ui.is_enabled();
       let pad_x = ui.spacing().button_padding.x.max(10.0);
       let pad_y = ui.spacing().button_padding.y.max(6.0);
       let font = FontId::proportional(theme.typography.normal);
-      let height = height.unwrap_or(theme.typography.normal + 2.0 * pad_y);
+      let height = height
+         .unwrap_or(theme.typography.normal + 2.0 * pad_y + style.reserve(theme.typography.normal));
       let radius = corner_radius.unwrap_or(CornerRadius::same(u8::MAX));
+      let gap = gap.unwrap_or(match style {
+         TabsStyle::Segmented => 2.0,
+         TabsStyle::Underline => theme.spacing.md,
+      });
 
       let painter = ui.painter().clone();
       // Measured once with a placeholder ink and painted per state: a galley's size does not depend
@@ -255,7 +366,7 @@ impl<'a> Tabs<'a> {
 
       let widths: Vec<f32> = if galleys.is_empty() {
          Vec::new()
-      } else if fill_width {
+      } else if fill_width && style == TabsStyle::Segmented {
          let gap_total = gap * (galleys.len() - 1) as f32;
          let each = ((ui.available_width() - gap_total) / galleys.len() as f32).max(1.0);
          vec![each; galleys.len()]
@@ -263,35 +374,20 @@ impl<'a> Tabs<'a> {
          galleys.iter().map(|galley| galley.size().x + 2.0 * pad_x).collect()
       };
 
-      let strip_width: f32 =
+      let tabs_width: f32 =
          widths.iter().sum::<f32>() + gap * (galleys.len().saturating_sub(1) as f32);
+      // Underline tabs stay fitted whatever `fill_width` says; the flag only decides whether the
+      // baseline runs on to the edge of the row.
+      let strip_width = if galleys.is_empty() {
+         0.0
+      } else if style == TabsStyle::Underline && fill_width {
+         ui.available_width().max(tabs_width)
+      } else {
+         tabs_width
+      };
       let (rect, mut response) = ui.allocate_exact_size(vec2(strip_width, height), Sense::hover());
 
-      if !ui.is_rect_visible(rect) {
-         return response;
-      }
-
-      let shade = |color: Color32| {
-         if enabled {
-            color
-         } else {
-            color.gamma_multiply(DISABLED_ALPHA)
-         }
-      };
-      let inset = (rect.height() * INSET_RATIO).round().max(1.0);
-      let indicator_radius =
-         CornerRadius::same((f32::from(radius.nw) - inset).max(MIN_RADIUS).round() as u8);
-
-      painter.rect_filled(rect, radius, shade(visuals.track));
-      if !visuals.track_border.is_empty() {
-         let border = Stroke::new(
-            visuals.track_border.width,
-            shade(visuals.track_border.color),
-         );
-         painter.rect_stroke(rect, radius, border, StrokeKind::Inside);
-      }
-
-      if galleys.is_empty() {
+      if !ui.is_rect_visible(rect) || galleys.is_empty() {
          return response;
       }
 
@@ -336,22 +432,6 @@ impl<'a> Tabs<'a> {
       // The clicks above already moved the index, so this is the selection of the frame being painted.
       let selected = (*selected).min(labels.len() - 1);
 
-      // ---- hover wash ----------------------------------------------------
-      for (index, face) in faces.iter().enumerate() {
-         if index == selected {
-            continue;
-         }
-         let wash = face.blend(0.0, HOVER_WASH, PRESS_WASH);
-         if wash > 0.001 {
-            painter.rect_filled(
-               segments[index].shrink(inset),
-               indicator_radius,
-               shade(visuals.hover).gamma_multiply(wash),
-            );
-         }
-      }
-
-      // ---- indicator -----------------------------------------------------
       // Seeded at the selection: a strip that first appears is still, a moved one slides.
       let t = animate_from(
          ui,
@@ -361,22 +441,23 @@ impl<'a> Tabs<'a> {
          motion,
       )
       .clamp(0.0, (labels.len() - 1) as f32);
-      // Between two neighbours only: the pill travels from one segment to the other and stretches
-      // between them mid-flight, which reads as a segment sliding rather than a cell lighting up.
-      let from = (t.floor() as usize).min(labels.len() - 1);
-      let to = (from + 1).min(labels.len() - 1);
-      let indicator_rect =
-         segments[from].shrink(inset).lerp(segments[to].shrink(inset), t - from as f32);
 
-      let lift = shadow.to_shadow(indicator_rect.height(), visuals.indicator, 1.0);
-      if lift != Shadow::NONE {
-         painter.add(lift.as_shape(indicator_rect, indicator_radius));
-      }
-      painter.rect_filled(
-         indicator_rect,
-         indicator_radius,
-         shade(visuals.indicator),
-      );
+      let strip = Strip {
+         rect,
+         segments: &segments,
+         faces: &faces,
+         visuals,
+         shadow,
+         selected,
+         t,
+         corner_radius: radius,
+         font_size: theme.typography.normal,
+         enabled,
+      };
+      let band = match style {
+         TabsStyle::Segmented => segmented::paint(ui, &strip),
+         TabsStyle::Underline => underline::paint(ui, &strip),
+      };
 
       // ---- labels --------------------------------------------------------
       for (index, galley) in galleys.iter().enumerate() {
@@ -385,8 +466,11 @@ impl<'a> Tabs<'a> {
          } else {
             visuals.text.lerp(visuals.text_hover, faces[index].hover)
          };
-         let pos = segments[index].center() - galley.size() / 2.0;
-         painter.galley(pos, galley.clone(), shade(ink));
+         let pos = pos2(
+            segments[index].center().x - galley.size().x / 2.0,
+            band.center().y - galley.size().y / 2.0,
+         );
+         ui.painter().galley(pos, galley.clone(), shade(ink, enabled));
       }
 
       if changed {
@@ -399,7 +483,7 @@ impl<'a> Tabs<'a> {
 #[cfg(test)]
 mod tests {
    use super::*;
-   use crate::theme::{Theme, ThemeKind};
+   use crate::theme::{Theme, ThemeColors, ThemeKind};
    use egui::{
       Context, Event, FullOutput, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, pos2, vec2,
    };
@@ -503,6 +587,11 @@ mod tests {
       count
    }
 
+   /// The hover wash a palette paints at full hover.
+   fn wash(colors: ThemeColors) -> Color32 {
+      colors.hover.gamma_multiply(HOVER_WASH)
+   }
+
    #[test]
    fn clicking_a_segment_selects_it() {
       let ctx = themed_ctx();
@@ -556,6 +645,9 @@ mod tests {
       let mut selected = 0usize;
       frame(&ctx, 0.0, vec![], |ui| {
          Tabs::new("empty", &mut selected, [] as [&str; 0]).show(ui);
+         Tabs::new("empty_line", &mut selected, [] as [&str; 0])
+            .style(TabsStyle::Underline)
+            .show(ui);
       });
    }
 
@@ -686,7 +778,7 @@ mod tests {
             .show(ui);
       });
 
-      let wash = colors.hover.gamma_multiply(HOVER_WASH);
+      let wash = wash(colors);
       let fills = rects(&out);
       assert!(
          fills.iter().any(|(_, fill)| *fill == wash),
@@ -700,6 +792,64 @@ mod tests {
          fills.iter().filter(|(_, fill)| *fill == colors.highlight).count(),
          1,
          "only the indicator carries the selection fill"
+      );
+   }
+
+   /// A click moves the index on the release frame, but the indicator still has a whole leg to travel:
+   /// the clicked segment must keep its wash until the indicator lands on it, or the strip falls back
+   /// to the bare track for that leg.
+   #[test]
+   fn a_clicked_segment_keeps_its_wash_until_the_indicator_lands() {
+      let ctx = themed_ctx();
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      let mut selected = 0usize;
+      let mut strip = Rect::ZERO;
+
+      frame(&ctx, 10.0, vec![], |ui| {
+         strip = Tabs::new("retain", &mut selected, ["A", "B", "C"])
+            .fill_width(false)
+            .show(ui)
+            .rect;
+      });
+
+      let at = pos2(strip.right() - 8.0, strip.center().y);
+      // The pointer settles on the last segment while it is still unselected.
+      frame(&ctx, 10.1, vec![Event::PointerMoved(at)], |ui| {
+         Tabs::new("retain", &mut selected, ["A", "B", "C"]).fill_width(false).show(ui);
+      });
+      let hovered = frame(&ctx, 10.5, vec![], |ui| {
+         Tabs::new("retain", &mut selected, ["A", "B", "C"]).fill_width(false).show(ui);
+      });
+      assert!(
+         rects(&hovered).iter().any(|(_, fill)| *fill == wash(colors)),
+         "a hovered unselected segment carries the wash"
+      );
+
+      frame(&ctx, 10.6, vec![press(at)], |ui| {
+         Tabs::new("retain", &mut selected, ["A", "B", "C"]).fill_width(false).show(ui);
+      });
+      let clicked = frame(&ctx, 10.7, vec![release(at)], |ui| {
+         Tabs::new("retain", &mut selected, ["A", "B", "C"]).fill_width(false).show(ui);
+      });
+      assert_eq!(
+         selected, 2,
+         "the last segment takes the selection"
+      );
+      let fills = rects(&clicked);
+      assert!(
+         fills
+            .iter()
+            .any(|(rect, fill)| *fill == wash(colors) && rect.center().x > strip.center().x + 8.0),
+         "the clicked segment keeps its wash while the indicator is on its way: {fills:?}"
+      );
+
+      // One animation leg later the indicator has landed, and it replaces the wash.
+      let landed = frame(&ctx, 11.2, vec![], |ui| {
+         Tabs::new("retain", &mut selected, ["A", "B", "C"]).fill_width(false).show(ui);
+      });
+      assert!(
+         !rects(&landed).iter().any(|(_, fill)| *fill == wash(colors)),
+         "the landed indicator replaces the wash"
       );
    }
 
@@ -751,6 +901,203 @@ mod tests {
          assert_ne!(
             visuals.track, visuals.indicator,
             "the track and the selected segment must not collapse"
+         );
+      }
+   }
+
+   /// The underline style: a border rule along the bottom of the strip, and one accent bar sitting on
+   /// it under the selected tab.
+   #[test]
+   fn the_underline_style_paints_a_baseline_and_a_bar() {
+      let ctx = themed_ctx();
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      let mut selected = 1usize;
+      let mut strip = Rect::ZERO;
+
+      let out = frame(&ctx, 10.0, vec![], |ui| {
+         strip = Tabs::new("line", &mut selected, ["All", "Media", "Files"])
+            .style(TabsStyle::Underline)
+            .fill_width(false)
+            .show(ui)
+            .rect;
+      });
+
+      let fills = rects(&out);
+      let baseline = fills
+         .iter()
+         .find(|(rect, fill)| *fill == colors.border && rect.height() <= 1.5)
+         .map(|(rect, _)| *rect)
+         .expect("the baseline is painted");
+      assert!(
+         (baseline.bottom() - strip.bottom()).abs() < 0.5,
+         "the rule is the last row"
+      );
+      assert!(
+         (baseline.width() - strip.width()).abs() < 0.5,
+         "a fitted baseline spans the whole strip: {baseline:?} in {strip:?}"
+      );
+
+      let bar = indicator(&out, colors.accent).expect("one accent bar");
+      assert!(
+         (bar.bottom() - strip.bottom()).abs() < 0.5,
+         "the bar sits on the rule"
+      );
+      assert!(
+         bar.height() >= 2.0 && bar.height() <= 3.0,
+         "a two-point bar, scaled from the label size: {bar:?}"
+      );
+      assert!(
+         bar.left() > strip.left() && bar.right() < strip.right(),
+         "the bar is under the selected tab, not the row: {bar:?}"
+      );
+      assert_eq!(
+         lifted(&out),
+         0,
+         "the underline style casts no lift"
+      );
+   }
+
+   /// `fill_width` decides how far the baseline runs, never how wide a tab is: underline tabs stay
+   /// fitted to their labels.
+   #[test]
+   fn an_underline_strip_runs_its_baseline_across_the_row() {
+      let ctx = themed_ctx();
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      let mut selected = 0usize;
+      let mut wide = Rect::ZERO;
+      let mut narrow = Rect::ZERO;
+
+      let wide_out = frame(&ctx, 10.0, vec![], |ui| {
+         wide = Tabs::new("wide_line", &mut selected, ["All", "Media"])
+            .style(TabsStyle::Underline)
+            .show(ui)
+            .rect;
+      });
+      let narrow_out = frame(&ctx, 10.1, vec![], |ui| {
+         narrow = Tabs::new("narrow_line", &mut selected, ["All", "Media"])
+            .style(TabsStyle::Underline)
+            .fill_width(false)
+            .show(ui)
+            .rect;
+      });
+
+      assert!(
+         wide.width() > 380.0,
+         "the default baseline uses the row"
+      );
+      assert!(
+         narrow.width() < wide.width() * 0.5,
+         "a fitted one stops at the tabs"
+      );
+      let wide_bar = indicator(&wide_out, colors.accent).expect("bar");
+      let narrow_bar = indicator(&narrow_out, colors.accent).expect("bar");
+      assert!(
+         (wide_bar.width() - narrow_bar.width()).abs() < 0.5,
+         "a tab keeps its fitted width either way: {wide_bar:?} vs {narrow_bar:?}"
+      );
+   }
+
+   /// The underline travels between segments like the pill does.
+   #[test]
+   fn the_underline_slides_to_the_new_segment() {
+      let ctx = themed_ctx();
+      let accent = Theme::new(ThemeKind::TokyoNight).colors.accent;
+      let mut selected = 0usize;
+      let mut strip = Rect::ZERO;
+
+      frame(&ctx, 10.0, vec![], |ui| {
+         strip = Tabs::new("line_slide", &mut selected, ["A", "B", "C"])
+            .style(TabsStyle::Underline)
+            .fill_width(false)
+            .show(ui)
+            .rect;
+      });
+
+      let at = pos2(strip.right() - 8.0, strip.center().y);
+      let start = indicator(
+         &frame(&ctx, 10.1, vec![], |ui| {
+            Tabs::new("line_slide", &mut selected, ["A", "B", "C"])
+               .style(TabsStyle::Underline)
+               .fill_width(false)
+               .show(ui);
+         }),
+         accent,
+      )
+      .expect("bar");
+
+      frame(&ctx, 10.2, vec![press(at)], |ui| {
+         Tabs::new("line_slide", &mut selected, ["A", "B", "C"])
+            .style(TabsStyle::Underline)
+            .fill_width(false)
+            .show(ui);
+      });
+      let on_click = indicator(
+         &frame(&ctx, 10.3, vec![release(at)], |ui| {
+            Tabs::new("line_slide", &mut selected, ["A", "B", "C"])
+               .style(TabsStyle::Underline)
+               .fill_width(false)
+               .show(ui);
+         }),
+         accent,
+      )
+      .expect("bar");
+      assert_eq!(selected, 2, "the click selects the last tab");
+      assert!(
+         (on_click.left() - start.left()).abs() < 0.5,
+         "the click frame still paints the old tab: {on_click:?} vs {start:?}"
+      );
+
+      let mid = indicator(
+         &frame(&ctx, 10.45, vec![], |ui| {
+            Tabs::new("line_slide", &mut selected, ["A", "B", "C"])
+               .style(TabsStyle::Underline)
+               .fill_width(false)
+               .show(ui);
+         }),
+         accent,
+      )
+      .expect("bar");
+      assert!(
+         mid.left() > on_click.left() + 4.0,
+         "the bar must travel: {mid:?} from {on_click:?}"
+      );
+
+      let settled = indicator(
+         &frame(&ctx, 10.9, vec![], |ui| {
+            Tabs::new("line_slide", &mut selected, ["A", "B", "C"])
+               .style(TabsStyle::Underline)
+               .fill_width(false)
+               .show(ui);
+         }),
+         accent,
+      )
+      .expect("bar");
+      assert!(
+         settled.left() > strip.center().x,
+         "the settled bar sits under the last tab: {settled:?}"
+      );
+   }
+
+   /// The underline style reads the accent, the border rule and no lift from every palette.
+   #[test]
+   fn the_underline_visuals_follow_every_palette() {
+      for kind in ThemeKind::to_vec() {
+         let colors = Theme::new(kind).colors;
+         let visuals = TabsVisuals::underline_from_theme(colors);
+         assert_eq!(visuals.indicator, colors.accent);
+         assert_eq!(visuals.text_selected, colors.accent);
+         assert_eq!(
+            visuals.track_border,
+            Stroke::new(1.0, colors.border)
+         );
+         assert_eq!(visuals.shadow, ToggleShadow::NONE);
+         assert_ne!(
+            visuals.text, visuals.text_hover,
+            "muted ink and hover ink must differ"
+         );
+         assert_ne!(
+            visuals.indicator, visuals.text,
+            "the accent bar must read against muted ink"
          );
       }
    }

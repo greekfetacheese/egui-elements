@@ -4,14 +4,14 @@
 
 use eframe::egui::*;
 use egui_elements::motion::Motion;
-use egui_elements::widgets::{Frame as Card, Tabs, TabsVisuals, ToggleShadow};
+use egui_elements::widgets::{Frame as Card, Tabs, TabsStyle, TabsVisuals, ToggleShadow};
 use egui_elements::{Theme, ThemeKind, utils};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
       viewport: ViewportBuilder::default()
          .with_title("egui-elements tabs")
-         .with_inner_size([720.0, 560.0])
+         .with_inner_size([720.0, 780.0])
          .with_resizable(true),
       ..Default::default()
    };
@@ -30,6 +30,7 @@ struct TabsApp {
    left: usize,
    right: usize,
    accent: usize,
+   page: usize,
 }
 
 impl TabsApp {
@@ -44,6 +45,7 @@ impl TabsApp {
          left: 0,
          right: 2,
          accent: 0,
+         page: 0,
       }
    }
 
@@ -158,12 +160,40 @@ impl TabsApp {
                   .show(ui);
             });
 
+            ui.add_space(space.lg);
+
+            self.caption(
+               ui,
+               "Underline tabs — the page-tab reference, baseline across the row",
+            );
+            Tabs::new(
+               "page",
+               &mut self.page,
+               ["Banners", "Posts", "Members", "Settings"],
+            )
+            .style(TabsStyle::Underline)
+            .show(ui);
+            ui.add_space(space.md);
+
+            self.caption(
+               ui,
+               "Fitted to its labels — the baseline stops at the last tab",
+            );
+            Tabs::new(
+               "page_fitted",
+               &mut self.page,
+               ["Overview", "Activity"],
+            )
+            .style(TabsStyle::Underline)
+            .fill_width(false)
+            .show(ui);
+
             ui.add_space(space.md);
             self.caption(
                ui,
                &format!(
-                  "filter {} · range {} · left {} · right {} · accent {}",
-                  self.filter, self.range, self.left, self.right, self.accent
+                  "filter {} · range {} · left {} · right {} · accent {} · page {}",
+                  self.filter, self.range, self.left, self.right, self.accent, self.page
                ),
             );
          });

@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Tabs`, `Chip`, `Divider`, `Scroll`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, segmented tabs whose indicator slides between segments, and `AvatarGroup` stacks that fan out on hover
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Tabs`, `Chip`, `Divider`, `Scroll`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, segmented and underlined tabs whose indicator slides between segments, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -379,6 +379,29 @@ Tabs::new("instant", &mut selected, ["A", "B"]).motion(Motion::instant()).show(u
 `TabsVisuals::from_theme(theme.colors)` to keep the rest. A first-sight strip is
 still (the indicator is seeded at the selection), and a click reports
 `Response::changed`.
+
+`.style(TabsStyle::Underline)` paints the page-tab shape instead: fitted tabs on a
+one-point `border` baseline that runs across the row, the selected tab's ink in
+`accent`, and a two-point `accent` bar sitting on the baseline under that tab,
+travelling to its neighbour exactly as the pill does. Underline tabs are always
+fitted to their labels; `.fill_width(false)` only stops the baseline at the last
+tab. Its defaults come from `TabsVisuals::underline_from_theme(theme.colors)`.
+
+```rust
+use egui_elements::widgets::{Tabs, TabsStyle};
+
+Tabs::new("page", &mut selected, ["Banners", "Posts", "Members"])
+   .style(TabsStyle::Underline)
+   .show(ui);
+Tabs::new("page_fitted", &mut selected, ["Overview", "Activity"])
+   .style(TabsStyle::Underline)
+   .fill_width(false)
+   .show(ui);
+```
+
+In both styles the segment you click keeps its hover (or press) wash until the
+indicator has landed on it, so a click never flashes the bare surface while the
+motion is still running.
 
 ### Avatar groups
 
