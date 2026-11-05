@@ -51,7 +51,7 @@ impl TabsApp {
       let space = self.theme.spacing;
       let colors = self.theme.colors;
       let title = self.theme.typography.large;
-      let theme = &self.theme;
+      let theme = self.theme.clone();
 
       Panel::top("header")
          .frame(
@@ -64,7 +64,9 @@ impl TabsApp {
             ui.horizontal(|ui| {
                ui.label(RichText::new("Tabs").size(title).color(colors.text).strong());
                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                  utils::theme_switcher(theme, ui);
+                  if let Some(new_theme) = utils::theme_switcher(&theme, ui) {
+                     self.theme = new_theme;
+                  }
                });
             });
          });
