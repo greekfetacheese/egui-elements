@@ -5,7 +5,7 @@
 //! `Theme::spacing`; the constants below are component sizes, not step values.
 
 use eframe::egui::{Color32, Stroke};
-use egui_elements::theme::Theme;
+use egui_elements::theme::{ColorRole, DerivedColor, Theme};
 use egui_elements::utils::mix;
 
 /// Sidebar width in points.
@@ -67,15 +67,19 @@ pub fn chat_plate(theme: &Theme, index: usize) -> Color32 {
    mix(role, colors.bg, pull)
 }
 
-/// Bubble fill: incoming `widget_bg`, outgoing tinted toward `accent`.
+/// Outgoing bubble fill: a 32 % accent wash over `widget_bg`.
 ///
-/// The outgoing mix is deliberately past a light tint: on the dark palettes
+/// The strength is deliberately past a light tint: on the dark palettes
 /// `widget_bg` and a 0.18 accent mix read as the same grey, so the two sides of
-/// a conversation lose their shape.
+/// a conversation lose their shape. Naming the wash lets the audit panel check
+/// it like a palette slot.
+pub const BUBBLE_OUT: DerivedColor = DerivedColor::new("bubble.out", ColorRole::Accent, 0.32);
+
+/// Bubble fill: incoming `widget_bg`, outgoing the accent wash.
 pub fn bubble_fill(theme: &Theme, outgoing: bool) -> Color32 {
    let colors = theme.colors;
    if outgoing {
-      mix(colors.widget_bg, colors.accent, 0.32)
+      BUBBLE_OUT.fill(colors)
    } else {
       colors.widget_bg
    }

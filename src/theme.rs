@@ -719,6 +719,14 @@ impl ThemeColors {
       (fill, ink)
    }
 
+   /// [`Self::widget_bg`] pulled `strength` toward `role` (0 = the widget, 1 = the role).
+   ///
+   /// The recipe a chat bubble, a selected row or a badge wash uses; naming it keeps the
+   /// strength beside the decision instead of inlined at a paint site.
+   pub fn wash(&self, role: Color32, strength: f32) -> Color32 {
+      mix(self.widget_bg, role, strength.clamp(0.0, 1.0))
+   }
+
    /// [`Self::text`] or [`Self::bg`], whichever has more contrast against `fill`.
    ///
    /// The ink rule for every solid chromatic fill: [`Self::text`] is a surface ink and does not
@@ -926,6 +934,85 @@ impl ContrastCheck {
    /// `true` when the pair meets its threshold.
    pub fn passes(&self) -> bool {
       self.ratio >= self.required
+   }
+}
+
+/// A palette role a [`DerivedColor`] mixes from.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColorRole {
+   /// [`ThemeColors::accent`].
+   Accent,
+   /// [`ThemeColors::info`].
+   Info,
+   /// [`ThemeColors::success`].
+   Success,
+   /// [`ThemeColors::warning`].
+   Warning,
+   /// [`ThemeColors::error`].
+   Error,
+   /// [`ThemeColors::highlight`].
+   Highlight,
+   /// [`ThemeColors::hover`].
+   Hover,
+}
+
+impl ColorRole {
+   /// The palette colour this role names.
+   pub fn color(self, colors: ThemeColors) -> Color32 {
+      match self {
+         Self::Accent => colors.accent,
+         Self::Info => colors.info,
+         Self::Success => colors.success,
+         Self::Warning => colors.warning,
+         Self::Error => colors.error,
+         Self::Highlight => colors.highlight,
+         Self::Hover => colors.hover,
+      }
+   }
+}
+
+/// A named application colour derived from a palette role.
+///
+/// [`Self::fill`] is [`ThemeColors::widget_bg`] pulled `strength` toward the role — the
+/// Telegram demo's outgoing bubble was `mix(widget_bg, accent, 0.32)` inline. Naming it keeps
+/// the decision and its strength together, lets several widgets share one wash, and gives the
+/// contrast audit a label: [`Self::check`] is a [`ContrastCheck`] named after the colour, ready
+/// for [`ThemeColors::audit_with`].
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DerivedColor {
+   /// Stable name, used as the contrast-check label.
+   pub name: &'static str,
+   /// Palette role the fill is mixed toward.
+   pub role: ColorRole,
+   /// Share of the role in the fill, `0.0..=1.0`.
+   pub strength: f32,
+}
+
+impl DerivedColor {
+   /// An application colour with a name, a role and a wash strength.
+   pub const fn new(name: &'static str, role: ColorRole, strength: f32) -> Self {
+      Self {
+         name,
+         role,
+         strength,
+      }
+   }
+
+   /// [`ThemeColors::widget_bg`] pulled `strength` toward the role.
+   pub fn fill(self, colors: ThemeColors) -> Color32 {
+      colors.wash(self.role.color(colors), self.strength)
+   }
+
+   /// Readable ink on [`Self::fill`].
+   pub fn ink(self, colors: ThemeColors) -> Color32 {
+      colors.ink_on(self.fill(colors))
+   }
+
+   /// Contrast pair named after this colour, for [`ThemeColors::audit_with`].
+   pub fn check(self, colors: ThemeColors) -> ContrastCheck {
+      ContrastCheck::text(self.name, self.ink(colors), self.fill(colors))
    }
 }
 
@@ -1166,6 +1253,32 @@ mod tests {
       assert_eq!(
          raised.color, overlay.color,
          "the palette keeps the shadow colour"
+      );
+   }
+
+   #[test]
+   fn a_derived_colour_washes_widget_bg() {
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      let bubble = DerivedColor::new("bubble out", ColorRole::Accent, 0.32);
+
+      assert_eq!(
+         bubble.fill(colors),
+         mix(colors.widget_bg, colors.accent, 0.32)
+      );
+      assert_eq!(
+         DerivedColor::new("plain", ColorRole::Accent, 0.0).fill(colors),
+         colors.widget_bg
+      );
+      assert_eq!(
+         DerivedColor::new("full", ColorRole::Accent, 1.0).fill(colors),
+         colors.accent
+      );
+
+      let check = bubble.check(colors);
+      assert_eq!(check.label, "bubble out");
+      assert!(
+         check.passes(),
+         "ink on the wash must read: {check:?}"
       );
    }
 }
