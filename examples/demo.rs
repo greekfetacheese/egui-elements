@@ -23,7 +23,13 @@ fn main() -> eframe::Result {
       viewport: ViewportBuilder::default()
          .with_title("egui-elements demo")
          .with_inner_size([1180.0, 820.0])
-         .with_resizable(true),
+         .with_resizable(true)
+         // The Linux QR scanner is a fullscreen transparent overlay that shows the
+         // desktop through itself. eframe's glow backend builds one GL config for
+         // the whole process from this flag, so without it the overlay is an opaque
+         // 24-bit window and the scanner only ever sees itself. Panels paint every
+         // pixel, so an ARGB root window looks unchanged.
+         .with_transparent(true),
       ..Default::default()
    };
 
@@ -250,6 +256,14 @@ impl DemoApp {
 }
 
 impl eframe::App for DemoApp {
+   /// eframe clears every viewport with a 71 %-alpha dark grey by default, and
+   /// the Linux QR overlay is part of the screenshot: that film is baked into
+   /// what the scanner decodes. The panels paint their own opaque background, so
+   /// a transparent clear only reaches the overlay.
+   fn clear_color(&self, _visuals: &Visuals) -> [f32; 4] {
+      [0.0, 0.0, 0.0, 0.0]
+   }
+
    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
       Panel::top("header")
          .frame(

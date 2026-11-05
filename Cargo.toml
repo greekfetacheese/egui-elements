@@ -14,29 +14,43 @@ repository = "https://github.com/greekfetacheese/egui-elements"
 egui = { version = "0.37", default-features = false }
 
 serde = { version = "1", optional = true, features = ["derive"] }
-secure-types = {version = "0.5", optional = true}
+secure-types = { version = "0.5", optional = true }
 
 xcap = { version = "0.9", optional = true }
 enigo = { version = "0.6", optional = true }
 rqrr-zeroize = { version = "0.10", optional = true }
 
-qrcodegen-no-heap = {version = "1", optional = true}
-image = {version = "0.25", optional = true, default-features = false, features = ["png"]}
-egui-elegance = {version = "0.17", optional = true}
+qrcodegen-no-heap = { version = "1", optional = true }
+image = { version = "0.25", optional = true, default-features = false, features = [
+    "png",
+] }
+egui-elegance = { version = "0.17", optional = true }
 egui-lucide = { version = "0.2", optional = true }
 
 
 [features]
 serde = ["dep:serde", "egui/serde"]
 lucide = ["dep:egui-lucide"]
-qr-scanner = ["dep:secure-types", "dep:xcap", "dep:enigo", "dep:rqrr-zeroize", "lucide"]
+qr-scanner = [
+    "dep:secure-types",
+    "dep:xcap",
+    "dep:enigo",
+    "dep:rqrr-zeroize",
+    "lucide",
+]
 secure-types = ["dep:secure-types", "lucide"]
 qr-image = ["dep:qrcodegen-no-heap", "dep:image"]
 elegance = ["dep:egui-elegance"]
 full = ["serde", "qr-scanner", "secure-types", "qr-image", "elegance", "lucide"]
 
 [dev-dependencies]
-eframe = "0.37"
+eframe = { version = "0.37", default-features = false, features = [
+    "glow",
+    "default_fonts",
+    "wayland",
+    "x11",
+    "clipboard",
+] }
 rfd = "0.17"
 egui_extras = { version = "0.37", features = ["image", "svg"] }
 egui = { version = "0.37", features = ["default_fonts"] }

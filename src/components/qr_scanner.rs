@@ -193,6 +193,28 @@ mod win32 {
 /// Prefer X11 on Linux. Windows does **not** keep a screenshot temp file the
 /// way Wayland does. The pixels still live in process memory until wiped.
 ///
+/// # Host transparency (Linux)
+///
+/// The overlay paints nothing inside the capture box: the code is visible
+/// because the *desktop* shows through the window underneath it. A transparent
+/// overlay is a process-wide setting the component cannot make for itself.
+///
+/// - **Give the root viewport `with_transparent(true)`.** eframe's `glow`
+///   backend builds a single GL config for the whole process from the *root*
+///   viewport's transparency flag and reuses it for every window, so an opaque
+///   root hands this overlay a depth-24 window in which alpha is ignored — it
+///   goes opaque near-black and the scanner captures itself instead of the
+///   screen. `wgpu` creates one surface per window and is unaffected. Set
+///   `ViewportBuilder::default().with_transparent(true)` in `NativeOptions`;
+///   an app whose panels paint every pixel looks the same.
+/// - **Override `App::clear_color` to `[0.0, 0.0, 0.0, 0.0]`.** eframe clears
+///   *every* viewport — this overlay included — with a translucent dark grey by
+///   default (71 % alpha), and the dimming lands in the captured pixels.
+///
+/// A compositor is required for the ARGB window to composite at all. Symptoms of
+/// a missing setup: a black screen with only the red box and this text, and
+/// "No QR code found" on every capture.
+///
 /// # Usage:
 ///
 /// ```no_run
