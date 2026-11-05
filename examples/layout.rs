@@ -118,7 +118,7 @@ fn heading(ui: &mut Ui, theme: &Theme, text: &str) {
    ui.label(RichText::new(text).size(theme.typography.normal).color(theme.colors.text));
 }
 
-/// A. The `demo2` comparison: `ui.horizontal` seeds the row's height from
+/// A. `ui.horizontal` vs a flex row: the former seeds the row's height from
 /// egui's guess, so the taller button is not centred against the label. The
 /// flex row measures both items first.
 fn section_centering(ui: &mut Ui, theme: &Theme) {

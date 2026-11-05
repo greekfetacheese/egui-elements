@@ -295,7 +295,7 @@ ways, with no host-side count to keep in sync.
 
 ### Label next to a button
 
-The `demo2` case: the row is as tall as the button, and the label is centred on it.
+A row holding a label and a button: the row is as tall as the button, and the label is centred on it.
 
 ```rust
 use egui_elements::layout::{CrossAlign, Flex, Item};
