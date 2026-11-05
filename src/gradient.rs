@@ -27,6 +27,12 @@ const FEATHER: f32 = 1.0;
 /// little headroom instead of aiming at [`CONTRAST_AA_TEXT`] exactly.
 const CLAMP_CONTRAST: f32 = CONTRAST_AA_TEXT + 0.05;
 
+/// Default depth of a themed gradient fill: a soft sheen, not a ramp.
+///
+/// It is the share of the way to white / black a [`Gradient::bevel`] may travel before contrast
+/// clamps it further.
+pub const DEFAULT_GRADIENT_STRENGTH: f32 = 0.1;
+
 /// Samples [`Gradient::min_contrast`] measures along a ramp.
 const CONTRAST_SAMPLES: usize = 16;
 
@@ -309,6 +315,17 @@ impl Fill {
          Self::Solid(base)
       } else {
          Self::Gradient(gradient)
+      }
+   }
+
+   /// A bevel of this fill's solid colour, or the fill unchanged when it is already a gradient.
+   ///
+   /// This is how the theme paints a solid token as a gradient: an explicit
+   /// [`Fill::Gradient`] outranks the variant.
+   pub fn graded(self, ink: Color32, strength: f32) -> Fill {
+      match self {
+         Self::Solid(color) => Self::bevel(color, ink, strength),
+         gradient => gradient,
       }
    }
 

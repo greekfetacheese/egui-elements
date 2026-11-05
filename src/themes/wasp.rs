@@ -1,7 +1,9 @@
 //! Wasp (dark). Source: <https://github.com/santiyounger/Wasp-Obsidian-Theme>.
 
-use crate::gradient::Fill;
-use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeSpacing, ThemeVisuals, Typography};
+use crate::gradient::{DEFAULT_GRADIENT_STRENGTH, Fill};
+use crate::theme::{
+   Theme, ThemeColors, ThemeKind, ThemeSpacing, ThemeVariant, ThemeVisuals, Typography,
+};
 use crate::visuals::*;
 use egui::{
    Color32, CornerRadius, Frame, Margin, Shadow, Spacing, Stroke, Style, Visuals,
@@ -64,6 +66,8 @@ pub fn theme() -> Theme {
       dark: true,
       image_tint_recommended: true,
       kind: ThemeKind::Wasp,
+      variant: ThemeVariant::Solid,
+      gradient_strength: DEFAULT_GRADIENT_STRENGTH,
       colors: colors(),
       typography: typography(),
       spacing: ThemeSpacing::default(),

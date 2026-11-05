@@ -21,7 +21,7 @@ use egui::{
 };
 
 use crate::gradient::Fill;
-use crate::theme::{Theme, ThemeColors, ThemeKind};
+use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeVariant};
 use crate::utils::{self, Hsla};
 use crate::visuals::*;
 use crate::widgets::{Button as ElementsButton, Checkbox, Switch, Window};
@@ -334,6 +334,26 @@ impl ThemeEditor {
 
          CollapsingHeader::new("Contrast Audit").default_open(true).show(ui, |ui| {
             Self::contrast_audit(&colors, ui);
+         });
+
+         CollapsingHeader::new("Fill").default_open(true).show(ui, |ui| {
+            ui.horizontal(|ui| {
+               ui.label("Variant");
+
+               for variant in ThemeVariant::to_vec() {
+                  let picked = ui
+                     .selectable_label(theme.variant == variant, variant.to_str())
+                     .clicked();
+
+                  if picked {
+                     theme.set_variant(variant);
+                  }
+               }
+            });
+
+            if theme.variant == ThemeVariant::Gradient {
+               ui.add(Slider::new(&mut theme.gradient_strength, 0.0..=1.0).text("Bevel depth"));
+            }
          });
 
          CollapsingHeader::new("Theme Frames").show(ui, |ui| {

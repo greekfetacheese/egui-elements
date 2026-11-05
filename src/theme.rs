@@ -7,6 +7,7 @@
 //! Built-in palettes live in [`crate::themes`]. Slot roles are documented
 //! in the crate `docs/theme.md`.
 
+use crate::gradient::DEFAULT_GRADIENT_STRENGTH;
 use crate::themes::{
    mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, tokyo_night_light, wasp, wasp_light,
 };
@@ -121,6 +122,36 @@ impl ThemeKind {
    }
 }
 
+/// How the themed fills are painted.
+///
+/// Fill slots store a solid palette colour; the variant decides whether a widget paints that
+/// colour flat or as a soft two-stop gradient of it. Switching variant is one field, not a new
+/// visuals set: every widget reads the graded fill as it paints.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ThemeVariant {
+   /// Every fill is the palette's flat colour.
+   #[default]
+   Solid,
+   /// Every fill is a bevel of that colour, clamped so the label ink keeps AA contrast.
+   Gradient,
+}
+
+impl ThemeVariant {
+   /// Human-readable name, for the editor's selector.
+   pub fn to_str(&self) -> &str {
+      match self {
+         ThemeVariant::Solid => "Solid",
+         ThemeVariant::Gradient => "Gradient",
+      }
+   }
+
+   /// Both variants, in selector order.
+   pub fn to_vec() -> Vec<Self> {
+      vec![Self::Solid, Self::Gradient]
+   }
+}
+
 /// Complete look: colors, typography, frames, and widget visuals.
 ///
 /// `Theme` is `Clone`. [`Theme::install`] takes `&mut self` (the elegance
@@ -148,6 +179,18 @@ pub struct Theme {
 
    /// Which built-in palette this theme was constructed from.
    pub kind: ThemeKind,
+
+   /// How the themed fills are painted: the flat palette colour, or a gradient of it.
+   #[cfg_attr(feature = "serde", serde(default))]
+   pub variant: ThemeVariant,
+
+   /// Depth of a gradient fill: the share of the way to white / black a ramp may travel.
+   ///
+   /// Each end is clamped further by contrast, so a tight palette gets a subtler ramp instead of
+   /// an unreadable one. Ignored while [`Self::variant`] is [`ThemeVariant::Solid`].
+   #[cfg_attr(feature = "serde", serde(default = "gradient_strength"))]
+   pub gradient_strength: f32,
+
    /// Semantic color slots.
    pub colors: ThemeColors,
    /// Per-widget chrome (button, label, combo, text edit, frames).
@@ -194,6 +237,8 @@ impl PartialEq for Theme {
    fn eq(&self, other: &Self) -> bool {
       self.dark == other.dark
          && self.kind == other.kind
+         && self.variant == other.variant
+         && self.gradient_strength == other.gradient_strength
          && self.colors == other.colors
          && self.typography == other.typography
          && self.spacing == other.spacing
@@ -205,6 +250,11 @@ impl PartialEq for Theme {
 }
 
 impl Eq for Theme {}
+
+/// Serde default for [`Theme::gradient_strength`], so a theme saved before gradients loads flat.
+fn gradient_strength() -> f32 {
+   DEFAULT_GRADIENT_STRENGTH
+}
 
 impl Theme {
    /// Construct a built-in theme.
@@ -244,6 +294,20 @@ impl Theme {
    /// not the palette.
    pub fn rename(&mut self, name: impl Into<String>) {
       self.kind = ThemeKind::Custom(name.into());
+   }
+
+   /// This theme with its fills painted as `variant`.
+   pub fn with_variant(mut self, variant: ThemeVariant) -> Self {
+      self.variant = variant;
+      self
+   }
+
+   /// Switch how every themed fill is painted.
+   ///
+   /// The fills are stored solid and graded as they are read, so the next frame is enough — there
+   /// is nothing to rebuild, and the editor keeps editing the same colours.
+   pub fn set_variant(&mut self, variant: ThemeVariant) {
+      self.variant = variant;
    }
 
    /// Stock [`egui::Style`] for this kind (widgets, selection, window fill).
@@ -341,14 +405,28 @@ impl Theme {
       }
    }
 
-   /// Frame 1 visuals from [`ThemeVisuals`].
+   /// Frame 1 visuals from [`ThemeVisuals`], graded when [`Self::variant`] is
+   /// [`ThemeVariant::Gradient`].
    pub fn frame1_visuals(&self) -> FrameVisuals {
-      self.visuals.frame1_visuals
+      let visuals = self.visuals.frame1_visuals;
+      let ink = self.colors.text;
+
+      match self.variant {
+         ThemeVariant::Solid => visuals,
+         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength),
+      }
    }
 
-   /// Frame 2 visuals from [`ThemeVisuals`].
+   /// Frame 2 visuals from [`ThemeVisuals`], graded when [`Self::variant`] is
+   /// [`ThemeVariant::Gradient`].
    pub fn frame2_visuals(&self) -> FrameVisuals {
-      self.visuals.frame2_visuals
+      let visuals = self.visuals.frame2_visuals;
+      let ink = self.colors.text;
+
+      match self.variant {
+         ThemeVariant::Solid => visuals,
+         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength),
+      }
    }
 
    /// The frame for a [`Surface`].
@@ -369,8 +447,8 @@ impl Theme {
    /// Hover/click visuals when a surface is interactive.
    pub fn surface_visuals(&self, surface: Surface) -> Option<FrameVisuals> {
       match surface {
-         Surface::Panel => Some(self.visuals.frame1_visuals),
-         Surface::Well => Some(self.visuals.frame2_visuals),
+         Surface::Panel => Some(self.frame1_visuals()),
+         Surface::Well => Some(self.frame2_visuals()),
          Surface::Canvas | Surface::Overlay => None,
       }
    }
@@ -420,24 +498,49 @@ impl Theme {
       }
    }
 
-   /// Button visuals from [`ThemeVisuals`].
+   /// Button visuals, graded when [`Self::variant`] is [`ThemeVariant::Gradient`].
+   ///
+   /// The fills are stored solid on [`ThemeVisuals`]; this is where the variant turns them into
+   /// ramps, clamped against the label's own ink.
    pub fn button_visuals(&self) -> ButtonVisuals {
-      self.visuals.button_visuals
+      let visuals = self.visuals.button_visuals;
+
+      match self.variant {
+         ThemeVariant::Solid => visuals,
+         ThemeVariant::Gradient => visuals.graded(visuals.text, self.gradient_strength),
+      }
    }
 
-   /// Label visuals from [`ThemeVisuals`] (same shape as button visuals).
+   /// Label visuals (same shape as button visuals), graded the same way.
    pub fn label_visuals(&self) -> LabelVisuals {
-      self.visuals.label_visuals
+      let visuals = self.visuals.label_visuals;
+
+      match self.variant {
+         ThemeVariant::Solid => visuals,
+         ThemeVariant::Gradient => visuals.graded(visuals.text, self.gradient_strength),
+      }
    }
 
-   /// Combo-box visuals from [`ThemeVisuals`].
+   /// Combo-box visuals, graded against [`ThemeColors::text`] (the combo carries no ink slot of
+   /// its own).
    pub fn combo_box_visuals(&self) -> ComboBoxVisuals {
-      self.visuals.combo_box_visuals
+      let visuals = self.visuals.combo_box_visuals;
+      let ink = self.colors.text;
+
+      match self.variant {
+         ThemeVariant::Solid => visuals,
+         ThemeVariant::Gradient => visuals.graded(ink, self.gradient_strength),
+      }
    }
 
-   /// Text-edit visuals from [`ThemeVisuals`].
+   /// Text-edit visuals, graded against the typed-text colour.
    pub fn text_edit_visuals(&self) -> TextEditVisuals {
-      self.visuals.text_edit_visuals
+      let visuals = self.visuals.text_edit_visuals;
+
+      match self.variant {
+         ThemeVariant::Solid => visuals,
+         ThemeVariant::Gradient => visuals.graded(visuals.text, self.gradient_strength),
+      }
    }
 
    fn storage_id() -> Id {
@@ -1206,6 +1309,94 @@ pub struct Typography {
 #[cfg(test)]
 mod tests {
    use super::*;
+   use crate::gradient::Fill;
+
+   /// Every themed fill the variant grades, with the ink it carries.
+   fn graded_fills(theme: &Theme) -> Vec<(&'static str, Fill, Color32)> {
+      let button = theme.button_visuals();
+      let label = theme.label_visuals();
+      let combo = theme.combo_box_visuals();
+      let edit = theme.text_edit_visuals();
+      let frame1 = theme.frame1_visuals();
+      let frame2 = theme.frame2_visuals();
+      let frames_ink = theme.colors.text;
+
+      vec![
+         ("button bg", button.bg, button.text),
+         ("button hover", button.bg_hover, button.text),
+         ("button click", button.bg_click, button.text),
+         ("button selected", button.bg_selected, button.text),
+         ("label hover", label.bg_hover, label.text),
+         ("label selected", label.bg_selected, label.text),
+         ("combo bg", combo.bg, frames_ink),
+         ("combo hover", combo.bg_hover, frames_ink),
+         ("combo open", combo.bg_open, frames_ink),
+         ("text edit bg", edit.bg, edit.text),
+         ("frame1 bg", frame1.bg, frames_ink),
+         ("frame1 hover", frame1.bg_hover, frames_ink),
+         ("frame2 bg", frame2.bg, frames_ink),
+         ("frame2 hover", frame2.bg_hover, frames_ink),
+      ]
+   }
+
+   #[test]
+   fn gradient_fills_keep_their_ink_readable_on_every_builtin_theme() {
+      for kind in ThemeKind::to_vec() {
+         let name = kind.to_str().to_owned();
+         let theme = Theme::new(kind).with_variant(ThemeVariant::Gradient);
+
+         for (slot, fill, ink) in graded_fills(&theme) {
+            let worst = fill.min_contrast(ink);
+
+            assert!(
+               worst >= CONTRAST_AA_TEXT,
+               "{name}: {slot} fell to {worst:.2}:1 on {fill:?}"
+            );
+         }
+      }
+   }
+
+   #[test]
+   fn the_gradient_variant_ramps_the_fills_it_can() {
+      let theme = Theme::new(ThemeKind::TokyoNight).with_variant(ThemeVariant::Gradient);
+      let button = theme.button_visuals();
+
+      assert!(
+         matches!(button.bg, Fill::Gradient(gradient) if !gradient.is_flat()),
+         "the idle fill must be a ramp: {:?}",
+         button.bg
+      );
+   }
+
+   #[test]
+   fn the_solid_variant_leaves_the_palette_fills_flat() {
+      let theme = Theme::new(ThemeKind::TokyoNight);
+      let button = theme.button_visuals();
+
+      assert_eq!(button.bg, theme.visuals.button_visuals.bg);
+      assert_eq!(button.bg, Fill::solid(theme.colors.widget_bg));
+   }
+
+   #[test]
+   fn switching_variant_returns_the_same_stored_fill() {
+      let mut theme = Theme::new(ThemeKind::Wasp);
+      let solid = theme.button_visuals();
+
+      theme.set_variant(ThemeVariant::Gradient);
+      let _graded = theme.button_visuals();
+
+      theme.set_variant(ThemeVariant::Solid);
+      assert_eq!(theme.button_visuals(), solid);
+   }
+
+   #[test]
+   fn a_tight_fill_stays_flat_under_the_gradient_variant() {
+      let colors = Theme::new(ThemeKind::TokyoNight).colors;
+      let tight = colors.text;
+
+      // Text on its own colour has no headroom at all, so the bevel must collapse to a solid.
+      assert_eq!(Fill::bevel(tight, tight, 0.5), Fill::Solid(tight));
+   }
 
    #[test]
    fn tinted_ink_is_readable_on_every_builtin_theme() {

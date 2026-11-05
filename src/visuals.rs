@@ -58,6 +58,21 @@ impl PartialEq for ButtonVisuals {
 impl Eq for ButtonVisuals {}
 
 impl ButtonVisuals {
+   /// This set painted as gradients of its own fills.
+   ///
+   /// `ink` is the label colour: every ramp is clamped so this text keeps
+   /// [`CONTRAST_AA_TEXT`](crate::utils::CONTRAST_AA_TEXT). A fill that is already a gradient
+   /// is left alone — an explicit gradient outranks the theme's variant.
+   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+      Self {
+         bg: self.bg.graded(ink, strength),
+         bg_hover: self.bg_hover.graded(ink, strength),
+         bg_click: self.bg_click.graded(ink, strength),
+         bg_selected: self.bg_selected.graded(ink, strength),
+         ..self
+      }
+   }
+
    /// Fill for the current interaction state (click > hover > idle).
    pub fn bg_from_res(&self, res: &Response) -> Fill {
       if res.is_pointer_button_down_on() || res.has_focus() || res.clicked() {
@@ -145,6 +160,16 @@ impl TextEditVisuals {
    }
 }
 
+impl TextEditVisuals {
+   /// This set painted as a gradient of its field fill — see [`ButtonVisuals::graded`].
+   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+      Self {
+         bg: self.bg.graded(ink, strength),
+         ..self
+      }
+   }
+}
+
 /// Visuals for a ComboBox
 #[derive(Copy, Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -219,6 +244,20 @@ impl ComboBoxVisuals {
    }
 }
 
+impl ComboBoxVisuals {
+   /// This set painted as gradients of its own fills — see [`ButtonVisuals::graded`].
+   ///
+   /// The popup surface stays flat: an `egui::Frame` paints the menu.
+   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+      Self {
+         bg: self.bg.graded(ink, strength),
+         bg_hover: self.bg_hover.graded(ink, strength),
+         bg_open: self.bg_open.graded(ink, strength),
+         ..self
+      }
+   }
+}
+
 /// Visuals for Frame
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Default)]
@@ -273,6 +312,21 @@ impl FrameVisuals {
    }
 
    /// Shadow + fill + inside stroke on an already allocated widget rect.
+   /// This set painted as gradients of its own fills.
+   ///
+   /// `ink` is the label colour: every ramp is clamped so this text keeps
+   /// [`CONTRAST_AA_TEXT`](crate::utils::CONTRAST_AA_TEXT). A fill that is already a gradient
+   /// is left alone — an explicit gradient outranks the theme's variant.
+   pub fn graded(self, ink: Color32, strength: f32) -> Self {
+      Self {
+         bg: self.bg.graded(ink, strength),
+         bg_hover: self.bg_hover.graded(ink, strength),
+         bg_click: self.bg_click.graded(ink, strength),
+         bg_selected: self.bg_selected.graded(ink, strength),
+         ..self
+      }
+   }
+
    pub fn paint_at(&self, painter: &Painter, rect: Rect, fill: Fill, stroke: Stroke) {
       painter.add(paint_shape(
          rect,
