@@ -222,6 +222,16 @@ impl Frame {
       self
    }
 
+   /// Shrink-wrap to the content width; same as `fill_width(false)`.
+   ///
+   /// The default for a bare [`Frame`], but `.surface(..)` and hand-built frames may have
+   /// stretched, and `fit()` reads better than a boolean at the call site.
+   #[inline]
+   pub fn fit(mut self) -> Self {
+      self.fill_width = false;
+      self
+   }
+
    #[inline]
    pub fn multiply_with_opacity(mut self, opacity: f32) -> Self {
       self.visuals.bg = self.visuals.bg.gamma_multiply(opacity);
@@ -422,5 +432,11 @@ mod tests {
       // Case: visuals_without_override_keeps_theme_radius
       let frame = Frame::new().visuals(theme_visuals());
       assert_eq!(frame.visuals.corner_radius, CornerRadius::same(6));
+   }
+
+   #[test]
+   fn fit_shrinks_a_stretched_frame() {
+      let frame = Frame::new().fill_width(true).fit();
+      assert!(!frame.fill_width);
    }
 }

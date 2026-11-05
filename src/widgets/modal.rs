@@ -47,6 +47,7 @@ pub struct Modal<'a> {
    content_order: Order,
    open: &'a mut bool,
    max_width: Option<f32>,
+   width: Option<f32>,
    closable: bool,
    close_on_backdrop: bool,
    close_on_escape: bool,
@@ -80,6 +81,7 @@ impl<'a> std::fmt::Debug for Modal<'a> {
          .field("content_order", &self.content_order)
          .field("open", &*self.open)
          .field("max_width", &self.max_width)
+         .field("width", &self.width)
          .field("closable", &self.closable)
          .field("close_on_backdrop", &self.close_on_backdrop)
          .field("close_on_escape", &self.close_on_escape)
@@ -150,6 +152,7 @@ impl<'a> Modal<'a> {
          content_order: Order::Foreground,
          open,
          max_width: None,
+         width: None,
          closable: true,
          close_on_backdrop: true,
          close_on_escape: true,
@@ -217,6 +220,15 @@ impl<'a> Modal<'a> {
    /// to its contents and stays centered. Default: no cap.
    pub fn max_width(mut self, max_width: f32) -> Self {
       self.max_width = Some(max_width);
+      self
+   }
+
+   /// Exact card width in points.
+   ///
+   /// The card fills this width and stays centered; it is clamped to the screen minus 32
+   /// points. Takes precedence over [`Self::max_width`]. Default: shrink-wrap to the content.
+   pub fn width(mut self, width: f32) -> Self {
+      self.width = Some(width);
       self
    }
 
@@ -344,7 +356,9 @@ impl<'a> Modal<'a> {
       let window_id = Id::unique("elegance_modal_window").with(self.id_salt);
       let measure_key = window_id.with("egui_elements_modal_measure");
       let mut measure: ModalMeasure = ctx.data(|d| d.get_temp(measure_key)).unwrap_or_default();
-      let measuring = self.max_width.is_none() && measure.passes < SHRINK_WRAP_MEASURE_PASSES;
+      let measuring = self.max_width.is_none()
+         && self.width.is_none()
+         && measure.passes < SHRINK_WRAP_MEASURE_PASSES;
       let measure_width = if measure.passes == 0 {
          0.0
       } else {
@@ -387,7 +401,11 @@ impl<'a> Modal<'a> {
       // backdrop is gated on this same flag so the dim overlay cannot appear
       // a frame before the dialog does.
       // `max_width(Some(_))` callers keep the single-pass behaviour.
-      area = match self.max_width {
+      let fixed_width = self
+         .width
+         .or(self.max_width)
+         .map(|width| width.min(ctx.content_rect().width() - 32.0));
+      area = match fixed_width {
          Some(w) => area.default_width(w),
          None if measuring => area.default_width(measure_width).sizing_pass(true),
          None => area.default_width(0.0),
@@ -758,5 +776,26 @@ mod tests {
          dx < 8.0 && dy < 8.0,
          "card should be centered with max_width, dx={dx}, dy={dy}, card={card:?}, screen={screen:?}"
       );
+   }
+
+   #[test]
+   fn modal_takes_an_exact_width() {
+      let mut width = 0.0;
+      run_until_painted(|ctx| {
+         let mut open = true;
+         Modal::new("modal_exact_width", &mut open)
+            .heading("Title")
+            .width(520.0)
+            .show(ctx, |ui| {
+               ui.label("short body");
+            });
+
+         let card: Rect = ctx
+            .data(|d| d.get_temp(Id::unique("egui_elements_test_card_rect")))
+            .expect("card rect");
+         width = card.width();
+      });
+
+      assert!((width - 520.0).abs() <= 2.0, "card width {width}");
    }
 }
