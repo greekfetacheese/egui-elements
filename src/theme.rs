@@ -7,7 +7,7 @@
 //! Built-in palettes live in [`crate::themes`]. Slot roles are documented
 //! in the crate `docs/theme.md`.
 
-use crate::gradient::{DEFAULT_GRADIENT_STRENGTH, GradientDir};
+use crate::gradient::GradientDir;
 use crate::themes::{
    mclaren_650gts_gt3, reverie, shade_sanctuary, tokyo_night, tokyo_night_light, wasp, wasp_light,
 };
@@ -19,6 +19,9 @@ use egui::{
    style::{Selection, WidgetVisuals, Widgets},
    vec2,
 };
+
+#[cfg(feature = "serde")]
+use crate::gradient::DEFAULT_GRADIENT_STRENGTH;
 
 #[cfg(feature = "elegance")]
 use elegance::{Palette, Theme as EleganceTheme, Typography as EleganceTypography};
@@ -260,6 +263,7 @@ impl PartialEq for Theme {
 impl Eq for Theme {}
 
 /// Serde default for [`Theme::gradient_strength`], so a theme saved before gradients loads flat.
+#[cfg(feature = "serde")]
 fn gradient_strength() -> f32 {
    DEFAULT_GRADIENT_STRENGTH
 }
