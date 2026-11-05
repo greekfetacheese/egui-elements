@@ -131,7 +131,7 @@ impl<'a> Popover<'a> {
       self
    }
 
-   /// Override the card frame. Default: [`Theme::surface_frame(Surface::Overlay)`].
+   /// Override the card frame. Default: [`Theme::surface_frame`] for [`Surface::Overlay`].
    pub fn frame(mut self, frame: Frame) -> Self {
       self.frame = Some(frame);
       self

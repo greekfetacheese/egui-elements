@@ -79,8 +79,8 @@ impl BadgePulse {
 
    /// `(scale, alpha)` at loop progress `p`, ready to paint.
    ///
-   /// The alpha holds at [`BadgePulse::alpha`] until [`HOLD`] and eases to zero over the rest, which is
-   /// what the capture's flat band measures.
+   /// The alpha holds at [`BadgePulse::alpha`] for the first 62 % of the loop and eases to zero
+   /// over the rest, which is what the capture's flat band measures.
    pub fn frame(&self, p: f32) -> (f32, f32) {
       let p = p.rem_euclid(1.0);
       let scale = 1.0 + (self.scale.max(1.0) - 1.0) * self.easing.apply(p);
