@@ -3,22 +3,27 @@
 //! [`ThemeEditor::show`] mutates `theme` in place and only returns `Some`
 //! when the inner switcher picks a new [`crate::theme::ThemeKind`]. Always
 //! call [`crate::theme::Theme::install`] after `show`, not only on `Some`.
+//!
+//! The editor can rename a theme (detaching a built-in as a
+//! [`crate::theme::ThemeKind::Custom`]), preview it live, reset it to its
+//! built-in palette, and — when the host wires [`ThemeEditor::set_io`] —
+//! save it to or load it from disk.
+
+use std::sync::Arc;
 
 use egui::{
    Align, Align2, Button, CollapsingHeader, Color32, ComboBox, CornerRadius, DragValue, FontId,
-   Frame, Layout, Margin, Order, Popup, PopupCloseBehavior, Rect, Response, RichText, ScrollArea,
-   Sense, SetOpenCommand, Shadow, Slider, Stroke, StrokeKind, TextEdit, Ui, Vec2,
+   Frame, Key, Layout, Margin, Order, Popup, PopupCloseBehavior, Rect, Response, RichText,
+   ScrollArea, Sense, SetOpenCommand, Shadow, Slider, Stroke, StrokeKind, TextEdit, Ui, Vec2,
    color_picker::{Alpha, color_edit_button_srgba},
    ecolor::HexColor,
    vec2,
 };
 
-use crate::theme::{Theme, ThemeColors};
+use crate::theme::{Theme, ThemeColors, ThemeKind};
 use crate::utils::{self, Hsla};
 use crate::visuals::*;
-use crate::widgets::Window;
-
-const DARK: Color32 = Color32::from_rgba_premultiplied(22, 22, 30, 255);
+use crate::widgets::{Button as ElementsButton, Checkbox, Switch, Window};
 
 /// Identify which state of the widget we should edit
 #[derive(Clone, PartialEq)]
@@ -163,6 +168,16 @@ impl WidgetState {
    }
 }
 
+/// Host-wired persistence hooks behind the editor's Save / Load buttons.
+///
+/// `save` returns the status line to show (`None` when the user cancelled);
+/// `load` returns `Some(theme)` when a theme was picked.
+#[derive(Clone)]
+struct ThemeIo {
+   save: Arc<dyn Fn(&Theme) -> Result<Option<String>, String>>,
+   load: Arc<dyn Fn() -> Result<Option<Theme>, String>>,
+}
+
 /// In-app editor for a [`Theme`].
 ///
 /// Toggle [`ThemeEditor::open`], then call [`ThemeEditor::show`] every
@@ -178,35 +193,91 @@ pub struct ThemeEditor {
    /// Currently selected named slot in the palette list.
    pub color: Color,
    /// Editor window background.
+   ///
+   /// [`Color32::TRANSPARENT`] (the default) follows the theme's
+   /// [`Theme::window_frame`] fill, so switching to a light theme keeps the
+   /// editor readable. Set a colour to pin an override.
    pub bg_color: Color32,
    /// Minimum `(width, height)` of the editor contents.
    pub size: (f32, f32),
+   /// Name field bound to [`Theme::rename`].
+   name: String,
+   /// Kind the name field was last synced from.
+   name_kind: Option<ThemeKind>,
+   /// Snapshot for the Revert button (taken when the editor opens).
+   baseline: Option<Theme>,
+   /// Host hooks behind the Save / Load buttons.
+   io: Option<ThemeIo>,
+   /// Last save/load result and whether it was an error.
+   io_status: Option<(String, bool)>,
+   /// Preview: checkbox state.
+   preview_check: bool,
+   /// Preview: switch state.
+   preview_switch: bool,
+   /// Preview: text-edit contents.
+   preview_text: String,
+}
+
+impl Default for ThemeEditor {
+   fn default() -> Self {
+      Self::new()
+   }
 }
 
 impl ThemeEditor {
-   /// Closed editor with default size and Tokyo-Night-ish preview bg.
+   /// Closed editor with default size and a theme-following background.
    pub fn new() -> Self {
       Self {
          open: false,
          widget_state: WidgetState::NonInteractive,
          hsla_edit_button: HslaEditButton::new(),
          color: Color::Bg(Color32::TRANSPARENT),
-         bg_color: DARK,
+         bg_color: Color32::TRANSPARENT,
          size: (300.0, 300.0),
+         name: String::new(),
+         name_kind: None,
+         baseline: None,
+         io: None,
+         io_status: None,
+         preview_check: true,
+         preview_switch: true,
+         preview_text: String::from("Preview text"),
       }
+   }
+
+   /// Wire the Save / Load buttons to the host's file dialogs.
+   ///
+   /// The crate stays free of dialog and serializer dependencies: the demo
+   /// wires these to `rfd` + `serde_json`, and any app can do the same.
+   /// `save` gets the live theme and returns the status line to show (`None`
+   /// when the user cancelled); `load` returns the theme the user picked.
+   pub fn set_io(
+      &mut self,
+      save: impl Fn(&Theme) -> Result<Option<String>, String> + 'static,
+      load: impl Fn() -> Result<Option<Theme>, String> + 'static,
+   ) {
+      self.io = Some(ThemeIo {
+         save: Arc::new(save),
+         load: Arc::new(load),
+      });
    }
 
    /// Show the theme editor in a window
    ///
-   /// Returns the new theme if we change it
+   /// Returns the new theme when the inner switcher picks a built-in. Edits,
+   /// renames, resets, reverts and loads mutate `theme` in place.
    pub fn show(&mut self, theme: &mut Theme, ui: &mut Ui) -> Option<Theme> {
       if !self.open {
          return None;
       }
+      if self.baseline.is_none() {
+         self.baseline = Some(theme.clone());
+      }
 
       let mut open = self.open;
       let mut new_theme = None;
-      let frame = Frame::window(ui.style()).fill(self.bg_color);
+      let fill = editor_window_fill(theme, self.bg_color);
+      let frame = theme.window_frame.fill(fill);
       let title_frame = frame.stroke(Stroke::NONE);
 
       Window::new("Theme Editor")
@@ -220,6 +291,7 @@ impl ThemeEditor {
             ui.spacing_mut().button_padding = theme.button_padding;
 
             new_theme = utils::theme_switcher(theme, ui);
+            self.file_bar(theme, ui);
 
             ui.add_space(20.0);
 
@@ -230,6 +302,18 @@ impl ThemeEditor {
             });
          });
       self.open = open;
+
+      if !self.open {
+         self.baseline = None;
+      }
+
+      if let Some(switched) = &new_theme {
+         *theme = switched.clone();
+         self.baseline = Some(switched.clone());
+         self.name_kind = None;
+         self.io_status = None;
+      }
+
       new_theme
    }
 
@@ -238,6 +322,14 @@ impl ThemeEditor {
       ui.vertical_centered(|ui| {
          ui.spacing_mut().item_spacing.y = 10.0;
          let colors = theme.colors.clone();
+
+         CollapsingHeader::new("Theme").default_open(true).show(ui, |ui| {
+            self.identity_section(theme, ui);
+         });
+
+         CollapsingHeader::new("Preview").default_open(true).show(ui, |ui| {
+            self.preview(theme, ui);
+         });
 
          CollapsingHeader::new("Contrast Audit").default_open(true).show(ui, |ui| {
             Self::contrast_audit(&colors, ui);
@@ -332,39 +424,39 @@ impl ThemeEditor {
 
          CollapsingHeader::new("Typography").show(ui, |ui| {
             ui.label("Very Small");
-            ui.add(Slider::new(&mut theme.typography.very_small, 0.0..=100.0).text("Size"));
+            ui.add(Slider::new(&mut theme.typography.very_small, 4.0..=96.0).text("Size"));
 
             ui.label("Small");
-            ui.add(Slider::new(&mut theme.typography.small, 0.0..=100.0).text("Size"));
+            ui.add(Slider::new(&mut theme.typography.small, 4.0..=96.0).text("Size"));
 
             ui.label("Normal");
-            ui.add(Slider::new(&mut theme.typography.normal, 0.0..=100.0).text("Size"));
+            ui.add(Slider::new(&mut theme.typography.normal, 4.0..=96.0).text("Size"));
 
             ui.label("Large");
-            ui.add(Slider::new(&mut theme.typography.large, 0.0..=100.0).text("Size"));
+            ui.add(Slider::new(&mut theme.typography.large, 4.0..=96.0).text("Size"));
 
             ui.label("Very Large");
-            ui.add(Slider::new(&mut theme.typography.very_large, 0.0..=100.0).text("Size"));
+            ui.add(Slider::new(&mut theme.typography.very_large, 4.0..=96.0).text("Size"));
 
             ui.label("Heading");
-            ui.add(Slider::new(&mut theme.typography.heading, 0.0..=100.0).text("Size"));
+            ui.add(Slider::new(&mut theme.typography.heading, 4.0..=96.0).text("Size"));
          });
 
          CollapsingHeader::new("Spacing").show(ui, |ui| {
             ui.label("XS — tight meta / icon+label");
-            ui.add(Slider::new(&mut theme.spacing.xs, 0.0..=48.0).text("px"));
+            ui.add(Slider::new(&mut theme.spacing.xs, 0.0..=64.0).text("px"));
 
             ui.label("SM — dense lists");
-            ui.add(Slider::new(&mut theme.spacing.sm, 0.0..=48.0).text("px"));
+            ui.add(Slider::new(&mut theme.spacing.sm, 0.0..=64.0).text("px"));
 
             ui.label("MD — item spacing / related group");
-            ui.add(Slider::new(&mut theme.spacing.md, 0.0..=48.0).text("px"));
+            ui.add(Slider::new(&mut theme.spacing.md, 0.0..=64.0).text("px"));
 
             ui.label("LG — section padding");
-            ui.add(Slider::new(&mut theme.spacing.lg, 0.0..=48.0).text("px"));
+            ui.add(Slider::new(&mut theme.spacing.lg, 0.0..=64.0).text("px"));
 
             ui.label("XL — between groups");
-            ui.add(Slider::new(&mut theme.spacing.xl, 0.0..=48.0).text("px"));
+            ui.add(Slider::new(&mut theme.spacing.xl, 0.0..=64.0).text("px"));
          });
 
          /*
@@ -500,8 +592,168 @@ impl ThemeEditor {
          });
           */
 
+         CollapsingHeader::new("Layout & Chrome").show(ui, |ui| {
+            ui.checkbox(&mut theme.dark, "Dark theme");
+            ui.checkbox(&mut theme.image_tint_recommended, "Tint images");
+
+            ui.label("Corner radius");
+            ui.add(Slider::new(&mut theme.corner_radius, 0..=255).text("px"));
+
+            ui.label("Inner margin");
+            ui.add(Slider::new(&mut theme.inner_margin, 0..=127).text("px"));
+
+            ui.label("Outer margin");
+            ui.add(Slider::new(&mut theme.outer_margin, 0..=127).text("px"));
+
+            ui.label("Button padding");
+            ui.add(Slider::new(&mut theme.button_padding.x, 0.0..=40.0).text("X"));
+            ui.add(Slider::new(&mut theme.button_padding.y, 0.0..=40.0).text("Y"));
+
+            ui.label(
+               RichText::new(
+                  "Dark theme and tint are read by custom themes; built-in palettes keep their own egui style.",
+               )
+               .size(11.0)
+               .color(theme.colors.text_muted),
+            );
+         });
+
          CollapsingHeader::new("Tessellation").show(ui, |ui| {
             self.tesellation_settings(theme, ui);
+         });
+      });
+   }
+
+   /// Name, reset and revert controls.
+   fn identity_section(&mut self, theme: &mut Theme, ui: &mut Ui) {
+      if self.name_kind.as_ref() != Some(&theme.kind) {
+         self.name = theme.kind.to_str().to_owned();
+         self.name_kind = Some(theme.kind.clone());
+      }
+
+      ui.horizontal(|ui| {
+         ui.label("Name");
+         let response = ui.add(TextEdit::singleline(&mut self.name).desired_width(150.0));
+         let entered = response.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter));
+         let clicked = ui.add(ElementsButton::new("Rename").small()).clicked();
+
+         if (clicked || entered) && apply_theme_name(theme, &self.name) {
+            self.name_kind = Some(theme.kind.clone());
+         }
+      });
+
+      ui.label(
+         RichText::new("Renaming a built-in detaches it as a custom theme.")
+            .size(11.0)
+            .color(theme.colors.text_muted),
+      );
+
+      ui.horizontal(|ui| {
+         let is_builtin = !matches!(&theme.kind, ThemeKind::Custom(_));
+         let reset = ui.add_enabled(is_builtin, ElementsButton::new("Reset").small());
+         let reset_hovered = reset.hovered();
+
+         if reset.clicked() {
+            let kind = theme.kind.clone();
+            if let Some(fresh) = Theme::try_new(kind) {
+               *theme = fresh;
+               self.name_kind = None;
+               self.io_status = Some((
+                  String::from("Reset to the built-in palette"),
+                  false,
+               ));
+            }
+         }
+
+         if reset_hovered && !is_builtin {
+            reset.on_hover_text("A custom theme has no built-in palette to reset to");
+         }
+
+         let baseline = self.baseline.clone();
+         if ui
+            .add_enabled(
+               baseline.is_some(),
+               ElementsButton::new("Revert").small(),
+            )
+            .clicked()
+         {
+            if let Some(snapshot) = baseline {
+               *theme = snapshot;
+               self.name_kind = None;
+               self.io_status = None;
+            }
+         }
+      });
+
+      if let Some((message, is_error)) = &self.io_status {
+         let color = if *is_error {
+            theme.colors.error
+         } else {
+            theme.colors.text_muted
+         };
+         ui.label(RichText::new(message).size(11.0).color(color));
+      }
+   }
+
+   /// Save / Load row, shown only when the host wired [`ThemeEditor::set_io`].
+   fn file_bar(&mut self, theme: &mut Theme, ui: &mut Ui) {
+      let Some(io) = self.io.clone() else {
+         return;
+      };
+
+      ui.horizontal(|ui| {
+         if ui.add(ElementsButton::new("Save theme…").small()).clicked() {
+            match (io.save)(theme) {
+               Ok(Some(status)) => self.io_status = Some((status, false)),
+               Ok(None) => self.io_status = None,
+               Err(error) => self.io_status = Some((format!("Save failed: {error}"), true)),
+            }
+         }
+
+         if ui.add(ElementsButton::new("Load theme…").small()).clicked() {
+            match (io.load)() {
+               Ok(Some(loaded)) => {
+                  *theme = loaded;
+                  self.name_kind = None;
+                  self.baseline = Some(theme.clone());
+                  self.io_status = Some((String::from("Theme loaded"), false));
+               }
+               Ok(None) => self.io_status = None,
+               Err(error) => self.io_status = Some((format!("Load failed: {error}"), true)),
+            }
+         }
+      });
+   }
+
+   /// Live sample of the theme's widgets and frames.
+   fn preview(&mut self, theme: &Theme, ui: &mut Ui) {
+      ui.horizontal_wrapped(|ui| {
+         ui.add(ElementsButton::new("Button"));
+         ui.add(ElementsButton::new("Selected").selected(true));
+         ui.add(ElementsButton::new("Small").small());
+         ui.add_enabled(false, ElementsButton::new("Disabled"));
+      });
+
+      ui.horizontal(|ui| {
+         ui.add(Checkbox::new(&mut self.preview_check, "Checkbox"));
+         ui.add(Switch::new(&mut self.preview_switch, "Switch"));
+      });
+
+      ui.add(TextEdit::singleline(&mut self.preview_text).desired_width(180.0));
+
+      let typography = &theme.typography;
+      ui.label(RichText::new("Heading").size(typography.heading).color(theme.colors.text));
+      ui.label(RichText::new("Body copy").size(typography.normal).color(theme.colors.text));
+      ui.label(
+         RichText::new("Muted hint")
+            .size(typography.small)
+            .color(theme.colors.text_muted),
+      );
+
+      theme.frame1.show(ui, |ui| {
+         ui.label(RichText::new("frame1").size(typography.small).color(theme.colors.text));
+         theme.frame2.show(ui, |ui| {
+            ui.label(RichText::new("frame2").size(typography.small).color(theme.colors.text));
          });
       });
    }
@@ -1445,4 +1697,108 @@ fn alpha_slider(ui: &mut Ui, hsla: &mut Hsla) -> bool {
       StrokeKind::Inside,
    );
    changed
+}
+
+/// Fill for the editor window.
+///
+/// [`Color32::TRANSPARENT`] follows the theme's [`Theme::window_frame`], so a
+/// light theme gets a light editor window; anything else is a host override.
+fn editor_window_fill(theme: &Theme, override_fill: Color32) -> Color32 {
+   if override_fill == Color32::TRANSPARENT {
+      theme.window_frame.fill
+   } else {
+      override_fill
+   }
+}
+
+/// Apply the name field: detach a built-in as custom, or rename a custom theme.
+///
+/// Empty names are rejected. Returns `true` when the kind changed.
+fn apply_theme_name(theme: &mut Theme, name: &str) -> bool {
+   let name = name.trim();
+   if name.is_empty() {
+      return false;
+   }
+   if matches!(&theme.kind, ThemeKind::Custom(_)) && theme.kind.to_str() == name {
+      return false;
+   }
+
+   theme.rename(name);
+   true
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+
+   #[test]
+   fn the_editor_window_follows_the_theme_fill() {
+      let theme = Theme::new(ThemeKind::TokyoNightLight);
+      assert_eq!(
+         editor_window_fill(&theme, Color32::TRANSPARENT),
+         theme.window_frame.fill
+      );
+      assert_eq!(
+         editor_window_fill(&theme, Color32::BLACK),
+         Color32::BLACK
+      );
+   }
+
+   #[test]
+   fn renaming_detaches_a_builtin_and_rejects_empty_names() {
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+
+      assert!(!apply_theme_name(&mut theme, "   "));
+      assert_eq!(theme.kind, ThemeKind::TokyoNight);
+
+      assert!(apply_theme_name(&mut theme, " Sunset "));
+      assert_eq!(
+         theme.kind,
+         ThemeKind::Custom(String::from("Sunset"))
+      );
+      assert!(!apply_theme_name(&mut theme, "Sunset"));
+
+      assert!(apply_theme_name(&mut theme, "Dusk"));
+      assert_eq!(
+         theme.kind,
+         ThemeKind::Custom(String::from("Dusk"))
+      );
+   }
+
+   #[test]
+   fn renaming_a_builtin_to_its_own_name_still_detaches_it() {
+      let mut theme = Theme::new(ThemeKind::Wasp);
+      assert!(apply_theme_name(&mut theme, "Wasp"));
+      assert_eq!(
+         theme.kind,
+         ThemeKind::Custom(String::from("Wasp"))
+      );
+   }
+
+   #[test]
+   fn the_editor_renders_on_a_light_theme_without_panicking() {
+      use egui::{Context, Pos2, RawInput};
+
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNightLight);
+      theme.install(&ctx);
+
+      let mut editor = ThemeEditor::new();
+      editor.open = true;
+
+      let input = RawInput {
+         screen_rect: Some(Rect::from_min_size(
+            Pos2::ZERO,
+            vec2(640.0, 640.0),
+         )),
+         ..Default::default()
+      };
+      let mut output = ctx.run_ui(input, |ui| {
+         editor.show(&mut theme, ui);
+      });
+      output.textures_delta.clear();
+
+      assert!(editor.open);
+      assert_eq!(theme.kind, ThemeKind::TokyoNightLight);
+   }
 }

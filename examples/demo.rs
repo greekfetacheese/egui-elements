@@ -145,9 +145,42 @@ impl DemoApp {
       let mut secure_field = SecureInputField::new("Secret", true, true);
       secure_field.set_min_size(vec2(280.0, 20.0));
 
+      let mut editor = ThemeEditor::new();
+      editor.set_io(
+         |theme| {
+            let Some(path) = rfd::FileDialog::new()
+               .add_filter("egui-elements theme", &["json"])
+               .set_file_name(format!(
+                  "{}.json",
+                  theme.kind.to_str().replace(' ', "-").to_lowercase()
+               ))
+               .save_file()
+            else {
+               return Ok(None);
+            };
+
+            let json = serde_json::to_string_pretty(theme).map_err(|error| error.to_string())?;
+            std::fs::write(&path, json).map_err(|error| error.to_string())?;
+
+            Ok(Some(format!("Saved {}", path.display())))
+         },
+         || {
+            let Some(path) =
+               rfd::FileDialog::new().add_filter("egui-elements theme", &["json"]).pick_file()
+            else {
+               return Ok(None);
+            };
+
+            let json = std::fs::read_to_string(&path).map_err(|error| error.to_string())?;
+            let theme: Theme = serde_json::from_str(&json).map_err(|error| error.to_string())?;
+
+            Ok(Some(theme))
+         },
+      );
+
       Self {
          theme,
-         editor: ThemeEditor::new(),
+         editor,
          window_open: false,
          modal_open: false,
          confirm_password: true,

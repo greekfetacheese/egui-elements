@@ -244,6 +244,13 @@ only an identity — `Theme::new` cannot rebuild it from the name (it falls back
 to Tokyo Night; `Theme::try_new` returns `None`), and `Theme::style` derives
 the stock egui visuals from the theme's own slots and frames.
 
+The [`ThemeEditor`](../src/editor.rs) does this in-app: the name field calls
+`Theme::rename` (renaming a built-in detaches it as custom), Reset rebuilds the
+built-in palette, Revert returns to the snapshot taken when the editor opened,
+and the live preview shows buttons, toggles, type and frames. Save / Load
+appear when the host wires `ThemeEditor::set_io` to its own dialog and
+serializer (`rfd` + `serde_json` in `examples/demo.rs`).
+
 Do not run `cargo fmt` on the crate. Format only files you touch; match local indent.
 
 ---
