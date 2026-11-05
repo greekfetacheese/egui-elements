@@ -185,6 +185,9 @@ theme.install(ctx);
 The editor's **Fill** section flips the same field and shows the bevel depth slider. Panels,
 windows, popups and the modal card stay flat: an `egui::Frame` paints them and it takes one colour.
 
+The variant paints `TopDown`; `cargo run --example gradient` shows all four `GradientDir` axes on the
+same widget set, each built with `Fill::Gradient(..with_dir(..))`.
+
 Full contract — the mesh, the clamp, and what stays solid — in [`docs/gradient.md`](docs/gradient.md).
 
 ### Chips

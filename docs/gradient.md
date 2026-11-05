@@ -109,6 +109,20 @@ The ink each fill is clamped against: `ButtonVisuals::text`, `TextEditVisuals::t
 A fill that is **already a gradient** passes through untouched: an explicit gradient outranks the
 variant.
 
+The variant always paints `TopDown`; a host that wants another axis builds it from the same stored
+solids. `cargo run --example gradient` puts the four directions side by side — each card is
+`theme.visuals.button_visuals` (and the label / text-edit pair) with the bevel re-aimed through
+`Gradient::with_dir`, which is the whole recipe:
+
+```rust
+fn bevel(fill: Fill, ink: Color32, dir: GradientDir, strength: f32) -> Fill {
+   match fill.graded(ink, strength) {
+      Fill::Gradient(gradient) => Fill::Gradient(gradient.with_dir(dir)),
+      solid => solid,
+   }
+}
+```
+
 ## What stays flat
 
 `egui::Frame`-painted surfaces take one colour, so they stay solid by design: panels
