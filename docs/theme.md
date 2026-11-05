@@ -237,6 +237,13 @@ WCAG 2.x relative luminance, sRGB.
    - Semantic fills with **`bg` text**, idle
    - Nested `frame1` / `frame2`
 
+Steps 1–3 are for built-in palettes. A runtime theme needs none of them:
+customize (or deserialize) a [`Theme`](../src/theme.rs), retag it with
+`Theme::rename("Name")`, and persist the whole theme. `ThemeKind::Custom` is
+only an identity — `Theme::new` cannot rebuild it from the name (it falls back
+to Tokyo Night; `Theme::try_new` returns `None`), and `Theme::style` derives
+the stock egui visuals from the theme's own slots and frames.
+
 Do not run `cargo fmt` on the crate. Format only files you touch; match local indent.
 
 ---

@@ -12,7 +12,12 @@ use crate::themes::{
 };
 use crate::utils::*;
 use crate::visuals::*;
-use egui::{Color32, Context, Frame, Id, Margin, Shadow, Style, Vec2, vec2};
+use egui::{
+   Color32, Context, CornerRadius, Frame, Id, Margin, Shadow, Spacing, Stroke, Style, Vec2,
+   Visuals,
+   style::{Selection, WidgetVisuals, Widgets},
+   vec2,
+};
 
 #[cfg(feature = "elegance")]
 use elegance::{Palette, Theme as EleganceTheme, Typography as EleganceTypography};
@@ -78,6 +83,13 @@ pub enum ThemeKind {
    Wasp,
    /// Based on <https://github.com/santiyounger/Wasp-Obsidian-Theme> (light)
    WaspLight,
+   /// A theme defined at runtime, identified by name.
+   ///
+   /// The name is only an identity: the definition is the [`Theme`] it is
+   /// serialized with. A `Custom` kind cannot be rebuilt by name, so
+   /// [`Theme::new`] falls back to Tokyo Night and [`Theme::try_new`]
+   /// returns `None`.
+   Custom(String),
 }
 
 impl ThemeKind {
@@ -91,6 +103,7 @@ impl ThemeKind {
          ThemeKind::ShadeSanctuary => "Shade Sanctuary",
          ThemeKind::Wasp => "Wasp",
          ThemeKind::WaspLight => "Wasp Light",
+         ThemeKind::Custom(name) => name,
       }
    }
 
@@ -195,7 +208,21 @@ impl Eq for Theme {}
 
 impl Theme {
    /// Construct a built-in theme.
+   ///
+   /// A [`ThemeKind::Custom`] carries only a name, never a palette, so this
+   /// falls back to [`ThemeKind::TokyoNight`]. Use [`Theme::try_new`] when
+   /// the caller must know that nothing could be rebuilt.
    pub fn new(kind: ThemeKind) -> Self {
+      Self::try_new(kind).unwrap_or_else(tokyo_night::theme)
+   }
+
+   /// Like [`Theme::new`], but `None` for [`ThemeKind::Custom`].
+   ///
+   /// A custom theme's definition is the serialized [`Theme`] itself: load it
+   /// with `serde_json::from_str::<Theme>`, or rebuild a built-in with
+   /// [`Theme::new`] and tag it with [`Theme::rename`]. The kind that comes
+   /// back from either path keeps the name across saves.
+   pub fn try_new(kind: ThemeKind) -> Option<Self> {
       let theme = match kind {
          ThemeKind::TokyoNight => tokyo_night::theme(),
          ThemeKind::TokyoNightLight => tokyo_night_light::theme(),
@@ -204,14 +231,27 @@ impl Theme {
          ThemeKind::ShadeSanctuary => shade_sanctuary::theme(),
          ThemeKind::Wasp => wasp::theme(),
          ThemeKind::WaspLight => wasp_light::theme(),
+         ThemeKind::Custom(_) => return None,
       };
 
-      theme
+      Some(theme)
+   }
+
+   /// Re-tag this theme as a runtime-defined [`ThemeKind::Custom`].
+   ///
+   /// Only the name changes; colors, typography, spacing, frames and visuals
+   /// are left untouched. Persist the whole theme: the kind records the name,
+   /// not the palette.
+   pub fn rename(&mut self, name: impl Into<String>) {
+      self.kind = ThemeKind::Custom(name.into());
    }
 
    /// Stock [`egui::Style`] for this kind (widgets, selection, window fill).
+   ///
+   /// A built-in kind returns its palette module's hand-tuned style; a
+   /// [`ThemeKind::Custom`] derives one from its own slots and frames.
    pub fn style(&self) -> Style {
-      match self.kind {
+      match &self.kind {
          ThemeKind::TokyoNight => tokyo_night::style(),
          ThemeKind::TokyoNightLight => tokyo_night_light::style(),
          ThemeKind::McLaren650Gts => mclaren_650gts_gt3::style(),
@@ -219,6 +259,85 @@ impl Theme {
          ThemeKind::ShadeSanctuary => shade_sanctuary::style(),
          ThemeKind::Wasp => wasp::style(),
          ThemeKind::WaspLight => wasp_light::style(),
+         ThemeKind::Custom(_) => self.custom_style(),
+      }
+   }
+
+   /// Stock [`egui::Style`] derived from this theme's own slots and frames.
+   ///
+   /// [`ThemeKind::Custom`] has no palette module to ask, so the stock egui
+   /// visuals are rebuilt from `colors`, `dark`, `corner_radius` and the
+   /// stored frames. Built-in kinds keep their hand-tuned [`Theme::style`].
+   fn custom_style(&self) -> Style {
+      let colors = &self.colors;
+      let radius = CornerRadius::same(self.corner_radius);
+      let base = WidgetVisuals {
+         bg_fill: colors.widget_bg,
+         weak_bg_fill: colors.bg,
+         bg_stroke: Stroke::new(1.0, colors.border),
+         corner_radius: radius,
+         fg_stroke: Stroke::new(1.0, colors.text),
+         expansion: 0.0,
+      };
+
+      // Stock sliders and switches read the inactive fill; without the
+      // highlight slot they disappear into the canvas.
+      let mut inactive = base.clone();
+      inactive.bg_fill = colors.highlight;
+
+      let widgets = Widgets {
+         noninteractive: base.clone(),
+         inactive,
+         hovered: WidgetVisuals {
+            bg_fill: colors.widget_bg,
+            weak_bg_fill: colors.hover,
+            bg_stroke: Stroke::new(1.0, colors.hover),
+            ..base.clone()
+         },
+         active: WidgetVisuals {
+            bg_fill: colors.widget_bg,
+            weak_bg_fill: colors.widget_bg,
+            bg_stroke: Stroke::new(1.0, colors.border),
+            ..base.clone()
+         },
+         open: WidgetVisuals {
+            bg_fill: colors.widget_bg,
+            weak_bg_fill: colors.widget_bg,
+            bg_stroke: Stroke::new(1.0, colors.border),
+            ..base
+         },
+      };
+
+      let visuals = Visuals {
+         dark_mode: self.dark,
+         override_text_color: Some(colors.text),
+         widgets,
+         selection: Selection {
+            bg_fill: colors.highlight,
+            stroke: Stroke::new(1.0, colors.accent),
+         },
+         hyperlink_color: colors.info,
+         faint_bg_color: colors.bg,
+         extreme_bg_color: colors.widget_bg,
+         code_bg_color: colors.bg,
+         warn_fg_color: colors.warning,
+         error_fg_color: colors.error,
+         window_corner_radius: radius,
+         window_shadow: self.window_frame.shadow,
+         window_fill: self.window_frame.fill,
+         window_stroke: self.window_frame.stroke,
+         panel_fill: colors.bg,
+         ..Default::default()
+      };
+
+      Style {
+         visuals,
+         animation_time: 0.3,
+         spacing: Spacing {
+            window_margin: Margin::same(self.inner_margin),
+            ..Default::default()
+         },
+         ..Default::default()
       }
    }
 
@@ -1280,5 +1399,73 @@ mod tests {
          check.passes(),
          "ink on the wash must read: {check:?}"
       );
+   }
+
+   #[test]
+   fn a_custom_kind_names_itself_and_has_no_palette() {
+      let kind = ThemeKind::Custom("Sunset".into());
+      assert_eq!(kind.to_str(), "Sunset");
+
+      assert!(
+         Theme::try_new(kind.clone()).is_none(),
+         "a name alone cannot rebuild a theme"
+      );
+      assert_eq!(
+         Theme::new(kind).kind,
+         ThemeKind::TokyoNight,
+         "Theme::new falls back to Tokyo Night"
+      );
+   }
+
+   #[test]
+   fn a_custom_theme_derives_its_own_stock_style() {
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.colors.accent = Color32::from_rgb(12, 34, 56);
+      theme.rename("Sunset");
+
+      let style = theme.style();
+      assert_eq!(style.visuals.panel_fill, theme.colors.bg);
+      assert_eq!(
+         style.visuals.selection.bg_fill,
+         theme.colors.highlight
+      );
+      assert_eq!(style.visuals.dark_mode, theme.dark);
+      assert_eq!(
+         style.visuals.widgets.noninteractive.bg_stroke.color,
+         theme.colors.border
+      );
+      assert_eq!(
+         style.visuals.widgets.inactive.bg_fill,
+         theme.colors.highlight
+      );
+   }
+
+   #[cfg(feature = "serde")]
+   #[test]
+   fn a_custom_kind_round_trips_through_json() -> Result<(), serde_json::Error> {
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.colors.accent = Color32::from_rgb(9, 8, 7);
+      theme.rename("Sunset");
+
+      let json = serde_json::to_string(&theme)?;
+      let restored: Theme = serde_json::from_str(&json)?;
+
+      assert_eq!(restored.kind, ThemeKind::Custom("Sunset".into()));
+      assert_eq!(restored.colors, theme.colors);
+      assert_eq!(
+         restored.style().visuals.panel_fill,
+         restored.colors.bg
+      );
+
+      // Built-in kinds keep their wire format; a custom kind is tagged.
+      assert_eq!(
+         serde_json::from_str::<ThemeKind>("\"Wasp\"")?,
+         ThemeKind::Wasp
+      );
+      assert_eq!(
+         serde_json::from_str::<ThemeKind>(r#"{"Custom":"Sunset"}"#)?,
+         ThemeKind::Custom("Sunset".into())
+      );
+      Ok(())
    }
 }

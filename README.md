@@ -782,6 +782,24 @@ cargo run --example hold_to_confirm
 | `ShadeSanctuary` | [Shade Sanctuary](https://github.com/Elevict/Shade-Sanctuary) |
 | `Wasp` | Dark [Wasp Obsidian theme](https://github.com/santiyounger/Wasp-Obsidian-Theme) |
 | `WaspLight` | Light variant of the same |
+| `Custom(String)` | Runtime-defined: the persisted `Theme` is the definition, the string is its name |
+
+A customized theme keeps its own name instead of pretending to be a built-in.
+Retag it, persist the whole theme, and load it back with its own kind:
+
+```rust
+let mut theme = Theme::new(ThemeKind::TokyoNight);
+theme.colors.accent = egui::Color32::from_rgb(255, 91, 103);
+theme.rename("Sunset");
+
+let json = serde_json::to_string(&theme)?; // "kind":{"Custom":"Sunset"}
+let mut restored: Theme = serde_json::from_str(&json)?;
+restored.install(&ctx);
+```
+
+`ThemeKind::Custom` is an identity only: `Theme::new` cannot rebuild a palette
+from a name (it falls back to Tokyo Night; `Theme::try_new` returns `None`).
+Requires the `serde` feature.
 
 Palette slot roles (`bg` vs `widget_bg`, `hover` vs `highlight`, …) are documented in [`docs/theme.md`](docs/theme.md).
 
