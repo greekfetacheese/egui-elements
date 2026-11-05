@@ -266,7 +266,30 @@ pub fn remap_frame_visuals(
    );
 }
 
+/// Button width and popup floor for the switcher: the longest palette name plus chrome.
+fn switcher_width(ui: &Ui, theme: &Theme) -> (f32, f32) {
+   let font = egui::FontId::proportional(theme.typography.normal);
+   let widest = ThemeKind::to_vec()
+      .iter()
+      .map(|kind| {
+         ui.painter()
+            .layout_no_wrap(
+               kind.to_str().to_owned(),
+               font.clone(),
+               theme.colors.text,
+            )
+            .size()
+            .x
+      })
+      .fold(0.0_f32, f32::max);
+
+   (widest, (widest + 56.0).max(200.0))
+}
+
 /// Show a ComboBox to change the theme
+///
+/// The button and its popup are sized to the longest palette name, so names like
+/// "McLaren 650GTS" and "Shade Sanctuary" are not truncated.
 ///
 /// Returns the new theme if we select one, the new theme is installed to the [egui::Context]
 pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
@@ -274,8 +297,10 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
 
    let text = RichText::new(current_theme.kind.to_str()).size(current_theme.typography.normal);
    let current = Label::new(text, None);
+   let (widest, width) = switcher_width(ui, current_theme);
 
-   ComboBox::new("Theme switcher", current).width(200.0).show_ui(ui, |ui| {
+   ComboBox::new("Theme switcher", current).width(width).show_ui(ui, |ui| {
+      ui.set_min_width(widest);
       ui.spacing_mut().item_spacing.y = 12.0;
 
       for kind in ThemeKind::to_vec() {
@@ -386,5 +411,28 @@ mod tests {
       assert!((contrast_ratio(Color32::BLACK, Color32::WHITE) - 21.0).abs() < 0.01);
       assert!((contrast_ratio(Color32::WHITE, Color32::BLACK) - 21.0).abs() < 0.01);
       assert!((contrast_ratio(Color32::WHITE, Color32::WHITE) - 1.0).abs() < 0.001);
+   }
+
+   #[test]
+   fn the_theme_switcher_fits_its_longest_name() {
+      let ctx = egui::Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+
+      let mut widest = 0.0;
+      let mut width = 0.0;
+      let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+         (widest, width) = switcher_width(ui, &theme);
+      });
+      out.textures_delta.clear();
+
+      assert!(
+         widest > 40.0,
+         "the longest palette name measured {widest}"
+      );
+      assert!(
+         width >= widest + 40.0,
+         "button {width} vs text {widest}"
+      );
    }
 }
