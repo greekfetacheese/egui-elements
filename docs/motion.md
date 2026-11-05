@@ -240,3 +240,21 @@ unconditional `request_repaint` is correct.
 Prove it: `cargo run --example badge` — the second badge in "The reference" loops while the `Loop` badge in
 "Triggers" hops every 2.2 s. A 30 fps capture of that window measures the halo at 1.90 x the diameter holding
 alpha 0.51, and the hop peaking 7.5 px up on a 16 pt badge configured for 8.
+
+---
+
+## 10. A value that is a position
+
+`Tabs` animates a value that is not an opacity: the indicator's **segment index**. One `animate_from`
+returns `0.0..=(n - 1)`, and the strip paints the pill as the `Lerp` between the segments on either side of
+that number. Two consequences worth keeping:
+
+- The leg is *seeded at the selection* (`animate_from(.., selected, selected, motion)`), so a strip that
+  first appears is still and only a move slides. Seeding at `0.0` would fly the pill in from the first
+  segment on every mount.
+- Only two neighbours are ever blended, so the pill **stretches** across the gap while it travels and lands
+  as the exact segment rect. That is the reference segmented control's motion, and it is why a strip does not
+  need a per-segment fade at all.
+
+Prove it: `cargo run --example tabs`, and the `Tabs` tests, which read the painted shapes rather than the
+widget's state — the indicator is the one `Shape::Rect` carrying `highlight` in an `Instant`-free frame.

@@ -11,7 +11,7 @@ use egui_elements::theme::{Theme, ThemeKind};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox,
-   Label, Modal, Radio, SecureTextEdit, Spinner, Switch, Window,
+   Label, Modal, Radio, SecureTextEdit, Spinner, Switch, Tabs, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -118,6 +118,7 @@ struct DemoApp {
    switch_on: bool,
    switch_off: bool,
    radio: u8,
+   tabs: usize,
    slider: f32,
    items: Items,
    text_single: String,
@@ -162,6 +163,7 @@ impl DemoApp {
          switch_on: true,
          switch_off: false,
          radio: 0,
+         tabs: 0,
          slider: 42.0,
          items: Items::default(),
          text_single: String::from("Single-line text"),
@@ -709,6 +711,22 @@ impl DemoApp {
             RichText::new("Off").size(size).color(text_color),
          ));
          ui.add(Switch::without_text(&mut self.switch_off));
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 18.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+         // Every surface carries the strip, so the track and the lift are checked on bg, frame1 and
+         // the window: the id salt keeps their indicators from colliding.
+         Tabs::new(
+            format!("{id_salt}_tabs"),
+            &mut self.tabs,
+            ["All", "Media", "Files"],
+         )
+         .fill_width(false)
+         .show(ui);
       });
 
       ui.add_space(8.0);
