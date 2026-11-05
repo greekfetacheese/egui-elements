@@ -20,6 +20,7 @@ use egui::{
    vec2,
 };
 
+use crate::gradient::Fill;
 use crate::theme::{Theme, ThemeColors, ThemeKind};
 use crate::utils::{self, Hsla};
 use crate::visuals::*;
@@ -867,43 +868,40 @@ impl ThemeEditor {
 
       ui.label("Background Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("2", visuals.bg, &colors, ui);
-         if let Some(color) = color {
-            visuals.bg = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg1", ui, &mut visuals.bg);
+         self.edit_fill("2", "bg1", &colors, &mut visuals.bg, ui);
       });
 
       ui.label("Background Hover Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("3", visuals.bg_hover, &colors, ui);
-         if let Some(color) = color {
-            visuals.bg_hover = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg_hover1", ui, &mut visuals.bg_hover);
+         self.edit_fill(
+            "3",
+            "bg_hover1",
+            &colors,
+            &mut visuals.bg_hover,
+            ui,
+         );
       });
 
       ui.label("Background Click Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("4", visuals.bg_click, &colors, ui);
-         if let Some(color) = color {
-            visuals.bg_click = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg_click1", ui, &mut visuals.bg_click);
+         self.edit_fill(
+            "4",
+            "bg_click1",
+            &colors,
+            &mut visuals.bg_click,
+            ui,
+         );
       });
 
       ui.label("Background Selected");
       ui.horizontal(|ui| {
-         let color = self.color_select("5", visuals.bg_selected, &colors, ui);
-
-         if let Some(color) = color {
-            visuals.bg_selected = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg_selected1", ui, &mut visuals.bg_selected);
+         self.edit_fill(
+            "5",
+            "bg_selected1",
+            &colors,
+            &mut visuals.bg_selected,
+            ui,
+         );
       });
 
       ui.label("Border Color");
@@ -992,32 +990,23 @@ impl ThemeEditor {
    ) {
       ui.label("Background Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("2", visuals.bg, &colors, ui);
-         if let Some(color) = color {
-            visuals.bg = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg1", ui, &mut visuals.bg);
+         self.edit_fill("2", "bg1", &colors, &mut visuals.bg, ui);
       });
 
       ui.label("Background Hover Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("3", visuals.bg_hover, &colors, ui);
-         if let Some(color) = color {
-            visuals.bg_hover = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg_hover1", ui, &mut visuals.bg_hover);
+         self.edit_fill(
+            "3",
+            "bg_hover1",
+            &colors,
+            &mut visuals.bg_hover,
+            ui,
+         );
       });
 
       ui.label("Background Open Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("7", visuals.bg_open, &colors, ui);
-         if let Some(color) = color {
-            visuals.bg_open = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg_open1", ui, &mut visuals.bg_open);
+         self.edit_fill("7", "bg_open1", &colors, &mut visuals.bg_open, ui);
       });
 
       ui.label("Border Color");
@@ -1128,12 +1117,7 @@ impl ThemeEditor {
 
       ui.label("Background Color");
       ui.horizontal(|ui| {
-         let color = self.color_select("2", visuals.bg, &colors, ui);
-         if let Some(color) = color {
-            visuals.bg = color.color32();
-         }
-
-         self.hsla_edit_button.show("bg1", ui, &mut visuals.bg);
+         self.edit_fill("2", "bg1", &colors, &mut visuals.bg, ui);
       });
 
       ui.label("Border Color");
@@ -1313,6 +1297,29 @@ impl ThemeEditor {
                }
             }
          });
+   }
+
+   /// Edit one fill slot: the palette picker plus the HSLA editor for its flat colour.
+   ///
+   /// Themed fills are stored solid (a theme variant paints the ramp), so the editor edits the
+   /// colour; a gradient a host stored is folded to the midpoint of its ramp.
+   fn edit_fill(
+      &mut self,
+      id: &str,
+      picker: &str,
+      colors: &ThemeColors,
+      fill: &mut Fill,
+      ui: &mut Ui,
+   ) {
+      let mut color = fill.to_solid();
+      let picked = self.color_select(id, color, colors, ui);
+
+      if let Some(picked) = picked {
+         color = picked.color32();
+      }
+
+      self.hsla_edit_button.show(picker, ui, &mut color);
+      *fill = Fill::solid(color);
    }
 
    fn color_select(

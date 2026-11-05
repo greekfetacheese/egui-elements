@@ -148,7 +148,7 @@ fn edit(app: &mut TelegramApp, ui: &mut Ui) {
    let height = ui.available_height();
 
    let mut visuals = app.theme.text_edit_visuals();
-   visuals.bg = Color32::TRANSPARENT;
+   visuals.bg = Color32::TRANSPARENT.into();
    visuals.border = Stroke::NONE;
    visuals.border_hover = Stroke::NONE;
    visuals.border_open = Stroke::NONE;

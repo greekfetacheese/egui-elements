@@ -4,6 +4,7 @@ use egui::{
    UiBuilder, UiKind, UiStackInfo, epaint::MarginF32,
 };
 
+use crate::gradient::Fill;
 use crate::motion::{InteractT, Motion};
 use crate::theme::{Surface, Theme};
 use crate::visuals::FrameVisuals;
@@ -13,8 +14,8 @@ use crate::visuals::FrameVisuals;
 /// Same geometry as [`egui::Frame`]:
 /// `content_size + inner_margin + 2 * stroke.width + outer_margin`.
 ///
-/// The difference is that the fill is a plain [`Color32`] and the state colours
-/// live on [`FrameVisuals`] like the other widgets.
+/// The difference is that the fill is a [`Fill`] — a solid colour or a gradient — and the state
+/// colours live on [`FrameVisuals`] like the other widgets.
 ///
 /// Stroke width is taken from the idle border at `begin`. Changing stroke
 /// width on hover after `begin` does not relayout.
@@ -48,10 +49,10 @@ impl Frame {
       inner_margin: Margin::ZERO,
       outer_margin: Margin::ZERO,
       visuals: FrameVisuals {
-         bg: Color32::TRANSPARENT,
-         bg_hover: Color32::TRANSPARENT,
-         bg_click: Color32::TRANSPARENT,
-         bg_selected: Color32::TRANSPARENT,
+         bg: Fill::solid(Color32::TRANSPARENT),
+         bg_hover: Fill::solid(Color32::TRANSPARENT),
+         bg_click: Fill::solid(Color32::TRANSPARENT),
+         bg_selected: Fill::solid(Color32::TRANSPARENT),
          border: Stroke::NONE,
          border_hover: Stroke::NONE,
          border_click: Stroke::NONE,
@@ -77,10 +78,10 @@ impl Frame {
          inner_margin: frame.inner_margin,
          outer_margin: frame.outer_margin,
          visuals: FrameVisuals {
-            bg: fill,
-            bg_hover: fill,
-            bg_click: fill,
-            bg_selected: fill,
+            bg: Fill::solid(fill),
+            bg_hover: Fill::solid(fill),
+            bg_click: Fill::solid(fill),
+            bg_selected: Fill::solid(fill),
             border: frame.stroke,
             border_hover: frame.stroke,
             border_click: frame.stroke,
@@ -130,7 +131,7 @@ impl Frame {
 
    /// Idle fill. Does not change hover / click unless they were still the old idle fill.
    #[inline]
-   pub fn fill(mut self, fill: impl Into<Color32>) -> Self {
+   pub fn fill(mut self, fill: impl Into<Fill>) -> Self {
       let fill = fill.into();
       let old = self.visuals.bg;
       self.visuals.bg = fill;
@@ -279,7 +280,7 @@ impl Frame {
       }
    }
 
-   fn paint_shape(&self, widget_rect: Rect, fill: Color32, stroke: Stroke) -> Shape {
+   fn paint_shape(&self, widget_rect: Rect, fill: Fill, stroke: Stroke) -> Shape {
       crate::visuals::paint_shape(
          widget_rect,
          fill,
@@ -399,18 +400,21 @@ mod tests {
    #[test]
    fn fill_propagates_to_matching_states() {
       let frame = Frame::new().fill(Color32::RED);
-      assert_eq!(frame.visuals.bg, Color32::RED);
-      assert_eq!(frame.visuals.bg_hover, Color32::RED);
-      assert_eq!(frame.visuals.bg_click, Color32::RED);
-      assert_eq!(frame.visuals.bg_selected, Color32::RED);
+      assert_eq!(frame.visuals.bg, Fill::solid(Color32::RED));
+      assert_eq!(frame.visuals.bg_hover, Fill::solid(Color32::RED));
+      assert_eq!(frame.visuals.bg_click, Fill::solid(Color32::RED));
+      assert_eq!(
+         frame.visuals.bg_selected,
+         Fill::solid(Color32::RED)
+      );
    }
 
    fn theme_visuals() -> FrameVisuals {
       FrameVisuals {
-         bg: Color32::RED,
-         bg_hover: Color32::BLUE,
-         bg_click: Color32::RED,
-         bg_selected: Color32::GREEN,
+         bg: Fill::solid(Color32::RED),
+         bg_hover: Fill::solid(Color32::BLUE),
+         bg_click: Fill::solid(Color32::RED),
+         bg_selected: Fill::solid(Color32::GREEN),
          border: Stroke::NONE,
          border_hover: Stroke::NONE,
          border_click: Stroke::NONE,

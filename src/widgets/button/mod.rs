@@ -5,6 +5,7 @@ use egui::{
 };
 
 use crate::glow::{GlowProfile, glow_mesh_with, size_attenuation};
+use crate::gradient::Fill;
 use crate::motion::{InteractT, Motion};
 use crate::particles::Lightning;
 use crate::theme::Theme;
@@ -122,7 +123,7 @@ fn paint_burst(
 pub struct Button<'a> {
    layout: WidgetAtom<'a>,
    visuals: Option<ButtonVisuals>,
-   bg_color: Option<Color32>,
+   bg_color: Option<Fill>,
    badge: Option<Badge>,
    small: bool,
    frame_when_inactive: bool,
@@ -337,8 +338,8 @@ impl<'a> Button<'a> {
 
    /// Set the background color of the button
    #[inline]
-   pub fn bg_color(mut self, color: Color32) -> Self {
-      self.bg_color = Some(color);
+   pub fn bg_color(mut self, fill: impl Into<Fill>) -> Self {
+      self.bg_color = Some(fill.into());
       self
    }
 
@@ -618,9 +619,9 @@ impl<'a> Button<'a> {
             let widgets = &ui.style().visuals.widgets;
             (
                across.blend(
-                  widgets.inactive.weak_bg_fill,
-                  widgets.hovered.weak_bg_fill,
-                  widgets.active.weak_bg_fill,
+                  Fill::solid(widgets.inactive.weak_bg_fill),
+                  Fill::solid(widgets.hovered.weak_bg_fill),
+                  Fill::solid(widgets.active.weak_bg_fill),
                ),
                across.blend(
                   widgets.inactive.bg_stroke,
@@ -634,9 +635,10 @@ impl<'a> Button<'a> {
          // Selection is instant by design: a selected button changes fill in one step.
          let fill = match selected {
             false => fill,
-            true => {
-               visuals.as_ref().map(|v| v.bg_selected).unwrap_or(interact_visuals.weak_bg_fill)
-            }
+            true => visuals
+               .as_ref()
+               .map(|v| v.bg_selected)
+               .unwrap_or(Fill::solid(interact_visuals.weak_bg_fill)),
          };
 
          let text_color = visuals.as_ref().map(|v| v.text).unwrap_or(interact_visuals.text_color());
@@ -661,7 +663,7 @@ impl<'a> Button<'a> {
                      - Vec2::splat(stroke.width),
                )
                .outer_margin(-Vec2::splat(interact_visuals.expansion))
-               .fill(fill)
+               .fill(fill.to_solid())
                .stroke(stroke)
                .corner_radius(corner_radius)
                .shadow(shadow);
@@ -692,7 +694,7 @@ impl<'a> Button<'a> {
                if shadow != Shadow::NONE {
                   ui.painter().add(shadow.as_shape(expanded, corner_radius));
                }
-               ui.painter().add(Shape::rect_filled(expanded, corner_radius, fill));
+               fill.paint_rounded(ui.painter(), expanded, corner_radius);
 
                if sweep_active {
                   // Clip the same full rounded rect to the swept span rather than
@@ -737,6 +739,18 @@ impl<'a> Button<'a> {
                   burst_color,
                );
             }
+         } else if visible_frame && matches!(fill, Fill::Gradient(_)) {
+            // A gradient cannot go through the frame's single-colour fill, so it takes the fill
+            // over the way a hold does — base fill and shadow under the frame, stroke on top.
+            prepared.frame = prepared.frame.fill(Color32::TRANSPARENT).shadow(Shadow::NONE);
+
+            let expanded = prepared.response.rect.expand(interact_visuals.expansion);
+
+            if shadow != Shadow::NONE {
+               ui.painter().add(shadow.as_shape(expanded, corner_radius));
+            }
+
+            fill.paint_rounded(ui.painter(), expanded, corner_radius);
          }
 
          // Repaint only while the hold progresses or a burst animates; a full,

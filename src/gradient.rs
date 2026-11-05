@@ -312,6 +312,14 @@ impl Fill {
       }
    }
 
+   /// The ramp this fill paints; a solid becomes a flat one.
+   pub fn gradient(self) -> Gradient {
+      match self {
+         Self::Solid(color) => Gradient::flat(color),
+         Self::Gradient(gradient) => gradient,
+      }
+   }
+
    /// `true` for a solid fill that paints nothing.
    pub fn is_transparent(self) -> bool {
       matches!(self, Self::Solid(color) if color.a() == 0)

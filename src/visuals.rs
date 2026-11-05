@@ -5,6 +5,7 @@
 //! written by [`Theme::install`](crate::theme::Theme::install) → stock
 //! [`egui::Style`].
 
+use crate::gradient::Fill;
 use crate::theme::ThemeColors;
 use crate::utils::mix;
 use egui::{
@@ -21,14 +22,14 @@ pub type LabelVisuals = ButtonVisuals;
 pub struct ButtonVisuals {
    /// Glyph / label color.
    pub text: Color32,
-   /// Idle fill.
-   pub bg: Color32,
+   /// Idle fill: a solid colour or a gradient.
+   pub bg: Fill,
    /// Fill while hovered.
-   pub bg_hover: Color32,
+   pub bg_hover: Fill,
    /// Fill while the pointer is down.
-   pub bg_click: Color32,
+   pub bg_click: Fill,
    /// Fill when [`crate::widgets::Button::selected`] is set.
-   pub bg_selected: Color32,
+   pub bg_selected: Fill,
    /// Idle border.
    pub border: Stroke,
    /// Border while hovered.
@@ -58,7 +59,7 @@ impl Eq for ButtonVisuals {}
 
 impl ButtonVisuals {
    /// Fill for the current interaction state (click > hover > idle).
-   pub fn bg_from_res(&self, res: &Response) -> Color32 {
+   pub fn bg_from_res(&self, res: &Response) -> Fill {
       if res.is_pointer_button_down_on() || res.has_focus() || res.clicked() {
          self.bg_click
       } else if res.hovered() || res.highlighted() {
@@ -88,10 +89,10 @@ impl ButtonVisuals {
    /// shadow are kept, so start from [`Theme::button_visuals`](crate::theme::Theme::button_visuals).
    pub fn filled(mut self, fill: Color32, colors: ThemeColors) -> Self {
       self.text = colors.ink_on(fill);
-      self.bg = fill;
-      self.bg_hover = mix(fill, colors.bg, 0.16);
-      self.bg_click = mix(fill, colors.bg, 0.28);
-      self.bg_selected = fill;
+      self.bg = Fill::solid(fill);
+      self.bg_hover = Fill::solid(mix(fill, colors.bg, 0.16));
+      self.bg_click = Fill::solid(mix(fill, colors.bg, 0.28));
+      self.bg_selected = Fill::solid(fill);
       self.border = Stroke::NONE;
       self.border_hover = Stroke::NONE;
       self.border_click = Stroke::NONE;
@@ -105,8 +106,8 @@ impl ButtonVisuals {
 pub struct TextEditVisuals {
    /// Typed text color.
    pub text: Color32,
-   /// Field fill.
-   pub bg: Color32,
+   /// Field fill: a solid colour or a gradient.
+   pub bg: Fill,
    /// Idle border.
    pub border: Stroke,
    /// Border while hovered.
@@ -148,16 +149,19 @@ impl TextEditVisuals {
 #[derive(Copy, Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ComboBoxVisuals {
-   /// Idle fill of the closed button.
-   pub bg: Color32,
+   /// Idle fill of the closed button: a solid colour or a gradient.
+   pub bg: Fill,
    /// Disclosure-icon color.
    pub icon: Color32,
    /// Fill while hovered.
-   pub bg_hover: Color32,
+   pub bg_hover: Fill,
    /// Fill while the popup is open.
-   pub bg_open: Color32,
+   pub bg_open: Fill,
    /// Popup surface fill. Distinct from `bg` (which every palette aliases to the page),
    /// so the menu reads as a raised layer even before its shadow lands.
+   ///
+   /// Flat by design: an `egui::Frame` paints the menu, and it takes one colour. Widget fills
+   /// take a [`Fill`].
    #[cfg_attr(feature = "serde", serde(default))]
    pub popup_bg: Color32,
    /// Popup border.
@@ -193,7 +197,7 @@ impl Eq for ComboBoxVisuals {}
 
 impl ComboBoxVisuals {
    /// Fill for the current interaction state (open > hover > idle).
-   pub fn bg_from_res(&self, res: &Response) -> Color32 {
+   pub fn bg_from_res(&self, res: &Response) -> Fill {
       if res.is_pointer_button_down_on() || res.has_focus() || res.clicked() {
          self.bg_open
       } else if res.hovered() || res.highlighted() {
@@ -219,11 +223,11 @@ impl ComboBoxVisuals {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameVisuals {
-   pub bg: Color32,
-   pub bg_hover: Color32,
-   pub bg_click: Color32,
+   pub bg: Fill,
+   pub bg_hover: Fill,
+   pub bg_click: Fill,
    /// Fill when [`crate::widgets::Frame::selected`] is set.
-   pub bg_selected: Color32,
+   pub bg_selected: Fill,
    pub border: Stroke,
    pub border_hover: Stroke,
    pub border_click: Stroke,
@@ -248,7 +252,7 @@ impl PartialEq for FrameVisuals {
 impl Eq for FrameVisuals {}
 
 impl FrameVisuals {
-   pub fn bg_from_res(&self, res: &Response) -> Color32 {
+   pub fn bg_from_res(&self, res: &Response) -> Fill {
       if res.is_pointer_button_down_on() || res.has_focus() || res.clicked() {
          self.bg_click
       } else if res.contains_pointer() || res.hovered() || res.highlighted() {
@@ -269,7 +273,7 @@ impl FrameVisuals {
    }
 
    /// Shadow + fill + inside stroke on an already allocated widget rect.
-   pub fn paint_at(&self, painter: &Painter, rect: Rect, fill: Color32, stroke: Stroke) {
+   pub fn paint_at(&self, painter: &Painter, rect: Rect, fill: Fill, stroke: Stroke) {
       painter.add(paint_shape(
          rect,
          fill,
@@ -282,7 +286,7 @@ impl FrameVisuals {
 
 pub(crate) fn paint_shape(
    rect: Rect,
-   fill: Color32,
+   fill: Fill,
    stroke: Stroke,
    corner_radius: CornerRadius,
    shadow: Shadow,
@@ -291,7 +295,10 @@ pub(crate) fn paint_shape(
       return Shape::Noop;
    }
 
-   let has_fill = fill != Color32::TRANSPARENT;
+   let has_fill = match fill {
+      Fill::Solid(color) => color != Color32::TRANSPARENT,
+      Fill::Gradient(_) => true,
+   };
 
    let has_shadow = shadow != Shadow::NONE && shadow.color != Color32::TRANSPARENT;
    if !has_fill && stroke.is_empty() && !has_shadow {
@@ -304,14 +311,30 @@ pub(crate) fn paint_shape(
       shapes.push(Shape::from(shadow.as_shape(rect, corner_radius)));
    }
 
-   if has_fill || !stroke.is_empty() {
-      shapes.push(Shape::Rect(RectShape::new(
-         rect,
-         corner_radius,
-         fill,
-         stroke,
-         StrokeKind::Inside,
-      )));
+   match fill {
+      Fill::Solid(color) => {
+         if has_fill || !stroke.is_empty() {
+            shapes.push(Shape::Rect(RectShape::new(
+               rect,
+               corner_radius,
+               color,
+               stroke,
+               StrokeKind::Inside,
+            )));
+         }
+      }
+      Fill::Gradient(gradient) => {
+         shapes.push(gradient.shape_rounded(rect, corner_radius));
+
+         if !stroke.is_empty() {
+            shapes.push(Shape::Rect(RectShape::stroke(
+               rect,
+               corner_radius,
+               stroke,
+               StrokeKind::Inside,
+            )));
+         }
+      }
    }
 
    match shapes.len() {
@@ -323,6 +346,7 @@ pub(crate) fn paint_shape(
 
 #[cfg(test)]
 mod tests {
+   use crate::gradient::Fill;
    use crate::theme::{Theme, ThemeKind};
    use crate::utils::CONTRAST_AA_TEXT;
 
@@ -347,14 +371,15 @@ mod tests {
                "{name}: {ratio:.2}:1 on {fill:?}"
             );
             assert_eq!(visuals.text, colors.ink_on(fill));
-            assert_eq!(visuals.bg, fill);
-            assert_eq!(visuals.bg_selected, fill);
+            assert_eq!(visuals.bg, Fill::solid(fill));
+            assert_eq!(visuals.bg_selected, Fill::solid(fill));
             assert!(
                visuals.border.is_empty(),
                "{name}: the fill needs no border"
             );
             assert_ne!(
-               visuals.bg_hover, fill,
+               visuals.bg_hover,
+               Fill::solid(fill),
                "{name}: hover must lift the fill"
             );
          }

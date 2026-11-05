@@ -1,12 +1,13 @@
 use egui::{
    Align, Align2, Color32, CursorIcon, Event, EventFilter, FontId, FontSelection, Galley,
    IMEPurpose, Id, ImeEvent, Key, KeyboardShortcut, Margin, Modifiers, NumExt, Response, Sense,
-   Shape, TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, epaint, output,
+   Shadow, Shape, TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, epaint, output,
    text::{self, LayoutJob},
    text_selection::{self, CCursorRange, text_cursor_state::byte_index_from_char_index},
    vec2,
 };
 
+use crate::gradient::Fill;
 use crate::motion::{InteractT, Lerp, Motion};
 use crate::theme::Theme;
 use crate::visuals::TextEditVisuals;
@@ -169,7 +170,7 @@ pub struct SecureTextEdit<'a> {
    clip_text: bool,
    char_limit: usize,
    return_key: Option<KeyboardShortcut>,
-   background_color: Option<Color32>,
+   background_color: Option<Fill>,
 }
 
 impl<'a> SecureTextEdit<'a> {
@@ -375,8 +376,8 @@ impl<'a> SecureTextEdit<'a> {
    }
 
    /// Override the background fill.
-   pub fn background_color(mut self, color: Color32) -> Self {
-      self.background_color = Some(color);
+   pub fn background_color(mut self, fill: impl Into<Fill>) -> Self {
+      self.background_color = Some(fill.into());
       self
    }
 
@@ -385,8 +386,11 @@ impl<'a> SecureTextEdit<'a> {
       self.visuals = self.visuals.or_else(|| Theme::text_edit_visuals_from_ctx(ui.ctx()));
       let frame = self.frame;
       let where_to_put_background = ui.painter().add(Shape::Noop);
-      let background_color =
-         self.visuals.as_ref().map(|v| v.bg).unwrap_or(ui.visuals().extreme_bg_color);
+      let background_color = self
+         .visuals
+         .as_ref()
+         .map(|v| v.bg)
+         .unwrap_or(Fill::solid(ui.visuals().extreme_bg_color));
       let is_interactive = self.interactive;
 
       let (output, text_edit_visuals) = self.show_content(ui);
@@ -413,22 +417,23 @@ impl<'a> SecureTextEdit<'a> {
                .as_ref()
                .map(|v| v.border.lerp(v.border_open, open))
                .unwrap_or(visuals.bg_stroke);
-            epaint::RectShape::new(
+            crate::visuals::paint_shape(
                frame_rect,
-               corner,
                background_color,
                border,
-               epaint::StrokeKind::Inside,
+               corner,
+               Shadow::NONE,
             )
          } else {
             // Not interactive
             let visuals = &ui.style().visuals.widgets.inactive;
             let border = text_edit_visuals.as_ref().map(|v| v.border).unwrap_or(visuals.bg_stroke);
-            epaint::RectShape::stroke(
+            crate::visuals::paint_shape(
                frame_rect,
-               corner,
+               Fill::solid(egui::Color32::TRANSPARENT),
                border,
-               epaint::StrokeKind::Inside,
+               corner,
+               Shadow::NONE,
             )
          };
          ui.painter().set(where_to_put_background, shape);

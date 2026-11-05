@@ -247,13 +247,9 @@ pub fn remap_frame_visuals(
    old_highlight: Color32,
    new_highlight: Color32,
 ) {
-   remap_if_eq(&mut visuals.bg_hover, old_hover, new_hover);
-   remap_if_eq(&mut visuals.bg_click, old_click, new_click);
-   remap_if_eq(
-      &mut visuals.bg_selected,
-      old_highlight,
-      new_highlight,
-   );
+   visuals.bg_hover.remap_color(old_hover, new_hover);
+   visuals.bg_click.remap_color(old_click, new_click);
+   visuals.bg_selected.remap_color(old_highlight, new_highlight);
    remap_if_eq(
       &mut visuals.border_hover.color,
       old_highlight,
@@ -341,10 +337,10 @@ pub fn frame(
    let res = frame.content_ui.scope(|ui| add_contents(ui));
 
    if res.response.interact(Sense::click()).clicked() {
-      frame.frame = frame.frame.fill(visuals.bg_click);
+      frame.frame = frame.frame.fill(visuals.bg_click.to_solid());
       frame.frame = frame.frame.stroke(visuals.border_click);
    } else if res.response.hovered() {
-      frame.frame = frame.frame.fill(visuals.bg_hover);
+      frame.frame = frame.frame.fill(visuals.bg_hover.to_solid());
       frame.frame = frame.frame.stroke(visuals.border_hover);
    }
 

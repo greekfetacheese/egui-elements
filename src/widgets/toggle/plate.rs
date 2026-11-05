@@ -9,6 +9,7 @@ use egui::{
 
 use super::glyph::{self, dot_shapes, tick_shapes};
 use super::{ToggleShadow, ToggleVisuals};
+use crate::gradient::Fill;
 use crate::motion::{InteractT, Lerp, Motion, animate_from};
 use crate::theme::Theme;
 use crate::visuals::paint_shape;
@@ -174,7 +175,7 @@ impl<'u> Row<'u> {
 
          ui.painter().add(paint_shape(
             box_rect,
-            fill,
+            Fill::solid(fill),
             stroke,
             radius,
             lift.to_shadow(plate.y * scale, shade(visuals.bg_checked), t),

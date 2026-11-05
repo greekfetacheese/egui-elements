@@ -1,5 +1,6 @@
 //! Tokyo Night (dark). Source: <https://github.com/tokyo-night/tokyo-night-vscode-theme>.
 
+use crate::gradient::Fill;
 use crate::theme::{Theme, ThemeColors, ThemeKind, ThemeSpacing, ThemeVisuals, Typography};
 use crate::visuals::*;
 use egui::{
@@ -133,10 +134,10 @@ pub fn frame1(colors: &ThemeColors) -> Frame {
 
 pub fn frame1_visuals(colors: &ThemeColors) -> FrameVisuals {
    FrameVisuals {
-      bg: colors.widget_bg,
-      bg_hover: colors.hover,
-      bg_click: colors.widget_bg,
-      bg_selected: colors.highlight,
+      bg: Fill::solid(colors.widget_bg),
+      bg_hover: Fill::solid(colors.hover),
+      bg_click: Fill::solid(colors.widget_bg),
+      bg_selected: Fill::solid(colors.highlight),
       border: Stroke::NONE,
       border_hover: Stroke::new(0.0, colors.highlight),
       border_click: Stroke::new(0.0, colors.highlight),
@@ -170,10 +171,10 @@ pub fn frame2(colors: &ThemeColors) -> Frame {
 
 pub fn frame2_visuals(colors: &ThemeColors) -> FrameVisuals {
    FrameVisuals {
-      bg: colors.bg,
-      bg_hover: colors.hover,
-      bg_click: colors.bg,
-      bg_selected: colors.highlight,
+      bg: Fill::solid(colors.bg),
+      bg_hover: Fill::solid(colors.hover),
+      bg_click: Fill::solid(colors.bg),
+      bg_selected: Fill::solid(colors.highlight),
       border: Stroke::NONE,
       border_hover: Stroke::new(0.0, colors.highlight),
       border_click: Stroke::new(0.0, colors.highlight),
@@ -190,10 +191,10 @@ pub fn frame2_visuals(colors: &ThemeColors) -> FrameVisuals {
 pub fn button_visuals() -> ButtonVisuals {
    ButtonVisuals {
       text: TEXT,
-      bg: WIDGET_BG,
-      bg_hover: HOVER,
-      bg_click: WIDGET_BG,
-      bg_selected: HIGHLIGHT,
+      bg: Fill::solid(WIDGET_BG),
+      bg_hover: Fill::solid(HOVER),
+      bg_click: Fill::solid(WIDGET_BG),
+      bg_selected: Fill::solid(HIGHLIGHT),
       border: Stroke::new(1.0, Color32::TRANSPARENT),
       border_hover: Stroke::new(1.0, DUSK),
       border_click: Stroke::new(1.0, Color32::TRANSPARENT),
@@ -209,10 +210,10 @@ pub fn button_visuals() -> ButtonVisuals {
 
 pub fn combo_box_visuals() -> ComboBoxVisuals {
    ComboBoxVisuals {
-      bg: WIDGET_BG,
+      bg: Fill::solid(WIDGET_BG),
       icon: TEXT,
-      bg_hover: HOVER,
-      bg_open: HOVER,
+      bg_hover: Fill::solid(HOVER),
+      bg_open: Fill::solid(HOVER),
       border: Stroke::new(1.0, Color32::TRANSPARENT),
       border_hover: Stroke::new(1.0, DUSK),
       border_open: Stroke::new(1.0, DUSK),
@@ -230,7 +231,7 @@ pub fn combo_box_visuals() -> ComboBoxVisuals {
 
 pub fn label_visuals() -> ButtonVisuals {
    ButtonVisuals {
-      bg: Color32::TRANSPARENT,
+      bg: Fill::solid(Color32::TRANSPARENT),
       border: Stroke::new(1.0, Color32::TRANSPARENT),
       border_hover: Stroke::new(1.0, Color32::TRANSPARENT),
       border_click: Stroke::new(1.0, Color32::TRANSPARENT),
@@ -241,7 +242,7 @@ pub fn label_visuals() -> ButtonVisuals {
 pub fn text_edit_visuals() -> TextEditVisuals {
    TextEditVisuals {
       text: TEXT,
-      bg: WIDGET_BG,
+      bg: Fill::solid(WIDGET_BG),
       border: Stroke::new(1.0, BORDER),
       border_hover: Stroke::new(1.0, LIGHT_BLUE),
       border_open: Stroke::new(1.0, LIGHT_BLUE),
