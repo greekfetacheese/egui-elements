@@ -13,7 +13,7 @@ This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
-- Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor` (WIP)
+- Seven built-in palettes (`ThemeKind`) plus a live `ThemeEditor`: palette, frame, widget, typography and spacing editors, a contrast audit, a live preview, theme naming/detaching, and host-wired Save / Load to JSON
 - Feature-gated composites: credentials form, QR image, Linux QR scanner
 
 `Button`, `ComboBox`, `Window`, `Spinner` and `Checkbox` have the same names as the egui types. Import this crate's widgets *after* `use eframe::egui::*`, or alias one of them.
@@ -76,6 +76,12 @@ fn chrome(theme: &mut Theme, editor: &mut ThemeEditor, ui: &mut egui::Ui) {
     theme.install(ui.ctx());
 }
 ```
+
+The editor can rename a theme (which detaches a built-in as
+`ThemeKind::Custom`), reset it to its built-in palette, revert edits and preview
+the result live. Save / Load buttons appear once the host wires
+`ThemeEditor::set_io`; the crate ships no dialog or serializer dependency, so
+the demo wires `rfd` + `serde_json` itself (see `examples/demo.rs`).
 
 ## Usage
 

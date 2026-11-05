@@ -37,6 +37,7 @@ full = ["serde", "qr-scanner", "secure-types", "qr-image", "elegance", "lucide"]
 
 [dev-dependencies]
 eframe = "0.37"
+rfd = "0.17"
 egui_extras = { version = "0.37", features = ["image", "svg"] }
 egui = { version = "0.37", features = ["default_fonts"] }
 # Tests the `serde` feature's derives only; never a normal dependency, so it
