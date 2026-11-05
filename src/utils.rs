@@ -299,25 +299,38 @@ pub fn theme_switcher(current_theme: &Theme, ui: &mut Ui) -> Option<Theme> {
    let current = Label::new(text, None);
    let (widest, width) = switcher_width(ui, current_theme);
 
-   ComboBox::new("Theme switcher", current).width(width).show_ui(ui, |ui| {
-      ui.set_min_width(widest);
-      ui.spacing_mut().item_spacing.y = 12.0;
+   // Seven names at a 12-point gap overflow egui's default `combo_height` (200) and the last row
+   // is clipped mid-glyph. Size the popup to the whole list.
+   let row = ui.fonts_mut(|fonts| {
+      fonts.row_height(&egui::FontId::proportional(
+         current_theme.typography.normal,
+      ))
+   }) + 12.0
+      + 8.0;
+   let popup_height = row * ThemeKind::to_vec().len() as f32 + 12.0;
 
-      for kind in ThemeKind::to_vec() {
-         let label = RichText::new(kind.to_str()).size(current_theme.typography.normal);
-         let label = Label::new(label, None)
-            .interactive(true)
-            .fill_width(true)
-            .sense(Sense::click())
-            .expand(Some(4.0));
+   ComboBox::new("Theme switcher", current)
+      .width(width)
+      .popup_max_height(popup_height)
+      .show_ui(ui, |ui| {
+         ui.set_min_width(widest);
+         ui.spacing_mut().item_spacing.y = 12.0;
 
-         if ui.add(label).clicked() {
-            let mut new_theme = Theme::new(kind);
-            new_theme_opt = Some(new_theme.clone());
-            new_theme.install(ui.ctx());
+         for kind in ThemeKind::to_vec() {
+            let label = RichText::new(kind.to_str()).size(current_theme.typography.normal);
+            let label = Label::new(label, None)
+               .interactive(true)
+               .fill_width(true)
+               .sense(Sense::click())
+               .expand(Some(4.0));
+
+            if ui.add(label).clicked() {
+               let mut new_theme = Theme::new(kind);
+               new_theme_opt = Some(new_theme.clone());
+               new_theme.install(ui.ctx());
+            }
          }
-      }
-   });
+      });
    new_theme_opt
 }
 
