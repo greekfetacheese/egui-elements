@@ -692,6 +692,12 @@ Themed text edits — hint text, character limit, multiline:
 cargo run --example text_edit
 ```
 
+Icon-only buttons in the themed button chrome (the example icons need `lucide`):
+
+```sh
+cargo run --example icon_button --features lucide
+```
+
 Interactive snow with the public settings window:
 
 ```sh

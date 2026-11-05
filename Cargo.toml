@@ -109,5 +109,9 @@ name = "tabs"
 [[example]]
 name = "text_edit"
 
+[[example]]
+name = "icon_button"
+required-features = ["lucide"]
+
 [package.metadata.docs.rs]
 all-features = true

@@ -104,8 +104,8 @@ pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
-   ComboBox, Divider, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel,
-   Popover, PopoverSide, Radio, Scroll, Spinner, SpinnerShadow, Switch, Tabs, TextEdit,
+   ComboBox, Divider, Frame, HoldBurst, HoldSettings, IconButton, IntoModalId, Label, Modal,
+   MultiLabel, Popover, PopoverSide, Radio, Scroll, Spinner, SpinnerShadow, Switch, Tabs, TextEdit,
    TextEditOutput, ToggleShadow, ToggleVisuals, Window,
 };
 
