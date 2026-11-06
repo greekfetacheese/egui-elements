@@ -125,6 +125,8 @@ slot — a checked box is never painted `highlight`.
 
 egui `egui::Window` title (top layer) overwrites `title_frame.fill` with `widgets.open.weak_bg_fill`. App windows should use `egui_elements::widgets::Window`, which keeps the requested title fill regardless of how many windows are open. The `open.weak_bg_fill = bg` slot remains as a fallback for any leftover stock `egui::Window`.
 
+The theme pins the stock scroll-bar geometry on install: `bar_width 6`, `bar_inner_margin 2`, `bar_outer_margin 4` (egui's own floating bar is 10 points wide). Call sites use `egui::ScrollArea` directly and never restyle the bar; a pane that scrolls by wheel only sets `scroll_bar_visibility`.
+
 ---
 
 ## 6. Frames

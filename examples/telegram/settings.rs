@@ -11,7 +11,7 @@ use egui_elements::layout::{CrossAlign, Flex, Item};
 use egui_elements::theme::Theme;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Button, Checkbox, Chip, ChipRole, ComboBox, Divider, Label,
-   Modal, Radio, Scroll, Switch,
+   Modal, Radio, Switch,
 };
 
 use crate::TelegramApp;
@@ -93,13 +93,16 @@ pub fn show(app: &mut TelegramApp, ctx: &Context) {
       })
       .show(ctx, |ui| {
          ui.set_max_height(style::SETTINGS_BODY_H);
-         Scroll::vertical("settings_body").auto_shrink([false, true]).show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            match page {
-               SettingsPage::Settings => settings_page(app, ui),
-               SettingsPage::Advanced => advanced_page(app, ui),
-            }
-         });
+         ScrollArea::vertical().id_salt("settings_body").auto_shrink([false, true]).show(
+            ui,
+            |ui| {
+               ui.spacing_mut().item_spacing.y = 0.0;
+               match page {
+                  SettingsPage::Settings => settings_page(app, ui),
+                  SettingsPage::Advanced => advanced_page(app, ui),
+               }
+            },
+         );
       });
 
    if close {

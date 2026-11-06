@@ -20,6 +20,19 @@ use egui::{
    vec2,
 };
 
+/// Scroll-bar width the theme pins on the global style, in points.
+///
+/// egui's default floating bar is 10 points wide; panes share one narrow bar so
+/// a list does not change shape when it is long enough to scroll.
+const SCROLL_BAR_WIDTH: f32 = 6.0;
+
+/// Gap between the content and the scroll bar, in points.
+const SCROLL_BAR_INNER_MARGIN: f32 = 2.0;
+
+/// Gap outside the scroll bar, in points. Only allocates space for a solid bar,
+/// but pinned here so a theme that turns floating off still gets the gutter.
+const SCROLL_BAR_OUTER_MARGIN: f32 = 4.0;
+
 #[cfg(feature = "serde")]
 use crate::gradient::DEFAULT_GRADIENT_STRENGTH;
 
@@ -737,16 +750,22 @@ impl Theme {
       })
    }
 
-   /// Push [`Theme::spacing`] and button/window padding onto `style`.
+   /// Push [`Theme::spacing`], button/window padding and scroll-bar geometry
+   /// onto `style`.
    ///
    /// Called from [`Theme::install`]. `style()` from a `ThemeKind` only
    /// sets colors; layout tokens live on `Theme` so the editor can change
-   /// them without rebuilding the palette.
+   /// them without rebuilding the palette. The scroll-bar geometry is global
+   /// so every `egui::ScrollArea` in the app draws the same thin bar.
    fn apply_spacing(&self, style: &mut Style) {
       let s = &self.spacing;
       style.spacing.item_spacing = vec2(s.md, s.md);
       style.spacing.button_padding = self.button_padding;
       style.spacing.window_margin = Margin::same(self.inner_margin);
+
+      style.spacing.scroll.bar_width = SCROLL_BAR_WIDTH;
+      style.spacing.scroll.bar_inner_margin = SCROLL_BAR_INNER_MARGIN;
+      style.spacing.scroll.bar_outer_margin = SCROLL_BAR_OUTER_MARGIN;
    }
 
    /// Keep derived frame colors in sync with a palette change.
@@ -1340,6 +1359,18 @@ pub struct Typography {
 mod tests {
    use super::*;
    use crate::gradient::Fill;
+
+   #[test]
+   fn install_pins_the_scroll_bar_geometry() {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+
+      let scroll = ctx.global_style().spacing.scroll;
+      assert!((scroll.bar_width - SCROLL_BAR_WIDTH).abs() < f32::EPSILON);
+      assert!((scroll.bar_inner_margin - SCROLL_BAR_INNER_MARGIN).abs() < f32::EPSILON);
+      assert!((scroll.bar_outer_margin - SCROLL_BAR_OUTER_MARGIN).abs() < f32::EPSILON);
+   }
 
    /// Every themed fill the variant grades, with the ink it carries.
    fn graded_fills(theme: &Theme) -> Vec<(&'static str, Fill, Color32)> {

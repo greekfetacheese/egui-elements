@@ -13,7 +13,7 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::layout::{CrossAlign, Flex, Item, Justify};
 use egui_elements::theme::Theme;
 use egui_elements::utils::mix;
-use egui_elements::widgets::{Button, Modal, Scroll, Spinner};
+use egui_elements::widgets::{Button, Modal, Spinner};
 
 use crate::TelegramApp;
 use crate::paint;
@@ -386,26 +386,30 @@ fn emoji_grid(app: &mut TelegramApp, ui: &mut Ui, body: Rect, theme: &Theme) {
    ui.scope_builder(
       UiBuilder::new().max_rect(body).layout(Layout::top_down(Align::Min)),
       |ui| {
-         Scroll::vertical("emoji_grid").auto_shrink([false, true]).show(ui, |ui| {
-            ui.spacing_mut().item_spacing = Vec2::ZERO;
-            let pad = space.md;
-            let width = ui.available_width();
-            let cell_w = ((width - pad * 2.0) / style::EMOJI_COLS as f32).max(1.0);
-            // Spread the rows over the whole band: the grid reaches the strip
-            // instead of stopping two rows early.
-            let cell_h = ((body.height() - space.sm * 2.0) / rows as f32).max(style::EMOJI_CELL_H);
+         ScrollArea::vertical()
+            .id_salt("emoji_grid")
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+               ui.spacing_mut().item_spacing = Vec2::ZERO;
+               let pad = space.md;
+               let width = ui.available_width();
+               let cell_w = ((width - pad * 2.0) / style::EMOJI_COLS as f32).max(1.0);
+               // Spread the rows over the whole band: the grid reaches the strip
+               // instead of stopping two rows early.
+               let cell_h =
+                  ((body.height() - space.sm * 2.0) / rows as f32).max(style::EMOJI_CELL_H);
 
-            ui.add_space(space.sm);
-            for row in EMOJI.chunks(style::EMOJI_COLS) {
-               ui.horizontal(|ui| {
-                  ui.add_space(pad);
-                  for emoji in row {
-                     emoji_cell(app, ui, emoji, cell_w, cell_h, theme);
-                  }
-               });
-            }
-            ui.add_space(space.sm);
-         });
+               ui.add_space(space.sm);
+               for row in EMOJI.chunks(style::EMOJI_COLS) {
+                  ui.horizontal(|ui| {
+                     ui.add_space(pad);
+                     for emoji in row {
+                        emoji_cell(app, ui, emoji, cell_w, cell_h, theme);
+                     }
+                  });
+               }
+               ui.add_space(space.sm);
+            });
       },
    );
 }

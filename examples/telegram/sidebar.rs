@@ -6,7 +6,7 @@ use egui_elements::layout::{CrossAlign, Flex, Item};
 use egui_elements::theme::{ThemeColors, ThemeSpacing};
 use egui_elements::utils::mix;
 use egui_elements::widgets::SecureTextEdit;
-use egui_elements::widgets::{Avatar, AvatarGroup, AvatarVisuals, Badge, Label, Scroll};
+use egui_elements::widgets::{Avatar, AvatarGroup, AvatarVisuals, Badge, Label};
 
 use crate::TelegramApp;
 use crate::data::{self, Chat};
@@ -174,23 +174,26 @@ fn list(app: &mut TelegramApp, ui: &mut Ui) {
    let chats: Vec<&'static Chat> =
       data::chats().iter().filter(|chat| matches(chat, &query)).collect();
 
-   Scroll::vertical("chat_list").auto_shrink([false, false]).show(ui, |ui| {
-      ui.spacing_mut().item_spacing.y = 0.0;
-      ui.add_space(space.xs);
+   ScrollArea::vertical()
+      .id_salt("chat_list")
+      .auto_shrink([false, false])
+      .show(ui, |ui| {
+         ui.spacing_mut().item_spacing.y = 0.0;
+         ui.add_space(space.xs);
 
-      if chats.is_empty() {
-         ui.add_space(space.xl);
-         ui.vertical_centered(|ui| {
-            ui.label(RichText::new("No chats found").size(13.5).color(colors.text_muted));
-         });
-         return;
-      }
+         if chats.is_empty() {
+            ui.add_space(space.xl);
+            ui.vertical_centered(|ui| {
+               ui.label(RichText::new("No chats found").size(13.5).color(colors.text_muted));
+            });
+            return;
+         }
 
-      for chat in &chats {
-         row(app, ui, chat);
-      }
-      ui.add_space(space.sm);
-   });
+         for chat in &chats {
+            row(app, ui, chat);
+         }
+         ui.add_space(space.sm);
+      });
 }
 
 /// One 72 pt chat row, with a floating hover / selection fill.
