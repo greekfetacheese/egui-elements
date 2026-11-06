@@ -1,3 +1,21 @@
+//! The loader family: the widgets that say "something is happening" without
+//! telling you how much is left.
+//!
+//! Two members, and they are different mechanisms rather than two skins of one:
+//!
+//! - [`Spinner`] — an orbiting arc on a ring, which reads as progress that never
+//!   ends. Same geometry as [`egui::Spinner`], with a glow, a comet tail and a
+//!   track.
+//! - [`Ripple`] — a 3 x 3 grid of coloured cells lit in a wave, ported from
+//!   [alexruix / fluffy-starfish-52](https://uiverse.io/alexruix/fluffy-starfish-52)
+//!   (MIT); it reads as blocks arriving and carries its own hue ramp.
+//!
+//! Both report [`Role::ProgressIndicator`], both paint from an installed
+//! [`Theme`] unless you override the colour, and both expose
+//! `paint_at(&Ui, Rect)` so a host can draw one inside a widget it already owns.
+//!
+//! # Spinner
+//!
 //! A themed loading spinner: an orbiting arc, its glow and a faint track.
 //!
 //! Same geometry as [`egui::Spinner`] — a rotating arc whose sweep is modulated
@@ -32,11 +50,14 @@
 //! [`Spinner::paint_at`] rect inside a larger allocation.
 
 mod mesh;
+mod ripple;
 
 use egui::{Color32, Rect, Response, Role, Sense, Shape, Stroke, Ui, Widget, WidgetInfo, vec2};
 
 use crate::theme::Theme;
 use mesh::{Arc, arc_mesh};
+
+pub use ripple::Ripple;
 
 /// Stroke width as a fraction of the spinner's size.
 const THICKNESS_RATIO: f32 = 0.10;

@@ -35,8 +35,8 @@
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
 //!   [`Checkbox`], [`Radio`], [`ComboBox`], [`Chip`], [`Divider`],
 //!   [`Modal`], [`AvatarGroup`],
-//!   [`SecureTextEdit`], [`MultiLabel`], [`Spinner`],
-//!   [`Window`]
+//!   [`SecureTextEdit`], [`MultiLabel`], the loaders ([`Spinner`],
+//!   [`Ripple`]), [`Window`]
 //! - [`particles`] — [`Snow`],
 //!   [`Light`] and
 //!   [`Lightning`] with themed
@@ -111,8 +111,8 @@ pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
    ComboBox, Divider, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel,
-   Popover, PopoverSide, Radio, Spinner, SpinnerShadow, Switch, Tabs, TabsStyle, TabsVisuals,
-   TextEdit, TextEditOutput, ToggleShadow, ToggleVisuals, Window,
+   Popover, PopoverSide, Radio, Ripple, Spinner, SpinnerShadow, Switch, Tabs, TabsStyle,
+   TabsVisuals, TextEdit, TextEditOutput, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

@@ -12,7 +12,7 @@ use egui_elements::theme::{Theme, ThemeKind, ThemeVariant};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox,
-   Label, Modal, Radio, SecureTextEdit, Spinner, Switch, Tabs, TabsStyle, Window,
+   Label, Modal, Radio, Ripple, SecureTextEdit, Spinner, Switch, Tabs, TabsStyle, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -816,6 +816,9 @@ impl DemoApp {
 
          for size in [20.0, 32.0, 44.0] {
             ui.add(Spinner::new().size(size));
+         }
+         for size in [26.0, 40.0] {
+            ui.add(Ripple::new().size(size));
          }
       });
 
