@@ -10,9 +10,7 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::layout::{CrossAlign, Flex, Item};
 use egui_elements::theme::{Theme, ThemeColors};
 use egui_elements::utils::mix;
-use egui_elements::widgets::{
-   Avatar, AvatarGroup, AvatarVisuals, Frame, Label, Scroll, SecureTextEdit,
-};
+use egui_elements::widgets::{Avatar, AvatarGroup, AvatarVisuals, Frame, Label, SecureTextEdit};
 
 use crate::TelegramApp;
 use crate::data::{self, Chat, Msg, MsgBody, MsgStatus, Quote};
@@ -198,17 +196,20 @@ fn messages(theme: &Theme, ui: &mut Ui, chat: &Chat) {
    let out = ui.scope_builder(
       UiBuilder::new().max_rect(inner).layout(Layout::top_down(Align::Min)),
       |ui| {
-         Scroll::vertical("messages").auto_shrink([false, false]).show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = space.sm;
-            ui.add_space(space.lg);
-            for (index, message) in messages.iter().enumerate() {
-               message_row(ui, message, theme, chat.id, index);
-            }
-            ui.add_space(space.lg);
-            if pending {
-               ui.scroll_to_cursor(Some(Align::BOTTOM));
-            }
-         })
+         ScrollArea::vertical()
+            .id_salt("messages")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+               ui.spacing_mut().item_spacing.y = space.sm;
+               ui.add_space(space.lg);
+               for (index, message) in messages.iter().enumerate() {
+                  message_row(ui, message, theme, chat.id, index);
+               }
+               ui.add_space(space.lg);
+               if pending {
+                  ui.scroll_to_cursor(Some(Align::BOTTOM));
+               }
+            })
       },
    );
 

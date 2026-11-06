@@ -15,7 +15,7 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::layout::{Column, CrossAlign, Flex, Item, Table};
 use egui_elements::theme::{ContrastCheck, Theme};
 use egui_elements::widgets::{
-   Button, Checkbox, Chip, ChipRole, ComboBox, Divider, Label, Radio, Scroll, Switch, Window,
+   Button, Checkbox, Chip, ChipRole, ComboBox, Divider, Label, Radio, Switch, Window,
 };
 
 use crate::TelegramApp;
@@ -91,8 +91,9 @@ pub fn show(app: &mut TelegramApp, ctx: &Context) {
          ui.set_width(ui.available_width());
          ui.set_max_height(style::AUDIT_BODY_H);
          ui.spacing_mut().item_spacing.y = space.md;
-         Scroll::vertical("theme_audit")
-            .bars(ScrollBarVisibility::AlwaysVisible)
+         ScrollArea::vertical()
+            .id_salt("theme_audit")
+            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
             .auto_shrink([false, true])
             .show(ui, |ui| {
                ui.spacing_mut().item_spacing.y = space.md;
