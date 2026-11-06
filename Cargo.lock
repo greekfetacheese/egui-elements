@@ -868,9 +868,9 @@ dependencies = [
 
 [[package]]
 name = "egui-elegance"
-version = "0.17.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "298f385138a7c4f05cfda9889584fc407148ad34d421e35ee0ecb4a7a98b32d5"
+checksum = "7f70b3c5bb4ecb9c6f8a1142b9d8f0e4fa59db05882c3285e1062a677e9fd029"
 dependencies = [
  "egui",
  "js-sys",

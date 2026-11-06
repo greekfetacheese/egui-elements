@@ -24,7 +24,7 @@ qrcodegen-no-heap = { version = "1", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = [
     "png",
 ] }
-egui-elegance = { version = "0.17", optional = true }
+egui-elegance = { version = "0.18", optional = true }
 egui-lucide = { version = "0.2", optional = true }
 
 
