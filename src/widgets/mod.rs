@@ -20,7 +20,7 @@ pub mod modal;
 pub mod multi_label;
 pub mod popover;
 pub mod secure_text_edit;
-pub mod spinner;
+pub mod loaders;
 pub mod tabs;
 pub mod text_edit;
 pub mod toggle;
@@ -38,7 +38,7 @@ pub use modal::{IntoModalId, Modal};
 pub use multi_label::MultiLabel;
 pub use popover::{Popover, PopoverSide};
 pub use secure_text_edit::SecureTextEdit;
-pub use spinner::{Spinner, SpinnerShadow};
+pub use loaders::{Spinner, SpinnerShadow};
 pub use tabs::{Tabs, TabsStyle, TabsVisuals};
 pub use text_edit::{TextEdit, TextEditOutput};
 pub use toggle::{
