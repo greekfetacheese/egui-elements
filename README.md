@@ -544,6 +544,47 @@ ui.add(Switch::new(&mut flag, "Instant").motion(Motion::instant()));
 row reports `Response::changed`, Space toggles a focused switch, and
 `ui.add_enabled(false, Switch::new(..))` mutes the whole row.
 
+
+### Sliders
+
+`Slider` is a themed slider ported from
+[Web Awesome's `wa-slider`](https://webawesome.com/docs/components/slider/): a fully rounded
+rail, a circular thumb with a thin surface ring, a label above, optional reference captions
+below and an optional formatted value beside the rail. Every measurement is a ratio of
+`.size()` (the thumb's diameter), so one knob scales the rail, the ring and the step markers
+together.
+
+```rust
+use egui_elements::widgets::Slider;
+
+ui.add(
+    Slider::new(&mut users, 0.0..=6.0)
+        .text("Number of users")
+        .step_by(1.0)
+        .markers(true)
+        .tooltip(true)
+        .references(["Less", "More"])
+        .hint("Limit six per team"),
+);
+
+ui.add(Slider::new(&mut volume, 0.0..=100.0).text("Volume").fixed_decimals(1));
+ui.add(Slider::new(&mut level, 0.0..=100.0).vertical().height(180.0));
+ui.add(
+    Slider::new(&mut price, 0.0..=100.0)
+        .custom_formatter(|value, _| format!("${value:.0}")),
+);
+```
+
+The value cell is an editable `DragValue` (drag it or click it to type) placed by a `Flex`
+row, so it stays centred on the rail; `.show_value(false)` drops it. `.custom_formatter`
+drives both the number and the tooltip, and the step decides the written precision unless
+`.min_decimals` / `.max_decimals` / `.fixed_decimals` pin it. A focused slider takes the
+arrow keys (Home and End jump to the ends) and `Response::changed` fires on the frame that
+moves the value. `.visuals(SliderVisuals { .. })` replaces the colours for one slider — start
+from `SliderVisuals::from_theme(theme.colors)` to keep the rest.
+
+Proof: `cargo run --example slider`.
+
 ### Tabs
 
 `Tabs` is a segmented control: one pill indicator on a fully rounded track, and
