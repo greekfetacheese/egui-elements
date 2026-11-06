@@ -30,13 +30,14 @@
 //! The glow spills past the allocated square by `blur_ratio · size`, like any
 //! other shadow; a host that needs it contained paints a smaller
 //! [`Spinner::paint_at`] rect inside a larger allocation.
+//!
+//! [`ThemeColors`]: crate::theme::ThemeColors
 
-mod mesh;
+use super::mesh::{Arc, arc_mesh};
 
 use egui::{Color32, Rect, Response, Role, Sense, Shape, Stroke, Ui, Widget, WidgetInfo, vec2};
 
 use crate::theme::Theme;
-use mesh::{Arc, arc_mesh};
 
 /// Stroke width as a fraction of the spinner's size.
 const THICKNESS_RATIO: f32 = 0.10;

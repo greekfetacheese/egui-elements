@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, `Spinner`, `Checkbox`, `Radio`, `Switch`, `Tabs`, `Chip`, `Divider`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, segmented and underlined tabs whose indicator slides between segments, and `AvatarGroup` stacks that fan out on hover
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, the loaders `Spinner` and `Ripple`, `Checkbox`, `Radio`, `Switch`, `Tabs`, `Chip`, `Divider`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, segmented and underlined tabs whose indicator slides between segments, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -326,6 +326,33 @@ tail to a full-strength head (`0.0` paints a flat arc), `.thickness()` overrides
 the stroke (default 10 % of the size, clamped 2–6 pt), and
 `paint_at(&Ui, Rect)` draws it inside another widget. As with any shadow, the glow
 spills past the allocated square by `blur_ratio · size`.
+
+### Ripples
+
+`Ripple` is the second loader: a 3 x 3 grid of coloured cells lit in reading order,
+one every 100 ms, each fading over 30 % of a 1.5 s loop and dark for the remaining
+40 %. It reads as blocks arriving rather than as progress, which is what the
+spinner already says.
+
+Ported from [alexruix / fluffy-starfish-52](https://uiverse.io/alexruix/fluffy-starfish-52) (MIT).
+
+```rust
+use egui_elements::widgets::Ripple;
+
+ui.add(Ripple::new());                                 // theme ramp, 2.6 x interact_size.y
+ui.add(Ripple::new().size(64.0));                      // square grid, cells scale with it
+ui.add(Ripple::new().period(1.0).delay(0.05));         // faster wave, tighter step
+ui.add(Ripple::new().color(Color32::WHITE));           // one flat colour
+ui.add(Ripple::new().cells(colours));                  // your own nine, in reading order
+```
+
+The nine colours default to a ramp derived from `ThemeColors::accent`: the accent's
+hue walked by 35° at full saturation, lightness from 50 % to 69 %. Only the hue is
+taken from the accent — a muted accent would make the wave read as a brightness
+flicker instead of the ported hue ramp. `.color()` repaints every cell with one
+colour, `.cells()` replaces the ramp whole, `.period()` and `.delay()` retime it,
+and `.easing()` replaces the measured CSS `ease` curve. `paint_at(&Ui, Rect)` draws
+it inside a widget you already own.
 
 ### Checkboxes
 
@@ -861,3 +888,5 @@ Palette slot roles (`bg` vs `widget_bg`, `hover` vs `highlight`, …) are docume
 MIT. Icons from the `lucide` feature are [Lucide](https://lucide.dev) (ISC).
 
 The Snow particle effect is ported from [egui-snow](https://github.com/LaVashikk/egui-snow) (MIT, © 2025 LaVashikk).
+
+The `Ripple` loader is ported from [alexruix / fluffy-starfish-52](https://uiverse.io/alexruix/fluffy-starfish-52) (MIT).

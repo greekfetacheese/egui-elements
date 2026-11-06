@@ -96,6 +96,9 @@ name = "hold_to_confirm"
 name = "spinner"
 
 [[example]]
+name = "ripples"
+
+[[example]]
 name = "checkbox"
 
 [[example]]
