@@ -10,6 +10,70 @@ use egui_elements::motion::{Collapse, Easing, Fade, FadeMode, Lerp, Motion, anim
 
 ---
 
+## Usage
+
+Time lives in `Context` memory under an `Id`, so a host never stores an animation value in its own
+struct. There are three shapes: a value, an opacity, a height.
+
+### `Motion` / `Easing`
+
+`Motion::new(seconds)` is a duration plus a curve, and it is the argument every other helper takes.
+`Motion::from_ui(ui)` reads the duration from the style; `Motion::instant()` skips animation entirely
+(the behaviour a reduced-motion setting wants).
+
+```rust
+use egui_elements::{Easing, Motion};
+
+let motion = Motion::new(0.18).easing(Easing::EaseOut);
+```
+
+`Easing::{Linear, EaseIn, EaseOut, EaseInOut, Custom(fn(f32) -> f32)}`; `EaseOut` is the default because
+it reads as "the UI responded" instead of "something moved". `.duration(secs)` and `.easing(..)` are the
+builders.
+
+### `animate` / `animate_with` / `animate_from`
+
+```rust
+use egui_elements::animate_with;
+
+// Eases toward `target` whenever the target changes; returns this frame's value.
+let motion = Motion::new(0.18);
+let shown = animate_with(ui, "panel_open", target, motion);
+```
+
+`animate(ui, id, target)` uses the default motion; `animate_with(ui, id, target, motion)` takes yours;
+`animate_from(ui, id, target, initial, motion)` seeds the **first** frame with `initial` — pass `target`
+for "no entrance animation" (a toggle) and `0.0` for an entrance. Each returns the value for this frame
+and requests a repaint while the value is still moving, so a settled animation costs nothing.
+
+The `id` must be stable across frames and unique per animated value. `Lerp` is the companion trait for
+what you ease: it interpolates `f32`, `Vec2`, `Pos2`, `Rect`, `Color32`, `Stroke`, `Fill` and
+`Gradient`, so one eased `t` can drive a colour or a rect, not just a number.
+
+### `Fade` / `Collapse`
+
+```rust
+use egui_elements::{Collapse, Fade, FadeMode, Label};
+
+Fade::new("hint", open).mode(FadeMode::In).show(ui, |ui| {
+    ui.add(Label::new("Saved", None));
+});
+
+let height = Collapse::new("details", open).show(ui, |ui| {
+    ui.add(Label::new("Body", None));
+});
+```
+
+`Fade` animates opacity: `FadeMode::In` (the default) animates opening only — a fading-out panel stacks
+with whatever comes next and reads as a glitch — and `FadeMode::Both` animates both directions while the
+body keeps running. `Collapse` animates a body's own measured height and returns that height, so a host
+can size a scroll area or a following gap from it. Both take `.motion(..)` and key their state on the
+`id`.
+
+**Proof:** `cargo run --example motion`.
+
+---
+
 ## 1. What this is
 
 `motion` is the crate's one place for time. `animate` drives a **value** — any `f32` a host wants to ease toward
@@ -91,7 +155,7 @@ difference between the two functions.
 egui's own widgets still swap visual sets instantly through `Style::interact(&response)` — hover and active states
 jump rather than transition, and that is the third gap. Every widget in this crate that paints an interaction state
 (`Button`, `Frame`, `ComboBox`, `MultiLabel`, `SecureTextEdit`) now blends between them instead, through
-[`InteractT`](crate::motion::InteractT):
+`InteractT`:
 
 - **Hover eases** over the `Motion` duration, so the chrome ramps instead of switching.
 - **Press snaps** in *and* out. A press is a state flag, not ambience: a hold-to-confirm button has to drop its pressed

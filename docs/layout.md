@@ -10,6 +10,113 @@ Run the proof: `cargo run --example layout`.
 
 ---
 
+## Usage
+
+Each container is one builder plus one closure. `id_salt` keys the per-`Id` state (the solver's
+measurements, the table's column extents), so it must be stable across frames and unique per container.
+
+### `Flex`
+
+`Flex::row(id_salt)` / `Flex::column(id_salt)` measure their items and then place them into exact cell
+rects. `Flex::row_auto(id_salt)` is the flow variant for a row that must wrap onto several lines.
+
+```rust
+use egui_elements::layout::{CrossAlign, Flex, Item, Justify};
+
+Flex::row("actions")
+    .gap(theme.spacing.sm)
+    .justify(Justify::SpaceBetween)
+    .align_items(CrossAlign::Center)
+    .show(ui, |f| {
+        f.item(Item::new(), |ui| {
+            ui.add(Label::new("Export", None));
+        });
+        f.item(Item::grow(1.0), |ui| {
+            ui.add(Button::new("Copy key"));
+        });
+    });
+```
+
+Builders: `.gap(points)`, `.justify(Justify::{Start, Center, End, SpaceBetween, SpaceAround})`,
+`.align_items(CrossAlign::{Start, Center, End, Stretch})`, `.fill_main(bool)` (size the row by its
+container instead of its items), `.debug_overflow(bool)` (paint overflowing cells while debugging).
+`show` returns an `InnerResponse<R>`.
+
+### `Item`
+
+`Item::new()` is content-sized. `Item::fixed(points)` pins the main-axis size (CSS `width: Npx`) and
+`Item::grow(weight)` shares the free space by weight (CSS `flex: N`). Align with `.align(CrossAlign)`
+(the item's box) or `.align_content(CrossAlign)` (its content inside the box); `.stack()` makes the
+item's children stack on the cross axis instead of running inline.
+
+```rust
+Flex::row("header").show(ui, |f| {
+    f.item(Item::fixed(80.0), |ui| {
+        ui.add(Label::new("Label", None));
+    });
+    f.item(Item::grow(1.0).align_content(CrossAlign::Center), |ui| {
+        ui.add(Button::new("OK"));
+    });
+});
+```
+
+### `Table` / `Column`
+
+`Table::new(id_salt, &rows)` is data-driven: it hands the row closure the `&T`, and a `Column::Auto`
+column measures its widest cell for you.
+
+```rust
+use egui_elements::layout::{Column, Table};
+
+struct Tx {
+    wallet: &'static str,
+    amount: &'static str,
+}
+
+let rows = [Tx { wallet: "Master", amount: "1.20" }];
+
+Table::new("tx_history", &rows)
+    .columns([Column::Fixed(120.0), Column::Auto, Column::Fr(1.0)])
+    .gap(theme.spacing.md)
+    .row_gap(theme.spacing.md)
+    .header_rule(true)
+    .key(rows.len())
+    .show(ui, |t| {
+        t.header(|h| {
+            h.cell(|ui| {
+                ui.add(Label::new("Wallet", None));
+            });
+            h.cell(|ui| {
+                ui.add(Label::new("Amount", None));
+            });
+        });
+        t.rows(|r, tx| {
+            if r.index() % 2 == 1 {
+                r.fill(theme.colors.widget_bg);
+            }
+            r.cell(|ui| {
+                ui.add(Label::new(tx.wallet, None));
+            });
+            r.cell(|ui| {
+                ui.add(Label::new(tx.amount, None));
+            });
+        });
+    });
+```
+
+`Column::Fixed(px)` keeps its width, `Column::Auto` takes the widest measured cell, `Column::Fr(w)`
+shares what the other columns leave by weight. With no `Fr` column the table is narrower than the
+available width and left-aligned — CSS `width: auto`. Inside the row closure `r.index()` is the row
+index, `r.rect()` its rect and `r.fill(color)` paints the row band.
+
+`Table::key` is the invalidation knob: pass something that changes when the data changes shape (a page
+index, a length, a revision), not something that changes every frame.
+
+**Proof:** `cargo run --example layout` — six sections, each a shape hosts used to hand-roll. Product
+chrome: `cargo run --example email`.
+
+---
+
 ## 1. What this is
 
 A **CSS-flexbox subset** for egui: a container that measures its items first and then places them into exact
