@@ -374,11 +374,14 @@ ui.add(Orb::new().text("Saving").text_size(13.0));        // a smaller label
 
 The reference is one round element carrying three `inset` box-shadows that rotate
 while their colours cross-fade, which egui cannot express: there is no inset shadow.
-The port evaluates the three shadows' shape per vertex of one radial mesh instead —
-every shell's alpha ramps up with the radius and is gated by `cos(angle - phase)`, so
-the interior stays near black while the lit rim runs through white. Only the accent's
-hue comes from the palette (`Theme::colors_from_ctx`): the ported shadows are fully
-saturated, and a muted accent would read as a grey ball with a tint.
+The port rebuilds each shadow from its geometry per vertex of one radial mesh: a
+circle of the ball's radius shifted away from the light, blurred by the shadow's
+radius, painted over everything outside it. The three crescents therefore have
+circular edges, which is what reads as an inner sphere turning inside the ball
+instead of a half-moon sweeping around it. Only the accent's hue comes from the
+palette (`Theme::colors_from_ctx`): each crescent keeps the reference's saturation
+and brightness, so the ball holds the source's light-and-dark structure and a muted
+accent still reads as a light rather than a grey ball.
 
 `.color()` retints the whole shell (every shell is a hue offset from it, so a pure
 grey paints a silver ball), `.period()` retimes both the turn and the letter

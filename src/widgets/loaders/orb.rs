@@ -12,11 +12,13 @@
 //! - the third is the deep wash (`#471eec` to `#311e80`), which tints the whole
 //!   shell and is dimmest where the light does not reach.
 //!
-//! egui has no inset shadow, so the port composes the three as concentric shells
-//! whose colour and alpha are evaluated per vertex of one radial mesh
-//! ([Orb::paint_at]). Their measured shape is shared: alpha ramps up with the
-//! radius, and the light gates it by `cos(angle - phase · 360°)`. That is why the
-//! ball's interior stays almost black while the lit rim runs through white.
+//! egui has no inset shadow, so the port rebuilds each one from its geometry: a
+//! circle of the ball's radius shifted away from the light, blurred by the
+//! shadow's radius, painted over everything outside it. The three crescents
+//! therefore have circular edges, and those arcs — not a radial gradient — are
+//! what read as an inner sphere turning inside the ball. Every vertex of one
+//! radial mesh ([Orb::paint_at]) evaluates the three coverage functions and
+//! composites them base first.
 //!
 //! The label pulses letter by letter on the same 2 s clock, each one a step behind
 //! the last: opacity `0.4` to `1.0` with a 1.15x scale at 20 % of its loop, down
@@ -32,9 +34,10 @@
 //! ```
 //!
 //! The colours come from the installed [Theme]: every shell is a hue offset from
-//! [ThemeColors::accent], and the disc the shadows fall on is a dark tone of the
-//! same hue — opaque, so the ball reads the same on a light palette as on a dark
-//! one instead of turning into a ring.
+//! [ThemeColors::accent] carrying the reference's saturation and brightness, and
+//! the disc the shadows fall on is a dark tone of the same hue — opaque, so the
+//! ball reads the same on a light palette as on a dark one instead of turning
+//! into a ring.
 //!
 //! [Theme]: crate::theme::Theme
 //! [ThemeColors::accent]: crate::theme::ThemeColors::accent
@@ -52,7 +55,7 @@ use crate::theme::{Theme, ThemeColors};
 use crate::utils::Hsla;
 
 /// Shell radii, as fractions of the orb's radius. Dense toward the rim, where the
-/// ported shadows ramp hardest.
+/// sheen and the lobe are thin.
 const RINGS: [f32; 9] = [0.35, 0.55, 0.68, 0.78, 0.86, 0.92, 0.96, 0.985, 1.0];
 
 /// Fewest angular samples around the light axis.
@@ -137,26 +140,23 @@ const DEEP_SATURATION: f32 = 84.4;
 /// Saturation of the deep wash at the halfway point, in percent.
 const DEEP_SATURATION_END: f32 = 62.0;
 
-/// Lightness of the deep wash at the start of the loop, in percent.
-const DEEP_LIGHTNESS: f32 = 52.2;
+/// Brightness of the deep wash as a share of the accent's, measured from the
+/// ported keyframes (`#471eec` against `#ad5fff`): the wash keeps the
+/// reference's light-and-dark structure whatever the accent's hue is.
+const DEEP_LUMA_RATIO: f32 = 53.6 / 123.1;
 
-/// Lightness of the deep wash at the halfway point, in percent.
-const DEEP_LIGHTNESS_END: f32 = 31.0;
+/// Brightness of the deep wash at the halfway point (`#311e80`).
+const DEEP_LUMA_MID_RATIO: f32 = 41.1 / 123.1;
 
-/// Radius where the deep wash starts, as a fraction of the orb's.
-const DEEP_INNER: f32 = 0.0;
+/// Offset of the deep wash's circle at the 0 % keyframe, as a fraction of the
+/// diameter (`60px` of the ported `180px`).
+const DEEP_OFFSET: f32 = 60.0 / 180.0;
 
-/// Alpha of the deep wash at the rim.
-const DEEP_ALPHA: f32 = 0.95;
+/// Offset of the deep wash's circle at the 50 % keyframe (`40px`).
+const DEEP_OFFSET_MID: f32 = 40.0 / 180.0;
 
-/// Growth of the deep wash's alpha across the shell.
-const DEEP_RAMP: f32 = 1.15;
-
-/// Alpha of the deep wash where the light does not reach.
-const DEEP_FLOOR: f32 = 0.06;
-
-/// How tightly the light gates the deep wash.
-const DEEP_FOCUS: f32 = 1.0;
+/// Blur radius of the deep wash (`60px`), constant across the loop.
+const DEEP_BLUR: f32 = 60.0 / 180.0;
 
 /// Hue offset of the colour lobe at the halfway point, in degrees (`#ad5fff` to
 /// `#d60a47` walks the hue 73°).
@@ -168,53 +168,83 @@ const LOBE_SATURATION: f32 = 100.0;
 /// Saturation of the colour lobe at the halfway point, in percent.
 const LOBE_SATURATION_END: f32 = 91.1;
 
-/// Lightness of the colour lobe at the start of the loop, in percent.
-const LOBE_LIGHTNESS: f32 = 68.6;
+/// Brightness of the colour lobe as a share of the accent's (`#ad5fff` is the
+/// reference's accent).
+const LOBE_LUMA_RATIO: f32 = 1.0;
 
-/// Lightness of the colour lobe at the halfway point, in percent.
-const LOBE_LIGHTNESS_END: f32 = 43.9;
+/// Brightness of the colour lobe at the halfway point (`#d60a47`).
+const LOBE_LUMA_MID_RATIO: f32 = 57.8 / 123.1;
 
-/// Radius where the colour lobe starts, as a fraction of the orb's.
-const LOBE_INNER: f32 = 0.62;
+/// Offset of the colour lobe's circle (`20px`), constant across the loop.
+const LOBE_OFFSET: f32 = 20.0 / 180.0;
 
-/// Alpha of the colour lobe at the rim.
-const LOBE_ALPHA: f32 = 0.95;
+/// Blur radius of the colour lobe at the 0 % keyframe (`30px`).
+const LOBE_BLUR: f32 = 30.0 / 180.0;
 
-/// Growth of the lobe's alpha across the shell.
-const LOBE_RAMP: f32 = 3.0;
+/// Blur radius of the colour lobe at the 50 % keyframe (`10px`).
+const LOBE_BLUR_MID: f32 = 10.0 / 180.0;
 
-/// How tightly the light gates the colour lobe.
-const LOBE_FOCUS: f32 = 0.9;
+/// Offset of the sheen's circle (`10px`), constant across the loop.
+const SHEEN_OFFSET: f32 = 10.0 / 180.0;
 
-/// Radius where the sheen starts, as a fraction of the orb's.
-const SHEEN_INNER: f32 = 0.70;
+/// Blur radius of the sheen (`20px`).
+const SHEEN_BLUR: f32 = 20.0 / 180.0;
 
-/// Alpha of the sheen at the rim.
-const SHEEN_ALPHA: f32 = 0.95;
+/// Half-width of a blurred edge, in blur radii. A CSS `box-shadow` blur fades a
+/// hard edge across roughly 1.5 x its radius, which a `smoothstep` over this band
+/// matches.
+const BLUR_SPREAD: f32 = 0.75;
 
-/// Growth of the sheen's alpha across the shell.
-const SHEEN_RAMP: f32 = 2.0;
-
-/// How tightly the light gates the sheen.
-const SHEEN_FOCUS: f32 = 1.4;
-
-/// Share of white in the sheen's colour.
-const SHEEN_WHITE: f32 = 0.86;
+/// Share of white in the sheen's colour. The ported `#fff` shadow is what the
+/// rim's hot edge is made of.
+const SHEEN_WHITE: f32 = 0.95;
 
 /// Saturation under which an accent counts as neutral: a grey has no hue to walk,
 /// so [`Orb::color`] then paints a silver ball instead of a saturated one.
 const ACHROMATIC_SATURATION: f32 = 5.0;
 
-/// The four shells of one frame, base disc first.
-struct Stops {
-   /// The disc the inset shadows fall on.
+/// The four layers of one frame, base disc first.
+struct Shells {
+   /// The disc the ported shadows fall on.
    body: Color32,
    /// The deep wash.
-   deep: Color32,
+   deep: Shadow,
    /// The colour lobe under the light.
-   lobe: Color32,
+   lobe: Shadow,
    /// The hot sheen at the rim.
-   sheen: Color32,
+   sheen: Shadow,
+}
+
+/// One ported `inset` shadow: its colour and the circle it blurs onto the ball.
+struct Shadow {
+   color: Color32,
+   /// Offset of the shadow's circle from the ball's centre, as a fraction of the
+   /// diameter.
+   offset: f32,
+   /// Blur radius, as a fraction of the diameter.
+   blur: f32,
+}
+
+impl Shadow {
+   /// Blurred coverage of this shadow at `u` of the ball's radius and `angle` in
+   /// radians, with the light at `spin`.
+   ///
+   /// The shadow is everything outside a circle of the ball's radius shifted
+   /// *away* from the light, so the lit side is the side that circle does not
+   /// reach. Its colour is fully saturated where the crescent is thickest and
+   /// fades across the blur, so the arc reads as the edge of an inner sphere
+   /// turning inside the ball.
+   fn coverage(&self, u: f32, angle: f32, spin: f32) -> f32 {
+      // the shifted circle's centre, in units of the ball's radius
+      let shift = 2.0 * self.offset;
+      let distance = (u * u + shift * shift + 2.0 * u * shift * (angle - spin).cos()).sqrt();
+
+      smoothstep(
+         -2.0 * self.blur * BLUR_SPREAD,
+         2.0 * self.blur * BLUR_SPREAD,
+         distance - 1.0,
+      )
+   }
 }
 
 /// A glowing orb loader with an optional staggered label.
@@ -355,12 +385,13 @@ impl Orb {
       (letters, width)
    }
 
-   /// The four shells at `mix` of the loop (`0.0` is the `0%` keyframe).
+   /// The four layers at `mix` of the loop (`0.0` is the `0%` keyframe, `1.0` the
+   /// `50%` one; the loop comes back through the same ramp).
    ///
    /// Only the accent's hue is taken from the palette: the ported shadows are fully
    /// saturated (`#ad5fff` is 100 % saturated), so a muted accent would read as a grey
    /// ball with a tint rather than as a light.
-   fn stops(accent: Color32, mix: f32) -> Stops {
+   fn shells(accent: Color32, mix: f32) -> Shells {
       let seed = Hsla::from_color32(accent);
 
       // a grey accent has no hue to offset, so keep the whole shell neutral
@@ -369,23 +400,20 @@ impl Orb {
       } else {
          1.0
       };
-      let deep = Hsla {
-         h: seed.h + DEEP_HUE,
-         s: tint * lerp(DEEP_SATURATION, DEEP_SATURATION_END, mix),
-         l: lerp(DEEP_LIGHTNESS, DEEP_LIGHTNESS_END, mix),
-         a: 1.0,
-      };
-      let lobe = Hsla {
-         h: seed.h + LOBE_HUE * mix,
-         s: tint * lerp(LOBE_SATURATION, LOBE_SATURATION_END, mix),
-         l: lerp(LOBE_LIGHTNESS, LOBE_LIGHTNESS_END, mix),
-         a: 1.0,
-      };
+      let accent_luma = luma(accent);
+      let deep = shadow_color(
+         seed.h + DEEP_HUE,
+         tint * lerp(DEEP_SATURATION, DEEP_SATURATION_END, mix),
+         accent_luma * lerp(DEEP_LUMA_RATIO, DEEP_LUMA_MID_RATIO, mix),
+      );
+      let lobe = shadow_color(
+         seed.h + LOBE_HUE * mix,
+         tint * lerp(LOBE_SATURATION, LOBE_SATURATION_END, mix),
+         accent_luma * lerp(LOBE_LUMA_RATIO, LOBE_LUMA_MID_RATIO, mix),
+      );
+      let sheen = lobe.lerp_to_gamma(Color32::WHITE, SHEEN_WHITE);
 
-      let deep = deep.to_color32();
-      let lobe = lobe.to_color32();
-
-      Stops {
+      Shells {
          body: Hsla {
             h: seed.h + BODY_HUE,
             s: tint * BODY_SATURATION,
@@ -393,45 +421,42 @@ impl Orb {
             a: 1.0,
          }
          .to_color32(),
-         deep,
-         lobe,
-         sheen: lobe.lerp_to_gamma(Color32::WHITE, SHEEN_WHITE),
+         deep: Shadow {
+            color: deep,
+            offset: lerp(DEEP_OFFSET, DEEP_OFFSET_MID, mix),
+            blur: DEEP_BLUR,
+         },
+         lobe: Shadow {
+            color: lobe,
+            offset: LOBE_OFFSET,
+            blur: lerp(LOBE_BLUR, LOBE_BLUR_MID, mix),
+         },
+         sheen: Shadow {
+            color: sheen,
+            offset: SHEEN_OFFSET,
+            blur: SHEEN_BLUR,
+         },
       }
    }
 
-   /// The shell's colour and alpha at `u` of the radius, `angle` in radians, with
+   /// The ball's colour and alpha at `u` of the radius, `angle` in radians, with
    /// the light at `spin`.
    ///
-   /// `gate` is what makes the ball read as lit from one side: every shadow's alpha is
-   /// scaled by `cos(angle - spin)`, so the far side keeps only the deep wash's
-   /// [`DEEP_FLOOR`].
-   fn shade(u: f32, angle: f32, spin: f32, stops: &Stops) -> Color32 {
-      let gate = (angle - spin).cos().max(0.0);
+   /// The three ported shadows are composited base first; each one paints its own
+   /// crescent with its own colour, and the crescents' blurred edges are the
+   /// circular arcs that read as an inner sphere turning inside the ball.
+   fn shade(u: f32, angle: f32, spin: f32, shells: &Shells) -> Color32 {
       let rim = u.max(0.0);
       let feather = 1.0 - smoothstep(FEATHER_FROM, 1.0, rim);
-      let shells = [
-         (stops.body, BODY_ALPHA),
-         (
-            stops.deep,
-            DEEP_ALPHA
-               * smoothstep(DEEP_INNER, 1.0, rim).powf(DEEP_RAMP)
-               * (DEEP_FLOOR + (1.0 - DEEP_FLOOR) * gate.powf(DEEP_FOCUS)),
-         ),
-         (
-            stops.lobe,
-            LOBE_ALPHA * smoothstep(LOBE_INNER, 1.0, rim).powf(LOBE_RAMP) * gate.powf(LOBE_FOCUS),
-         ),
-         (
-            stops.sheen,
-            SHEEN_ALPHA
-               * smoothstep(SHEEN_INNER, 1.0, rim).powf(SHEEN_RAMP)
-               * gate.powf(SHEEN_FOCUS),
-         ),
+      let mut rgb = [
+         shells.body.r() as f32,
+         shells.body.g() as f32,
+         shells.body.b() as f32,
       ];
-      let mut rgb = [0.0f32; 3];
-      let mut alpha = 0.0f32;
+      let mut alpha = BODY_ALPHA;
 
-      for (color, layer) in shells {
+      for shadow in [&shells.deep, &shells.lobe, &shells.sheen] {
+         let layer = shadow.coverage(u, angle, spin);
          if layer <= 0.0 {
             continue;
          }
@@ -441,7 +466,11 @@ impl Orb {
             continue;
          }
 
-         let source = [color.r() as f32, color.g() as f32, color.b() as f32];
+         let source = [
+            shadow.color.r() as f32,
+            shadow.color.g() as f32,
+            shadow.color.b() as f32,
+         ];
          for (channel, value) in rgb.iter_mut().zip(source) {
             *channel = (value * layer + *channel * alpha * (1.0 - layer)) / combined;
          }
@@ -461,14 +490,19 @@ impl Orb {
    /// One radial mesh: a centre vertex, then one ring per [`RINGS`] entry, each
    /// vertex shaded.
    fn mesh(&self, orb: Rect, accent: Color32, phase: f32) -> Mesh {
-      let stops = Self::stops(accent, phase);
+      // the colours and the two animated blurs go out and back over one loop
+      let mix = 1.0 - (2.0 * phase - 1.0).abs();
+      let shells = Self::shells(accent, mix);
       let spin = LIGHT_START + std::f32::consts::TAU * phase;
       let radius = orb.width() * 0.5;
       let segments =
          ((orb.width() * SEGMENTS_PER_POINT).round() as usize).clamp(MIN_SEGMENTS, MAX_SEGMENTS);
       let mut mesh = Mesh::default();
 
-      mesh.colored_vertex(orb.center(), Self::shade(0.0, spin, spin, &stops));
+      mesh.colored_vertex(
+         orb.center(),
+         Self::shade(0.0, spin, spin, &shells),
+      );
 
       for u in RINGS {
          for segment in 0..segments {
@@ -476,7 +510,7 @@ impl Orb {
             let (sin, cos) = angle.sin_cos();
             let position = orb.center() + vec2(cos, sin) * (radius * u);
 
-            mesh.colored_vertex(position, Self::shade(u, angle, spin, &stops));
+            mesh.colored_vertex(position, Self::shade(u, angle, spin, &shells));
          }
       }
 
@@ -629,6 +663,43 @@ impl Widget for Orb {
    }
 }
 
+/// Perceived brightness of `color` in `0..=255`.
+fn luma(color: Color32) -> f32 {
+   f32::from(color.r()) * 0.2126 + f32::from(color.g()) * 0.7152 + f32::from(color.b()) * 0.0722
+}
+
+/// A colour at `hue` and `saturation` (percent) whose brightness matches the
+/// reference's: the port keeps the source's light-and-dark structure, and only
+/// the hue follows the theme.
+fn shadow_color(hue: f32, saturation: f32, target: f32) -> Color32 {
+   let (mut low, mut high) = (0.0f32, 100.0f32);
+
+   for _ in 0..24 {
+      let mid = (low + high) * 0.5;
+      let color = Hsla {
+         h: hue,
+         s: saturation,
+         l: mid,
+         a: 1.0,
+      }
+      .to_color32();
+
+      if luma(color) < target {
+         low = mid;
+      } else {
+         high = mid;
+      }
+   }
+
+   Hsla {
+      h: hue,
+      s: saturation,
+      l: (low + high) * 0.5,
+      a: 1.0,
+   }
+   .to_color32()
+}
+
 /// Linear interpolation of two scalars.
 fn lerp(from: f32, to: f32, t: f32) -> f32 {
    from + (to - from) * t.clamp(0.0, 1.0)
@@ -692,15 +763,6 @@ mod tests {
       found.expect("the orb paints one radial mesh")
    }
 
-   /// Perceived brightness of a colour, `0..=255`.
-   fn luma(color: Color32) -> f32 {
-      let r = f32::from(color.r());
-      let g = f32::from(color.g());
-      let b = f32::from(color.b());
-
-      0.2126 * r + 0.7152 * g + 0.0722 * b
-   }
-
    /// The brightest vertex of `mesh` and its angle around the mesh's centre, in
    /// degrees.
    fn brightest(mesh: &Mesh, center: Pos2) -> (f32, f32) {
@@ -720,15 +782,15 @@ mod tests {
 
    #[test]
    fn the_interior_is_dark_and_the_lit_rim_is_bright() {
-      let stops = Orb::stops(accent(), 0.0);
-      let center = Orb::shade(0.0, 0.0, LIGHT_START, &stops);
+      let shells = Orb::shells(accent(), 0.0);
+      let center = Orb::shade(0.0, 0.0, LIGHT_START, &shells);
       // 0.96 is the last ring before the rim feathers out
-      let rim = Orb::shade(0.96, LIGHT_START, LIGHT_START, &stops);
+      let rim = Orb::shade(0.96, LIGHT_START, LIGHT_START, &shells);
       let far = Orb::shade(
          0.96,
          LIGHT_START + std::f32::consts::PI,
          LIGHT_START,
-         &stops,
+         &shells,
       );
 
       assert!(
@@ -804,6 +866,34 @@ mod tests {
    }
 
    #[test]
+   fn each_shadow_is_bounded_by_a_shifted_circle() {
+      let shells = Orb::shells(accent(), 0.0);
+      let shadow = &shells.deep;
+      let shift = 2.0 * shadow.offset;
+      let spin = LIGHT_START;
+      let center = -shift * vec2(spin.cos(), spin.sin());
+
+      // the shadow's edge is a circle around its shifted centre: every point of
+      // it that falls inside the ball is half-covered, whatever radius it sits at
+      for degrees in [-20.0f32, -45.0, -90.0, -135.0, -160.0] {
+         let around = degrees.to_radians();
+         let point = center + vec2(around.cos(), around.sin());
+         let u = point.length();
+         let angle = point.y.atan2(point.x);
+         let coverage = shadow.coverage(u, angle, spin);
+
+         assert!(
+            u <= 1.0,
+            "the edge point at {degrees} degrees is inside the ball"
+         );
+         assert!(
+            (coverage - 0.5).abs() < 0.01,
+            "the shadow fades over its circle edge at {degrees} degrees: {coverage}"
+         );
+      }
+   }
+
+   #[test]
    fn a_label_pulses_letters_one_delay_apart() {
       let orb = Orb::new().letter_delay(0.1);
       let period = 2.0;
@@ -871,10 +961,10 @@ mod tests {
 
    #[test]
    fn a_neutral_override_paints_a_neutral_ball() {
-      let silver = Orb::stops(Color32::WHITE, 0.0);
-      let accent = Orb::stops(accent(), 0.0);
+      let silver = Orb::shells(Color32::WHITE, 0.0);
+      let accent = Orb::shells(accent(), 0.0);
 
-      for color in [silver.deep, silver.lobe, silver.body] {
+      for color in [silver.deep.color, silver.lobe.color, silver.body] {
          let hsla = Hsla::from_color32(color);
          assert!(
             hsla.s < 1.0,
@@ -883,7 +973,7 @@ mod tests {
          );
       }
       assert!(
-         Hsla::from_color32(accent.lobe).s > 90.0,
+         Hsla::from_color32(accent.lobe.color).s > 90.0,
          "a chromatic accent keeps the ported saturation"
       );
    }
