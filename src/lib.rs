@@ -34,7 +34,7 @@
 //!   fills and completion bursts), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
 //!   [`Checkbox`], [`Radio`], [`ComboBox`], [`Chip`], [`Divider`],
-//!   [`Modal`], [`AvatarGroup`],
+//!   [`Modal`], [`Toast`] / [`Toasts`], [`AvatarGroup`],
 //!   [`SecureTextEdit`], [`MultiLabel`], the loaders ([`Spinner`],
 //!   [`Ripple`], [`Orb`]), [`Window`]
 //! - [`particles`] — [`Snow`],
@@ -112,7 +112,7 @@ pub use widgets::{
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
    ComboBox, Divider, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel, Orb,
    Popover, PopoverSide, Radio, Ripple, Spinner, SpinnerShadow, Switch, Tabs, TabsStyle,
-   TabsVisuals, TextEdit, TextEditOutput, ToggleShadow, ToggleVisuals, Window,
+   TabsVisuals, TextEdit, TextEditOutput, Toast, Toasts, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

@@ -117,6 +117,9 @@ name = "avatar"
 name = "badge"
 
 [[example]]
+name = "toast"
+
+[[example]]
 name = "telegram"
 path = "examples/telegram/main.rs"
 required-features = ["secure-types"]
