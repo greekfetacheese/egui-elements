@@ -120,6 +120,9 @@ name = "badge"
 name = "toast"
 
 [[example]]
+name = "indicator"
+
+[[example]]
 name = "telegram"
 path = "examples/telegram/main.rs"
 required-features = ["secure-types"]

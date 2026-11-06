@@ -12,8 +12,8 @@ use egui_elements::theme::{Theme, ThemeKind, ThemeVariant};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ChipRole,
-   ComboBox, Label, Modal, Orb, Radio, Ripple, SecureTextEdit, Spinner, Switch, Tabs, TabsStyle,
-   Toast, Toasts, Window,
+   ComboBox, Indicator, IndicatorState, Label, Modal, Orb, Radio, Ripple, SecureTextEdit, Spinner,
+   Switch, Tabs, TabsStyle, Toast, Toasts, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -888,6 +888,19 @@ impl DemoApp {
             RichText::new("Off").size(size).color(text_color),
          ));
          ui.add(Switch::without_text(&mut self.switch_off));
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 18.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+
+         // The pulse reuses the badge's loop, phased from the light's own id.
+         ui.add(Indicator::new(IndicatorState::On).size(12.0));
+         ui.add(Indicator::new(IndicatorState::On).size(12.0).pulse(BadgePulse::new()));
+         ui.add(Indicator::new(IndicatorState::Connecting).size(12.0));
+         ui.add(Indicator::new(IndicatorState::Off).size(12.0));
       });
 
       ui.add_space(8.0);
