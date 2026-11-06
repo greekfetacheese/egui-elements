@@ -300,6 +300,51 @@ A badge can also be rendered on its own, with no host widget: `ui.add(Badge::new
 square. Both the halo and the hop paint outside the badge's rect, so a badge animating inside a clipped parent
 is clipped with it.
 
+### Toasts
+
+`Toast` enqueues a notification; `Toasts` draws the stack. The builder takes only
+`&Context`, so any callback that holds the context can fire one, and the renderer is
+a single call in your top-level update:
+
+```rust
+use egui_elements::widgets::{ChipRole, Toast, Toasts};
+
+// Once per frame, after the panels:
+Toasts::new().render(ctx);
+
+// From a button handler, a completion callback, …
+Toast::new("Deploy complete")
+    .tone(ChipRole::Success)
+    .description("Rolled out to us-east-1")
+    .show(ctx);
+```
+
+`Toast::new("…")` draws the title with a left accent bar tinted by the tone — a
+`ChipRole`, the same semantic role enum `Chip` uses: `Success`, `Error`, `Warning`,
+`Info` and `Neutral` (`Accent` also works). `.description(…)` adds a second, muted
+line, `.duration(Duration::from_secs(8))` overrides the four-second auto-dismiss, and
+`.persistent()` keeps the toast until the user clicks ×.
+
+`Toasts::new()` configures the renderer, and every knob is a builder:
+
+```rust
+use egui::Align2;
+
+Toasts::new()
+    .anchor(Align2::RIGHT_BOTTOM)   // the default corner
+    .offset((12.0, 12.0))           // points from that corner
+    .width(320.0)                   // card width
+    .max_visible(5)                 // oldest toasts are dropped past the cap
+    .clear_all_button(true)         // "Clear all" pill once two pile up
+    .render(ctx);
+```
+
+The stack fades out only (never in), hovering a toast freezes its auto-dismiss
+countdown so it can be read or copied, and a settled stack requests no repaint.
+Clicking × starts the fade immediately; the "Clear all" pill does the same for every
+visible toast. Danger and warning tones are announced as ARIA alerts, the rest as
+status messages. Proof: `cargo run --example toast`.
+
 ### Spinners
 
 `Spinner` has the same geometry as egui's spinner — a rotating arc whose sweep is
@@ -935,3 +980,5 @@ The Snow particle effect is ported from [egui-snow](https://github.com/LaVashikk
 The `Ripple` loader is ported from [alexruix / fluffy-starfish-52](https://uiverse.io/alexruix/fluffy-starfish-52) (MIT).
 
 The `Orb` loader is ported from [dexter-st / bright-lizard-8](https://uiverse.io/dexter-st/bright-lizard-8) (MIT).
+
+The `Toast` widget is forked from [egui-elegance](https://github.com/stephenberry/egui-elegance) (MIT OR Apache-2.0, © 2026 Stephen Berry).

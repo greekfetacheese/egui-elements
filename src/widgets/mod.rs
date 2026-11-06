@@ -23,6 +23,7 @@ pub mod popover;
 pub mod secure_text_edit;
 pub mod tabs;
 pub mod text_edit;
+pub mod toast;
 pub mod toggle;
 pub mod window;
 
@@ -41,6 +42,7 @@ pub use popover::{Popover, PopoverSide};
 pub use secure_text_edit::SecureTextEdit;
 pub use tabs::{Tabs, TabsStyle, TabsVisuals};
 pub use text_edit::{TextEdit, TextEditOutput};
+pub use toast::{Toast, Toasts};
 pub use toggle::{
    Checkbox, CheckboxShadow, CheckboxVisuals, Radio, Switch, ToggleShadow, ToggleVisuals,
 };

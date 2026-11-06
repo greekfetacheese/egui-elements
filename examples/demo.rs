@@ -11,8 +11,9 @@ use egui_elements::gradient::{Fill, GradientDir};
 use egui_elements::theme::{Theme, ThemeKind, ThemeVariant};
 use egui_elements::utils;
 use egui_elements::widgets::{
-   Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ComboBox,
-   Label, Modal, Orb, Radio, Ripple, SecureTextEdit, Spinner, Switch, Tabs, TabsStyle, Window,
+   Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ChipRole,
+   ComboBox, Label, Modal, Orb, Radio, Ripple, SecureTextEdit, Spinner, Switch, Tabs, TabsStyle,
+   Toast, Toasts, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -311,6 +312,10 @@ impl eframe::App for DemoApp {
                   ui.add_space(48.0);
                });
          });
+
+      // The toast stack is an overlay (Order::Tooltip): render it after every panel
+      // so it floats above them, whichever surface fired it.
+      Toasts::new().render(ui.ctx());
    }
 }
 
@@ -781,6 +786,35 @@ impl DemoApp {
                .badge(Badge::new("3").color(colors.error).straddle().pulse(BadgePulse::new()))
                .min_size(button_size),
          );
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal_wrapped(|ui| {
+         ui.spacing_mut().item_spacing.x = 12.0;
+         ui.spacing_mut().item_spacing.y = 12.0;
+
+         // Every surface can fire the stack; the description names the surface, so a
+         // toast fired from the window gallery is identifiable. The renderer itself is
+         // global and runs once per frame at the end of `ui()`.
+         let tones = [
+            ("Success", ChipRole::Success),
+            ("Error", ChipRole::Error),
+            ("Warning", ChipRole::Warning),
+            ("Info", ChipRole::Info),
+         ];
+
+         for (label, tone) in tones {
+            let button =
+               Button::new(RichText::new(label).size(size).color(text_color)).min_size(button_size);
+
+            if ui.add(button).clicked() {
+               Toast::new(format!("{label} toast"))
+                  .tone(tone)
+                  .description(format!("Fired from the {id_salt} gallery"))
+                  .show(ui.ctx());
+            }
+         }
       });
 
       ui.add_space(8.0);
