@@ -33,7 +33,7 @@
 //!   [`HoldSettings`] for configurable hold-to-confirm
 //!   fills and completion bursts), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
-//!   [`Checkbox`], [`Radio`], [`ComboBox`], [`Chip`], [`Divider`],
+//!   [`Checkbox`], [`Radio`], [`Slider`], [`ComboBox`], [`Chip`], [`Divider`],
 //!   [`Modal`], [`Toast`] / [`Toasts`], [`Indicator`], [`AvatarGroup`],
 //!   [`SecureTextEdit`], [`MultiLabel`], the loaders ([`Spinner`],
 //!   [`Ripple`], [`Orb`]), [`Window`]
@@ -111,9 +111,9 @@ pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
    ComboBox, Divider, Frame, HoldBurst, HoldSettings, Indicator, IndicatorState, IntoModalId,
-   Label, Modal, MultiLabel, Orb, Popover, PopoverSide, Radio, Ripple, Spinner, SpinnerShadow,
-   Switch, Tabs, TabsStyle, TabsVisuals, TextEdit, TextEditOutput, Toast, Toasts, ToggleShadow,
-   ToggleVisuals, Window,
+   Label, Modal, MultiLabel, Orb, Popover, PopoverSide, Radio, Ripple, Slider, SliderVisuals,
+   Spinner, SpinnerShadow, Switch, Tabs, TabsStyle, TabsVisuals, TextEdit, TextEditOutput, Toast,
+   Toasts, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]
