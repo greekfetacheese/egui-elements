@@ -238,6 +238,34 @@ ui.add(Divider::new().inset(8.0));
 ui.add(Divider::vertical().length(14.0));
 ```
 
+### Indicators
+
+`Indicator` is a small status light with three states: `On` (a filled success dot
+inside a soft glow), `Connecting` (a warning ring) and `Off` (an error ring with a
+bar through it).
+
+```rust
+use egui_elements::widgets::{BadgePulse, Indicator, IndicatorState};
+
+ui.add(Indicator::new(IndicatorState::On));
+ui.add(Indicator::new(IndicatorState::Connecting).size(14.0));
+ui.add(Indicator::new(IndicatorState::Off).size(14.0));
+```
+
+Any state can pulse with the badge's loop — the same `BadgePulse` parameters, so
+`period`, `scale`, `alpha` and the easing behave exactly as they do on a badge:
+
+```rust
+ui.add(Indicator::new(IndicatorState::On).pulse(BadgePulse::new()));
+ui.add(Indicator::new(IndicatorState::Connecting).pulse(BadgePulse::new().period(2.0)));
+```
+
+The phase is derived from each light's id, so siblings in one row are staggered
+instead of beating in lockstep. The glow and the pulse paint outside the allocated
+square, exactly like the badge halo — leave a gap in a tight layout. A pulsing light
+repaints every frame; drop `.pulse(..)` when the state is static. Proof:
+`cargo run --example indicator`.
+
 ### Badges
 
 Attach a notification `Badge` to a corner of a `Button` to signal unseen content
@@ -981,4 +1009,4 @@ The `Ripple` loader is ported from [alexruix / fluffy-starfish-52](https://uiver
 
 The `Orb` loader is ported from [dexter-st / bright-lizard-8](https://uiverse.io/dexter-st/bright-lizard-8) (MIT).
 
-The `Toast` widget is forked from [egui-elegance](https://github.com/stephenberry/egui-elegance) (MIT OR Apache-2.0, © 2026 Stephen Berry).
+The `Toast` and `Indicator` widgets are forked from [egui-elegance](https://github.com/stephenberry/egui-elegance) (MIT OR Apache-2.0, © 2026 Stephen Berry).
