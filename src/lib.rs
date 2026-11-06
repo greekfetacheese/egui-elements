@@ -36,7 +36,7 @@
 //!   [`Checkbox`], [`Radio`], [`ComboBox`], [`Chip`], [`Divider`],
 //!   [`Modal`], [`AvatarGroup`],
 //!   [`SecureTextEdit`], [`MultiLabel`], the loaders ([`Spinner`],
-//!   [`Ripple`]), [`Window`]
+//!   [`Ripple`], [`Orb`]), [`Window`]
 //! - [`particles`] — [`Snow`],
 //!   [`Light`] and
 //!   [`Lightning`] with themed
@@ -110,7 +110,7 @@ pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
-   ComboBox, Divider, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel,
+   ComboBox, Divider, Frame, HoldBurst, HoldSettings, IntoModalId, Label, Modal, MultiLabel, Orb,
    Popover, PopoverSide, Radio, Ripple, Spinner, SpinnerShadow, Switch, Tabs, TabsStyle,
    TabsVisuals, TextEdit, TextEditOutput, ToggleShadow, ToggleVisuals, Window,
 };
