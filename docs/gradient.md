@@ -9,7 +9,7 @@ use egui_elements::gradient::{Fill, Gradient, GradientDir};
 
 let solid = Fill::solid(colors.widget_bg);
 let ramp = Fill::horizontal(colors.accent, colors.info);
-let bevel = Fill::graded(solid, colors.text, 0.1); // contrast-clamped
+let bevel = Fill::graded(solid, colors.text, 0.1, GradientDir::TopDown); // contrast-clamped
 ```
 
 ## The primitive
