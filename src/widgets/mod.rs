@@ -34,7 +34,7 @@ pub use combo_box::ComboBox;
 pub use divider::Divider;
 pub use frame::Frame;
 pub use label::Label;
-pub use loaders::{Ripple, Spinner, SpinnerShadow};
+pub use loaders::{Orb, Ripple, Spinner, SpinnerShadow};
 pub use modal::{IntoModalId, Modal};
 pub use multi_label::MultiLabel;
 pub use popover::{Popover, PopoverSide};

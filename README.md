@@ -9,7 +9,7 @@ egui-elements is far from perfect and there may be breaking changes to the color
 
 This crate is **not** a drop-in replacement for stock egui widgets. It ships:
 
-- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, the loaders `Spinner` and `Ripple`, `Checkbox`, `Radio`, `Switch`, `Tabs`, `Chip`, `Divider`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, segmented and underlined tabs whose indicator slides between segments, and `AvatarGroup` stacks that fan out on hover
+- A widget set (`Button`, `Label`, `ComboBox`, `SecureTextEdit`, `Modal`, `MultiLabel`, the loaders `Spinner`, `Ripple` and `Orb`, `Checkbox`, `Radio`, `Switch`, `Tabs`, `Chip`, `Divider`, `Window`) that reads visuals from an installed theme, corner `Badges` for buttons, hold-to-confirm buttons with a configurable progress sweep and completion burst, an animated checkbox, segmented and underlined tabs whose indicator slides between segments, and `AvatarGroup` stacks that fan out on hover
 - **Layout** — a CSS-flexbox subset (`Flex::row` / `Flex::column`, `gap`, `justify`, `align_items`, `flex: n` items) and a data-driven `Table` with `fixed` / `auto` / `fr` columns; see [`docs/layout.md`](docs/layout.md), run `cargo run --example layout`
 - **Motion** — eased value animation (`animate`, `Motion`, `Easing`), colour/rect interpolation (`Lerp`) and two containers: `Fade` (opacity) and `Collapse` (a body revealed by its own measured height); see [`docs/motion.md`](docs/motion.md), run `cargo run --example motion`
 - `Snow` and `Light` particle effects with drop-in, themed settings windows (`Snow` ported from [egui-snow](https://github.com/LaVashikk/egui-snow), MIT)
@@ -353,6 +353,40 @@ flicker instead of the ported hue ramp. `.color()` repaints every cell with one
 colour, `.cells()` replaces the ramp whole, `.period()` and `.delay()` retime it,
 and `.easing()` replaces the measured CSS `ease` curve. `paint_at(&Ui, Rect)` draws
 it inside a widget you already own.
+
+### Orbs
+
+`Orb` is the third loader, and the only one that carries text of its own: a glowing
+sphere whose lit rim orbits it once every 2 s while a label inside pulses letter by
+letter, each letter 100 ms behind the one before it.
+
+Ported from [dexter-st / bright-lizard-8](https://uiverse.io/dexter-st/bright-lizard-8) (MIT).
+
+```rust
+use egui_elements::widgets::Orb;
+
+ui.add(Orb::new().text("Generating"));                    // accent shell, sized for the label
+ui.add(Orb::new().size(64.0));                            // ball only
+ui.add(Orb::new().text("Loading").color(Color32::from_rgb(0xad, 0x5f, 0xff))); // retint
+ui.add(Orb::new().period(1.0).letter_delay(0.05));        // faster, tighter stagger
+ui.add(Orb::new().text("Saving").text_size(13.0));        // a smaller label
+```
+
+The reference is one round element carrying three `inset` box-shadows that rotate
+while their colours cross-fade, which egui cannot express: there is no inset shadow.
+The port evaluates the three shadows' shape per vertex of one radial mesh instead —
+every shell's alpha ramps up with the radius and is gated by `cos(angle - phase)`, so
+the interior stays near black while the lit rim runs through white. Only the accent's
+hue comes from the palette (`Theme::colors_from_ctx`): the ported shadows are fully
+saturated, and a muted accent would read as a grey ball with a tint.
+
+`.color()` retints the whole shell (every shell is a hue offset from it, so a pure
+grey paints a silver ball), `.period()` retimes both the turn and the letter
+pulse, `.letter_delay(0.0)` pulses every letter at once, `.text_size()` overrides the
+label's 1.5 x body default, and `.size()` pins the square — without it the ball grows
+so the label keeps 60 % of the diameter, which is the reference's 108 pt of text in
+180 pt. An empty `.text("")` is the same as no label. `paint_at(&Ui, Rect)` draws it
+inside a widget you already own.
 
 ### Checkboxes
 
@@ -809,6 +843,12 @@ Telegram Desktop replica: a two-pane `Flex` shell (chat list, conversation, over
 cargo run --features secure-types --example telegram
 ```
 
+Orb loader: the size ladder, the staggered label and live knobs:
+
+```sh
+cargo run --example orb
+```
+
 Segmented tabs, filled and fitted:
 
 ```sh
@@ -890,3 +930,5 @@ MIT. Icons from the `lucide` feature are [Lucide](https://lucide.dev) (ISC).
 The Snow particle effect is ported from [egui-snow](https://github.com/LaVashikk/egui-snow) (MIT, © 2025 LaVashikk).
 
 The `Ripple` loader is ported from [alexruix / fluffy-starfish-52](https://uiverse.io/alexruix/fluffy-starfish-52) (MIT).
+
+The `Orb` loader is ported from [dexter-st / bright-lizard-8](https://uiverse.io/dexter-st/bright-lizard-8) (MIT).
