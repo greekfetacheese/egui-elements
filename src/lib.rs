@@ -34,7 +34,7 @@
 //!   fills and completion bursts), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
 //!   [`Checkbox`], [`Radio`], [`Slider`], [`ComboBox`], [`Chip`], [`Divider`],
-//!   [`Modal`], [`Toast`] / [`Toasts`], [`Indicator`], [`AvatarGroup`],
+//!   [`Modal`], [`Toast`] / [`Toasts`], [`Indicator`], [`FpsMeter`], [`AvatarGroup`],
 //!   [`SecureTextEdit`], [`MultiLabel`], the loaders ([`Spinner`],
 //!   [`Ripple`], [`Orb`]), [`Window`]
 //! - [`particles`] — [`Snow`],
@@ -110,10 +110,10 @@ pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
-   ComboBox, Divider, Frame, HoldBurst, HoldSettings, Indicator, IndicatorState, IntoModalId,
-   Label, Modal, MultiLabel, Orb, Popover, PopoverSide, Radio, Ripple, Slider, SliderVisuals,
-   Spinner, SpinnerShadow, Switch, Tabs, TabsStyle, TabsVisuals, TextEdit, TextEditOutput, Toast,
-   Toasts, ToggleShadow, ToggleVisuals, Window,
+   ComboBox, Divider, FpsMeter, FpsStats, Frame, HoldBurst, HoldSettings, Indicator,
+   IndicatorState, IntoModalId, Label, Modal, MultiLabel, Orb, Popover, PopoverSide, Radio, Ripple,
+   Slider, SliderVisuals, Spinner, SpinnerShadow, Spread, Switch, Tabs, TabsStyle, TabsVisuals,
+   TextEdit, TextEditOutput, Toast, Toasts, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

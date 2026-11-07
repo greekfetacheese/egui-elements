@@ -24,6 +24,7 @@ cargo run --example demo --features full   # the whole gallery
 | [Badges](#badges) | `cargo run --example badge` |
 | [Avatar groups](#avatar-groups) | `cargo run --example avatar` |
 | [Indicators](#indicators) | `cargo run --example indicator` |
+| [FPS meters](#fps-meters) | `cargo run --example fps_meter` |
 | [Frame](#frame) | `cargo run --example email` |
 | [Surfaces](#surfaces) | `cargo run --example email` |
 | [Gradient fills](#gradient-fills) | `cargo run --example gradient` |
@@ -634,6 +635,38 @@ instead of beating in lockstep. The glow and the pulse paint outside the allocat
 square, exactly like the badge halo — leave a gap in a tight layout. A pulsing light
 repaints every frame; drop `.pulse(..)` when the state is static. Proof:
 `cargo run --example indicator`.
+
+## FPS meters
+
+`FpsMeter` measures the frame rate and the CPU time the host reports for a frame. Call
+`frame` once per frame with the host's own `Instant::elapsed()`; the meter times the
+interval between calls itself, so the two readings stay independent.
+
+```rust
+use std::time::Instant;
+use egui_elements::widgets::FpsMeter;
+
+let mut meter = FpsMeter::new();
+
+// once per frame, at the end of the host's work
+let start = Instant::now();
+meter.frame(start.elapsed());
+
+// a themed floating window …
+meter.show_window(ctx);
+
+// … or the chrome-free body inside any container
+meter.body_ui(ui);
+```
+
+`fps()` is the mean over the sample window (120 frames by default, about two seconds at
+60 fps) and `cpu_ms()` is the latest host reading. `stats()` returns the min / mean / max
+of both the frame interval and the CPU time, as a `Spread`. An empty window paints an em
+dash. `body_ui` requests a repaint — a metric on screen must keep the frame loop running
+to stay live. Two meters need distinct window titles, because the title is the window id.
+`anchor` pins the window to a screen corner, `with_capacity` resizes the window, and `clear`
+restarts the measurement.
+Proof: `cargo run --example fps_meter`.
 
 ## Frame
 

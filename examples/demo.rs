@@ -3,6 +3,8 @@
 //!
 //! Run with: `cargo run --example demo --features full`
 
+use std::time::Instant;
+
 use eframe::egui::*;
 use egui_elements::components::{CredentialsForm, QrEncoding, QrImage, SecureInputField};
 use egui_elements::editor::ThemeEditor;
@@ -12,8 +14,8 @@ use egui_elements::theme::{Theme, ThemeKind, ThemeVariant};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ChipRole,
-   ComboBox, Indicator, IndicatorState, Label, Modal, Orb, Radio, Ripple, SecureTextEdit, Slider,
-   Spinner, Switch, Tabs, TabsStyle, Toast, Toasts, Window,
+   ComboBox, FpsMeter, Indicator, IndicatorState, Label, Modal, Orb, Radio, Ripple, SecureTextEdit,
+   Slider, Spinner, Switch, Tabs, TabsStyle, Toast, Toasts, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -136,6 +138,8 @@ struct DemoApp {
    credentials: CredentialsForm,
    secure_field: SecureInputField,
    qr: QrImage,
+   fps: FpsMeter,
+   fps_open: bool,
 }
 
 impl DemoApp {
@@ -222,6 +226,8 @@ impl DemoApp {
                ..Default::default()
             },
          ),
+         fps: FpsMeter::new(),
+         fps_open: false,
       }
    }
 
@@ -269,6 +275,8 @@ impl eframe::App for DemoApp {
    }
 
    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+      let start = Instant::now();
+
       Panel::top("header")
          .frame(
             Frame::new()
@@ -315,6 +323,13 @@ impl eframe::App for DemoApp {
                });
          });
 
+      // The meter measures this demo's own frame: tick once with the host
+      // clock, then paint the floating window.
+      self.fps.frame(start.elapsed());
+      if self.fps_open {
+         self.fps.show_window(ui.ctx());
+      }
+
       // The toast stack is an overlay (Order::Tooltip): render it after every panel
       // so it floats above them, whichever surface fired it.
       Toasts::new().render(ui.ctx());
@@ -336,6 +351,17 @@ impl DemoApp {
          self.muted(ui, "Theme palette & widget showcase");
 
          ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let fps_text = if self.fps_open {
+               "Hide FPS"
+            } else {
+               "Show FPS"
+            };
+            if ui.add(Button::new(fps_text).min_size(vec2(96.0, 28.0))).clicked() {
+               self.fps_open = !self.fps_open;
+            }
+
+            ui.add_space(8.0);
+
             let editor_text = if self.editor.open {
                "Close Editor"
             } else {
