@@ -175,8 +175,8 @@ impl WidgetState {
 /// `load` returns `Some(theme)` when a theme was picked.
 #[derive(Clone)]
 struct ThemeIo {
-   save: Arc<dyn Fn(&Theme) -> Result<Option<String>, String>>,
-   load: Arc<dyn Fn() -> Result<Option<Theme>, String>>,
+   save: Arc<dyn Fn(&Theme) -> Result<Option<String>, String> + Send + Sync>,
+   load: Arc<dyn Fn() -> Result<Option<Theme>, String> + Send + Sync>,
 }
 
 /// In-app editor for a [`Theme`].
@@ -254,8 +254,8 @@ impl ThemeEditor {
    /// when the user cancelled); `load` returns the theme the user picked.
    pub fn set_io(
       &mut self,
-      save: impl Fn(&Theme) -> Result<Option<String>, String> + 'static,
-      load: impl Fn() -> Result<Option<Theme>, String> + 'static,
+      save: impl Fn(&Theme) -> Result<Option<String>, String> + Send + Sync + 'static,
+      load: impl Fn() -> Result<Option<Theme>, String> + Send + Sync + 'static,
    ) {
       self.io = Some(ThemeIo {
          save: Arc::new(save),
