@@ -62,6 +62,9 @@ serde_json = "1"
 name = "popover"
 
 [[example]]
+name = "menu"
+
+[[example]]
 name = "demo"
 required-features = ["full"]
 

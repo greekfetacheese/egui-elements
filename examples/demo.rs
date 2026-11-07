@@ -14,8 +14,9 @@ use egui_elements::theme::{Theme, ThemeKind, ThemeVariant};
 use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ChipRole,
-   ComboBox, FpsMeter, Indicator, IndicatorState, Label, Modal, Orb, Radio, Ripple, SecureTextEdit,
-   Slider, Spinner, Switch, Tabs, TabsStyle, Toast, Toasts, Window,
+   ComboBox, FpsMeter, Indicator, IndicatorState, Label, Menu, MenuItem, MenuSection, Modal, Orb,
+   Radio, Ripple, SecureTextEdit, Slider, Spinner, SubMenuItem, Switch, Tabs, TabsStyle, Toast,
+   Toasts, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -1060,6 +1061,34 @@ impl DemoApp {
          if ui.add(remove_btn).clicked() {
             self.items.remove();
          }
+      });
+
+      ui.add_space(8.0);
+
+      ui.horizontal(|ui| {
+         ui.spacing_mut().item_spacing.x = 12.0;
+
+         let trigger = ui.add(
+            Button::new(RichText::new("Menu").size(size).color(text_color))
+               .min_size(vec2(96.0, 32.0)),
+         );
+
+         let _ = Menu::new(format!("{id_salt}_menu")).show_below(&trigger, |ui| {
+            ui.add(MenuItem::new("Edit").shortcut("Ctrl+E"));
+            ui.add(MenuItem::new("Duplicate").icon("\u{29C9}"));
+            ui.separator();
+            ui.add(MenuSection::new("View"));
+            ui.add(MenuItem::new("Preview").checked(true));
+            ui.add(MenuItem::new("Full screen").checked(false));
+            ui.add(MenuItem::new("Zoom").radio(true));
+            ui.separator();
+            let _ = SubMenuItem::new("Open recent").show(ui, |ui| {
+               ui.add(MenuItem::new("theme.rs"));
+               ui.add(MenuItem::new("README.md"));
+            });
+            ui.add(MenuItem::new("Publish").enabled(false));
+            ui.add(MenuItem::new("Delete").danger());
+         });
       });
 
       ui.add_space(8.0);

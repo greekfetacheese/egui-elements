@@ -16,7 +16,7 @@ crate's widgets *after* `use eframe::egui::*`, or alias one of the two.
 
 | Area | What you get |
 |---|---|
-| **Widgets** | `Button` (+ hold-to-confirm), `Badge`, `Label` / `MultiLabel`, `ComboBox`, `Chip`, `Divider`, `Slider`, the toggle family, `Tabs`, `AvatarGroup`, `Indicator`, `FpsMeter`, `Modal`, `Window`, `Popover`, `Toast` / `Toasts`, and the `Spinner` / `Ripple` / `Orb` loaders → [docs/widgets.md](docs/widgets.md) |
+| **Widgets** | `Button` (+ hold-to-confirm), `Badge`, `Label` / `MultiLabel`, `ComboBox`, `Menu` / `MenuItem` / `SubMenuItem` / `MenuSection`, `Chip`, `Divider`, `Slider`, the toggle family, `Tabs`, `AvatarGroup`, `Indicator`, `FpsMeter`, `Modal`, `Window`, `Popover`, `Toast` / `Toasts`, and the `Spinner` / `Ripple` / `Orb` loaders → [docs/widgets.md](docs/widgets.md) |
 | **Layout** | a CSS-flexbox subset (`Flex`, `Item`) and a data-driven `Table` with `fixed` / `auto` / `fr` columns → [docs/layout.md](docs/layout.md) |
 | **Motion** | eased values (`animate`, `Motion`, `Easing`), interpolation (`Lerp`), and the `Fade` / `Collapse` containers → [docs/motion.md](docs/motion.md) |
 | **Particles** | `Snow`, `Light` and `Lightning`, each with a themed settings window → [docs/particles.md](docs/particles.md) |
@@ -180,13 +180,16 @@ states, contrast policy, how to add a palette — is [docs/theme.md](docs/theme.
 | `gradient` | `Fill` / `Gradient` on frames and buttons | `cargo run --example gradient` |
 
 Every widget also has its own proof example — `checkbox`, `radio`, `switch`, `slider`, `tabs`,
-`toast`, `badge`, `avatar`, `indicator`, `spinner`, `ripples`, `orb`, `popover`, `combo_box`,
+`toast`, `badge`, `avatar`, `indicator`, `spinner`, `ripples`, `orb`, `popover`, `menu`, `combo_box`,
 `text_edit`, `hold_to_confirm`, `label_sections`, `fps_meter`. The table in
 [docs/widgets.md](docs/widgets.md) maps each entry to its example.
 
 ## License
 
 MIT. Icons from the `lucide` feature are [Lucide](https://lucide.dev) (ISC).
+
+The `Menu` family is adapted from [egui-elegance](https://github.com/matrix-research-inc/egui-elegance)
+(MIT OR Apache-2.0, © Stephen Berry).
 
 The Snow particle effect is ported from [egui-snow](https://github.com/LaVashikk/egui-snow) (MIT, © 2025 LaVashikk).
 
