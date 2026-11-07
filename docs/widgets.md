@@ -24,6 +24,7 @@ cargo run --example demo --features full   # the whole gallery
 | [Badges](#badges) | `cargo run --example badge` |
 | [Avatar groups](#avatar-groups) | `cargo run --example avatar` |
 | [Indicators](#indicators) | `cargo run --example indicator` |
+| [FPS meters](#fps-meters) | `cargo run --example fps_meter` |
 | [Frame](#frame) | `cargo run --example email` |
 | [Surfaces](#surfaces) | `cargo run --example email` |
 | [Gradient fills](#gradient-fills) | `cargo run --example gradient` |
@@ -634,6 +635,50 @@ instead of beating in lockstep. The glow and the pulse paint outside the allocat
 square, exactly like the badge halo — leave a gap in a tight layout. A pulsing light
 repaints every frame; drop `.pulse(..)` when the state is static. Proof:
 `cargo run --example indicator`.
+
+## FPS meters
+
+`FpsMeter` measures the frame rate and the CPU time the host reports for a frame. Call
+`frame` once per frame with the host's own `Instant::elapsed()`; the meter times the
+interval between calls itself, so the two readings stay independent.
+
+```rust
+use std::time::Instant;
+use egui_elements::widgets::FpsMeter;
+
+let mut meter = FpsMeter::new();
+
+// once per frame, at the end of the host's work
+let start = Instant::now();
+meter.frame(start.elapsed());
+
+// a themed floating window …
+meter.show_window(ctx);
+
+// … or the chrome-free body inside any container
+meter.body_ui(ui);
+
+// the meter never schedules frames: repaint from the host
+ctx.request_repaint();
+
+// the title bar's close button hides the window; a toolbar can restore it
+if !meter.is_open() {
+    meter.set_open(true);
+}
+```
+
+`max_fps()` is the ceiling the frame work allows — `1000 / cpu_ms()` — so a vsync-capped
+60 Hz display still reports its headroom (a 4 ms frame reads 250). `fps()` keeps the
+measured rate: the mean over the sample window (120 frames by default, about two seconds
+at 60 fps). `stats()` returns the min / mean / max of both the frame interval and the CPU
+time, as a `Spread`. An empty window paints an em dash. The body never schedules a
+repaint: the host owns the frame loop, and `ctx.request_repaint()` is the live-metric call
+when the app is otherwise idle. The window floats and can be dragged; `anchor` pins it to a screen corner
+instead (a pinned window cannot be dragged). Its title bar closes it: `is_open` reads that
+state and `set_open` restores it from a toolbar toggle, and nothing is painted while closed.
+Two meters need distinct window titles, because the title is the window id. `with_capacity`
+resizes the window and `clear` restarts the measurement.
+Proof: `cargo run --example fps_meter`.
 
 ## Frame
 

@@ -126,6 +126,9 @@ name = "toast"
 name = "indicator"
 
 [[example]]
+name = "fps_meter"
+
+[[example]]
 name = "telegram"
 path = "examples/telegram/main.rs"
 required-features = ["secure-types"]
