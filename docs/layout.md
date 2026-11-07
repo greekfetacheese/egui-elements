@@ -291,6 +291,32 @@ needs `row_gap >= 2 × the overhang` — 12 pt, which is `theme.spacing.md` or t
 `item_spacing.y`. `theme.spacing.xs` (4 pt) lets one row's button reach into the next row. This is a
 documented host duty, not something the container can infer.
 
+### The viewport: only visible rows are placed
+
+A table inside a `ScrollArea` is virtualised without the host doing anything. On the placing pass the
+table skips every row whose band does not intersect `ui.clip_rect()`: no cell is built and no host closure
+runs for it, so the per-frame cost is the viewport rather than the list.
+
+```rust
+// Nothing to pass: the container reads the clip rect the ScrollArea already set.
+ScrollArea::vertical().show(ui, |ui| {
+    Table::new("portfolio_tokens", &rows).columns(/* … */).show(ui, |t| { /* … */ });
+});
+```
+
+Three properties make this safe:
+
+- **The band still spans every row.** An off-screen row's space is reserved from the cached heights, so the
+  `ScrollArea` sees the full content extent and the scrollbar is right.
+- **Column extents stay put.** `Auto` and the measure pass still run over the whole list, so the columns do
+  not resize as rows scroll past.
+- **Nothing interactive is dropped.** A fully clipped row cannot be hovered or clicked, so skipping it
+  changes no interaction.
+
+The measure pass is the one thing virtualisation cannot cut: an `Auto` column needs the widest cell of the
+whole list. Keep the widest column `Fixed`/`Fr` where the list is long, and a fresh table (or a changed
+`key`) costs one pass over every row, not a pass per frame.
+
 ### Recipe: the `tx_history` shape
 
 Five columns (`fr / fr / fr / auto / fixed`), a header with a cell per column — including the empty one over

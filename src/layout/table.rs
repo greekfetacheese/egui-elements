@@ -26,6 +26,14 @@
 //! [`Column::Fr`] column shares the space left over by the fixed and auto columns; a
 //! [`Column::Fixed`] column keeps its width. Cells are **not clipped** — chrome such as a button's
 //! hover expansion or a badge may paint outside its cell, so budget the gap for it.
+//!
+//! # The viewport
+//!
+//! Only the rows the host's clip rect shows are laid out, so a table in a `ScrollArea` costs its
+//! viewport, not its list. The band still spans every row — the space an off-screen row would take is
+//! reserved from the cached heights — so the scroll extent and the column extents (measured over the
+//! whole list) stay correct. A row that is scrolled out of view costs one height lookup and nothing
+//! else; the host needs no API for it, because only the table knows the row heights.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
@@ -160,6 +168,9 @@ impl<'a, T> Table<'a, T> {
    /// The header and every row are placed into the same column extents: `Auto` columns fit their
    /// widest measured cell, `Fr` columns share the width left over by the fixed and auto columns, and
    /// `Fixed` columns keep their width.
+   ///
+   /// Rows outside `ui.clip_rect()` are skipped, which is what makes a table inside a `ScrollArea`
+   /// cost its viewport rather than its list — see the [module docs](self).
    pub fn show<R>(
       self,
       ui: &mut Ui,
@@ -342,6 +353,7 @@ impl<T> TableUi<'_, '_, T> {
          Mode::Placing => {
             self.ensure_band();
             let band = self.band.as_ref().expect("the band is allocated above").0;
+            let clip = self.ui.clip_rect();
             let mut y = band.min.y + self.header_height + self.header_pad;
             if self.has_header {
                y += self.row_gap;
@@ -349,6 +361,14 @@ impl<T> TableUi<'_, '_, T> {
             for (i, item) in self.data.iter().enumerate() {
                let height = self.heights[i];
                let row_band = Rect::from_min_size(pos2(band.min.x, y), vec2(band.width(), height));
+               y += height + self.row_gap;
+
+               // The band already reserved this row's space, so a row the viewport does not show is
+               // skipped rather than placed: no cell is built and no closure runs for it.
+               if !clip.intersects(row_band) {
+                  continue;
+               }
+
                let mut cells = std::mem::take(&mut self.scratch);
                cells.clear();
                let mut x = band.min.x;
@@ -371,7 +391,6 @@ impl<T> TableUi<'_, '_, T> {
                   add(&mut row, item);
                }
                self.scratch = cells;
-               y += height + self.row_gap;
             }
          }
          Mode::Measuring => {
@@ -865,6 +884,65 @@ mod tests {
       assert_eq!(
          passes[2], 0,
          "third frame ran a second pass: {passes:?}"
+      );
+   }
+
+   /// A table in a `ScrollArea` lays out its viewport, not its list.
+   ///
+   /// The band still reserves every row's height — that is what a `ScrollArea` reads as its content
+   /// extent — while the rows the clip rect does not show are skipped outright.
+   #[test]
+   fn table_places_only_the_rows_the_viewport_shows() {
+      let rows: Vec<Row> = (0..6).map(|_| Row("row", "cell")).collect();
+      let ctx = themed_ctx();
+      let drawn = std::cell::Cell::new(0usize);
+      let band = std::cell::Cell::new(0.0f32);
+
+      let mut body = |ui: &mut Ui| {
+         let mut child = ui.new_child(UiBuilder::new().max_rect(Rect::from_min_size(
+            Pos2::ZERO,
+            vec2(500.0, 400.0),
+         )));
+         // The viewport a `ScrollArea` imposes: the first row and the gap under it, and nothing of
+         // the second (rows are 40 pt tall, 10 pt apart).
+         child.set_clip_rect(Rect::from_min_size(Pos2::ZERO, vec2(500.0, 45.0)));
+
+         let response = Table::new("viewport", &rows)
+            .columns([Column::Auto, Column::Fr(1.0)])
+            .row_gap(10.0)
+            .show(&mut child, |table| {
+               table.rows(|row, _item| {
+                  drawn.set(drawn.get() + 1);
+                  row.cell(|ui| {
+                     ui.allocate_space(vec2(10.0, 40.0));
+                  });
+                  row.cell(|ui| {
+                     ui.allocate_space(vec2(10.0, 40.0));
+                  });
+               });
+            })
+            .response;
+         band.set(response.rect.height());
+      };
+
+      drop(frame(&ctx, vec2(500.0, 400.0), &mut body));
+      drawn.set(0);
+      let out = frame(&ctx, vec2(500.0, 400.0), &mut body);
+
+      assert_eq!(
+         extra_passes(&out),
+         0,
+         "the second frame should place in one pass"
+      );
+      assert_eq!(
+         drawn.get(),
+         1,
+         "only the row the viewport shows is laid out"
+      );
+      assert!(
+         (band.get() - 290.0).abs() < 0.5,
+         "band height {} != 6 rows + 5 gaps",
+         band.get()
       );
    }
 }
