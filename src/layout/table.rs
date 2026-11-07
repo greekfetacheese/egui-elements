@@ -373,8 +373,9 @@ impl<T> TableUi<'_, '_, T> {
                cells.clear();
                let mut x = band.min.x;
                for width in &self.widths {
+                  // The band's own top, never `y`: `y` has already advanced to the next row.
                   cells.push(Rect::from_min_size(
-                     pos2(x, y),
+                     pos2(x, row_band.min.y),
                      vec2(*width, height),
                   ));
                   x += *width + self.gap;
@@ -944,5 +945,68 @@ mod tests {
          "band height {} != 6 rows + 5 gaps",
          band.get()
       );
+   }
+
+   /// Every cell of a row sits in that row's band.
+   ///
+   /// `TableRow::fill` paints `rect()`, so if `cell()` lands anywhere else the host's chrome and its
+   /// content drift apart — which is exactly how the viewport change first broke: the row cursor
+   /// advanced before the cells were built, every row's content moved down one slot, and the band
+   /// tint above it looked like an empty row.
+   #[test]
+   fn table_row_cells_sit_in_their_band() {
+      let rows: Vec<Row> = (0..3).map(|_| Row("row", "cell")).collect();
+      let ctx = themed_ctx();
+      let seen = std::cell::RefCell::new(Vec::new());
+
+      for _ in 0..2 {
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            seen.borrow_mut().clear();
+            scope(ui, |ui| {
+               Table::new("bands", &rows)
+                  .columns([Column::Auto, Column::Fr(1.0)])
+                  .row_gap(10.0)
+                  .show(ui, |table| {
+                     table.rows(|row, _item| {
+                        let band = row.rect();
+                        let cell = row
+                           .cell(|ui| {
+                              ui.allocate_space(vec2(10.0, 40.0));
+                              ui.max_rect()
+                           })
+                           .inner;
+                        seen.borrow_mut().push((band, cell));
+                     });
+                  });
+            });
+         }));
+      }
+
+      let seen = seen.borrow();
+      assert_eq!(seen.len(), 3);
+      for (band, cell) in seen.iter() {
+         assert!(
+            (cell.min.y - band.min.y).abs() < 0.5,
+            "cell top {} != band top {}",
+            cell.min.y,
+            band.min.y
+         );
+         assert!(
+            (cell.height() - band.height()).abs() < 0.5,
+            "cell height {} != band height {}",
+            cell.height(),
+            band.height()
+         );
+      }
+      for pair in seen.windows(2) {
+         let (above, _) = pair[0];
+         let (below, _) = pair[1];
+         assert!(
+            (below.min.y - (above.max.y + 10.0)).abs() < 0.5,
+            "band {} does not follow band {} at the row gap",
+            below.min.y,
+            above.max.y
+         );
+      }
    }
 }
