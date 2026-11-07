@@ -31,6 +31,7 @@ cargo run --example demo --features full   # the whole gallery
 | [Scroll areas and dividers](#scroll-areas-and-dividers) | `cargo run --example demo` |
 | [Window](#window) | `cargo run --example demo` |
 | [Modal](#modal) | `cargo run --example demo` |
+| [Menus](#menus) | `cargo run --example menu` |
 | [Popover](#popover) | `cargo run --example popover` |
 | [Toasts](#toasts) | `cargo run --example toast` |
 | [Spinners](#spinners) | `cargo run --example spinner` |
@@ -872,6 +873,45 @@ Modal::new("confirm", &mut open)
 - `.center_header(true)` centres the title, `header_icon(egui::Image)` takes an image (a Lucide SVG,
   not a glyph), `.closable(false)`, `.close_on_backdrop(false)` and `.close_on_escape(false)` remove
   exits, and `.alert(true)` marks the dialog as an alert for assistive tech.
+
+## Menus
+
+A click-to-open popup of rows anchored under a trigger, plus the three row types that go inside it.
+
+**Signature** `Menu::new(id_salt).min_width(..).show_below(&trigger, |ui| …) -> Option<R>`
+
+```rust
+use egui_elements::{Button, Menu, MenuItem, MenuSection, SubMenuItem};
+
+let trigger = ui.add(Button::new("Actions"));
+Menu::new("row_actions").show_below(&trigger, |ui| {
+    ui.add(MenuItem::new("Edit").shortcut("Ctrl+E"));
+    ui.add(MenuItem::new("Duplicate").icon("⧉"));
+    ui.separator();
+    ui.add(MenuSection::new("View"));
+    ui.add(MenuItem::new("Preview").checked(true));
+    let _ = SubMenuItem::new("Open recent").show(ui, |ui| {
+        ui.add(MenuItem::new("theme.rs"));
+    });
+    ui.add(MenuItem::new("Publish").enabled(false));
+    if ui.add(MenuItem::new("Delete").danger()).clicked() {
+        // …
+    }
+});
+```
+
+- `Menu` opens on a trigger click and closes on an item click, an outside click, or `Esc`. It
+  returns `Some` only while open; `.min_width(..)` defaults to 180.
+- `MenuItem` rows: `.shortcut(..)` is a right-aligned hint (not a key binding), `.danger()` paints
+  the error tone and a tinted hover, and `.enabled(false)` blocks clicks. One leading gutter is
+  selectable with `.icon(..)`, `.checked(bool)` or `.radio(bool)`; the off states still reserve it,
+  so rows that opt in stay aligned.
+- `MenuSection` is an uppercased, non-interactive header. `SubMenuItem` renders the same row with a
+  chevron and opens its body as a flyout that stays up while the pointer is over trigger or flyout.
+- The popup surface is the theme's `window_frame` with a `ThemeSpacing::xs` margin, and it sits one
+  `xs` step clear of its trigger; the flyout clears the parent panel by the same step, so the two
+  never touch.
+- Proof: `examples/menu.rs` — `cargo run --example menu`.
 
 ## Popover
 
