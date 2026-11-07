@@ -139,7 +139,6 @@ struct DemoApp {
    secure_field: SecureInputField,
    qr: QrImage,
    fps: FpsMeter,
-   fps_open: bool,
 }
 
 impl DemoApp {
@@ -226,8 +225,7 @@ impl DemoApp {
                ..Default::default()
             },
          ),
-         fps: FpsMeter::new(),
-         fps_open: false,
+         fps: FpsMeter::new().open(false),
       }
    }
 
@@ -324,11 +322,9 @@ impl eframe::App for DemoApp {
          });
 
       // The meter measures this demo's own frame: tick once with the host
-      // clock, then paint the floating window.
+      // clock, then paint the floating window (a no-op while it is closed).
       self.fps.frame(start.elapsed());
-      if self.fps_open {
-         self.fps.show_window(ui.ctx());
-      }
+      self.fps.show_window(ui.ctx());
 
       // The toast stack is an overlay (Order::Tooltip): render it after every panel
       // so it floats above them, whichever surface fired it.
@@ -351,13 +347,10 @@ impl DemoApp {
          self.muted(ui, "Theme palette & widget showcase");
 
          ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let fps_text = if self.fps_open {
-               "Hide FPS"
-            } else {
-               "Show FPS"
-            };
+            let fps_open = self.fps.is_open();
+            let fps_text = if fps_open { "Hide FPS" } else { "Show FPS" };
             if ui.add(Button::new(fps_text).min_size(vec2(96.0, 28.0))).clicked() {
-               self.fps_open = !self.fps_open;
+               self.fps.set_open(!fps_open);
             }
 
             ui.add_space(8.0);

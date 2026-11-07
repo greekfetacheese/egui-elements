@@ -29,7 +29,6 @@ fn main() -> eframe::Result {
 struct MeterApp {
    theme: Theme,
    meter: FpsMeter,
-   window: bool,
    work_ms: f32,
 }
 
@@ -40,8 +39,7 @@ impl MeterApp {
 
       Self {
          theme,
-         meter: FpsMeter::new().anchor(Align2::RIGHT_BOTTOM, vec2(-8.0, -8.0)),
-         window: true,
+         meter: FpsMeter::new(),
          work_ms: 3.0,
       }
    }
@@ -108,7 +106,10 @@ impl MeterApp {
                   .text("busy work (ms)")
                   .fixed_decimals(1),
             );
-            ui.add(Checkbox::new(&mut self.window, "Floating window"));
+            let mut open = self.meter.is_open();
+            if ui.add(Checkbox::new(&mut open, "Floating window")).changed() {
+               self.meter.set_open(open);
+            }
          });
    }
 
@@ -181,8 +182,6 @@ impl eframe::App for MeterApp {
             });
          });
 
-      if self.window {
-         self.meter.show_window(ui.ctx());
-      }
+      self.meter.show_window(ui.ctx());
    }
 }

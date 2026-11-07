@@ -93,6 +93,7 @@ pub struct FpsMeter {
    history: VecDeque<FrameSample>,
    capacity: usize,
    title: String,
+   open: bool,
    anchor: Option<(Align2, Vec2)>,
    last_frame: Option<Instant>,
 }
@@ -104,6 +105,7 @@ impl FpsMeter {
          history: VecDeque::new(),
          capacity: DEFAULT_CAPACITY,
          title: "FPS".to_owned(),
+         open: true,
          anchor: None,
          last_frame: None,
       }
@@ -122,10 +124,27 @@ impl FpsMeter {
       self
    }
 
+   /// Start with the window open or closed. Default `true`.
+   pub fn open(mut self, open: bool) -> Self {
+      self.open = open;
+      self
+   }
+
+   /// Whether [`Self::show_window`] currently paints; the title bar's close
+   /// button clears it.
+   pub fn is_open(&self) -> bool {
+      self.open
+   }
+
+   /// Open or close the window from the host (a toolbar toggle, for example).
+   pub fn set_open(&mut self, open: bool) {
+      self.open = open;
+   }
+
    /// Pin the window to a screen corner instead of letting it float.
    ///
    /// Wraps [`egui::Window::anchor`]: an anchored window cannot be dragged.
-   /// Default: a free window at egui's own placement.
+   /// Default: a free, movable window at egui's own placement.
    pub fn anchor(mut self, align: Align2, offset: impl Into<Vec2>) -> Self {
       self.anchor = Some((align, offset.into()));
       self
@@ -275,13 +294,24 @@ impl FpsMeter {
 
    /// Draw the themed floating window; returns its outer `Response` when open.
    ///
+   /// The window is movable and carries a close button: the button clears
+   /// [`Self::is_open`], so the host can restore it with [`Self::set_open`].
+   /// Nothing is painted while the window is closed.
+   ///
    /// The title is also the window's id, so give each meter a distinct
    /// [`Self::title`] when more than one is on screen.
-   pub fn show_window(&self, ctx: &Context) -> Option<Response> {
+   pub fn show_window(&mut self, ctx: &Context) -> Option<Response> {
+      if !self.open {
+         return None;
+      }
+
       let theme = Theme::current(ctx);
       let frame = theme.window_frame;
 
+      // Local copy: the window borrows `open` while the body borrows `self`.
+      let mut open = self.open;
       let window = Window::new(self.title.as_str())
+         .open(&mut open)
          .default_width(WINDOW_WIDTH)
          .resizable([false, false])
          .frame(frame)
@@ -292,7 +322,9 @@ impl FpsMeter {
          None => window,
       };
 
-      window.show(ctx, |ui| self.body_ui(ui)).map(|inner| inner.response)
+      let shown = window.show(ctx, |ui| self.body_ui(ui)).map(|inner| inner.response);
+      self.open = open;
+      shown
    }
 }
 
@@ -442,7 +474,7 @@ mod tests {
    #[test]
    fn show_window_paints_the_body_in_a_window() {
       let ctx = themed_ctx();
-      let meter = meter_from(&[(16, 2), (16, 3)]);
+      let mut meter = meter_from(&[(16, 2), (16, 3)]);
       let mut shown = false;
 
       for _ in 0..2 {
@@ -462,5 +494,40 @@ mod tests {
       }
 
       assert!(shown, "the window reports its response");
+      assert!(meter.is_open());
+   }
+
+   #[test]
+   fn a_closed_window_paints_nothing() {
+      let ctx = themed_ctx();
+      let mut meter = meter_from(&[(16, 2), (16, 3)]);
+      meter.set_open(false);
+
+      let mut shown = true;
+      let output = ctx.run_ui(
+         RawInput {
+            screen_rect: Some(Rect::from_min_size(
+               Pos2::ZERO,
+               vec2(600.0, 400.0),
+            )),
+            ..Default::default()
+         },
+         |ui| {
+            shown = meter.show_window(ui.ctx()).is_some();
+         },
+      );
+      output.drop_without_applying_deltas();
+
+      assert!(!shown, "a closed window paints nothing");
+      assert!(!meter.is_open());
+   }
+
+   #[test]
+   fn open_state_round_trips() {
+      let mut meter = FpsMeter::new().open(false);
+      assert!(!meter.is_open());
+
+      meter.set_open(true);
+      assert!(meter.is_open());
    }
 }

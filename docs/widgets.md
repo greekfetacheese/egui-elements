@@ -657,15 +657,22 @@ meter.show_window(ctx);
 
 // … or the chrome-free body inside any container
 meter.body_ui(ui);
+
+// the title bar's close button hides the window; a toolbar can restore it
+if !meter.is_open() {
+    meter.set_open(true);
+}
 ```
 
 `fps()` is the mean over the sample window (120 frames by default, about two seconds at
 60 fps) and `cpu_ms()` is the latest host reading. `stats()` returns the min / mean / max
 of both the frame interval and the CPU time, as a `Spread`. An empty window paints an em
 dash. `body_ui` requests a repaint — a metric on screen must keep the frame loop running
-to stay live. Two meters need distinct window titles, because the title is the window id.
-`anchor` pins the window to a screen corner, `with_capacity` resizes the window, and `clear`
-restarts the measurement.
+to stay live. The window floats and can be dragged; `anchor` pins it to a screen corner
+instead (a pinned window cannot be dragged). Its title bar closes it: `is_open` reads that
+state and `set_open` restores it from a toolbar toggle, and nothing is painted while closed.
+Two meters need distinct window titles, because the title is the window id. `with_capacity`
+resizes the window and `clear` restarts the measurement.
 Proof: `cargo run --example fps_meter`.
 
 ## Frame
