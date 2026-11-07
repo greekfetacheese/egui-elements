@@ -95,7 +95,7 @@ impl MeterApp {
             ui.label(
                RichText::new(
                   "The meter only reports what the host measures: raise the busy loop and \
-                   the CPU time climbs while FPS falls.",
+                   the CPU time climbs while MAX FPS falls.",
                )
                .size(typography.small)
                .color(colors.text_muted),
@@ -183,5 +183,9 @@ impl eframe::App for MeterApp {
          });
 
       self.meter.show_window(ui.ctx());
+
+      // The meter paints but never schedules frames: the host asks for the next
+      // one so the demo stays live.
+      ui.ctx().request_repaint();
    }
 }

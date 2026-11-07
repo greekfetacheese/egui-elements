@@ -85,9 +85,9 @@ pub struct FpsStats {
 /// Rolling FPS and CPU-time metric fed once per frame.
 ///
 /// The meter keeps the last 120 frame intervals and CPU times — roughly two
-/// seconds at 60 fps — and reports the mean FPS plus the
-/// min / mean / max of both series. Call [`Self::frame`] once per frame, then
-/// paint [`Self::body_ui`] wherever the metric belongs.
+/// seconds at 60 fps — and reports the measured mean FPS, the `1000 / cpu_ms`
+/// ceiling, and the min / mean / max of both series. Call [`Self::frame`] once
+/// per frame, then paint [`Self::body_ui`] wherever the metric belongs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FpsMeter {
    history: VecDeque<FrameSample>,
@@ -204,6 +204,16 @@ impl FpsMeter {
       self.history.back().map_or(0.0, |sample| millis(sample.cpu))
    }
 
+   /// Theoretical FPS ceiling from the latest CPU time: `1000 / cpu_ms`.
+   ///
+   /// This is the headroom the frame work allows, so it stays meaningful on a
+   /// vsync-capped display where [`Self::fps`] reads the refresh rate. `0.0`
+   /// while the window is empty or the reported CPU time is zero.
+   pub fn max_fps(&self) -> f32 {
+      let cpu = self.cpu_ms();
+      if cpu > 0.0 { 1000.0 / cpu } else { 0.0 }
+   }
+
    /// Min / mean / max of the frame interval and of the CPU time over the window.
    pub fn stats(&self) -> FpsStats {
       let mut frame_ms = Spread::default();
@@ -237,9 +247,10 @@ impl FpsMeter {
 
    /// Draw the metric into `ui` with no window chrome.
    ///
-   /// Host it in a panel, a card, or an existing window. The body requests a
-   /// repaint ([`Context::request_repaint`]) because a metric that is on screen
-   /// must keep the frame loop running to stay live.
+   /// Host it in a panel, a card, or an existing window. Painting is
+   /// side-effect free: the body never schedules a repaint, so the host decides
+   /// when the reading is refreshed. Call `ctx.request_repaint()` when it must
+   /// stay live while the app is otherwise idle.
    pub fn body_ui(&self, ui: &mut Ui) {
       let theme = Theme::current(ui.ctx());
       let colors = theme.colors;
@@ -251,6 +262,12 @@ impl FpsMeter {
          ui.set_min_width(BODY_WIDTH);
          ui.spacing_mut().item_spacing.y = spacing.xs;
 
+         let ceiling = self.max_fps();
+         let max_fps = if ceiling > 0.0 {
+            format!("{:.1}", ceiling)
+         } else {
+            "—".to_owned()
+         };
          let fps = if stats.frames > 0 {
             format!("{:.1}", stats.fps)
          } else {
@@ -272,8 +289,8 @@ impl FpsMeter {
 
          ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = spacing.sm;
-            ui.label(RichText::new(fps).size(typography.heading).color(colors.text).strong());
-            ui.label(RichText::new("FPS").size(typography.small).color(colors.text_muted));
+            ui.label(RichText::new(max_fps).size(typography.heading).color(colors.text).strong());
+            ui.label(RichText::new("MAX FPS").size(typography.small).color(colors.text_muted));
          });
 
          ui.add_space(spacing.xs);
@@ -281,14 +298,15 @@ impl FpsMeter {
          ui.add_space(spacing.xs);
 
          ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = spacing.sm;
+            ui.spacing_mut().item_spacing.x = spacing.xs;
+            ui.label(RichText::new("FPS").size(typography.small).color(colors.text_muted));
+            ui.label(RichText::new(fps).size(typography.normal).color(colors.text));
+            ui.add_space(spacing.sm);
             ui.label(RichText::new("CPU").size(typography.small).color(colors.text_muted));
             ui.label(RichText::new(cpu).size(typography.normal).color(colors.text));
          });
 
          ui.label(RichText::new(spread).size(typography.very_small).color(colors.text_muted));
-
-         ui.ctx().request_repaint();
       });
    }
 
@@ -457,10 +475,31 @@ mod tests {
    }
 
    #[test]
-   fn body_ui_keeps_the_frame_loop_running() {
+   fn max_fps_is_1000_over_the_latest_cpu_time() {
+      let meter = meter_from(&[(16, 4), (16, 2)]);
+      assert!((meter.max_fps() - 500.0).abs() < 1e-3);
+   }
+
+   #[test]
+   fn max_fps_is_zero_without_a_cpu_reading() {
+      let mut meter = FpsMeter::new();
+      assert_eq!(meter.max_fps(), 0.0);
+
+      meter.record(Duration::from_millis(16), Duration::ZERO);
+      assert_eq!(meter.max_fps(), 0.0);
+   }
+
+   #[test]
+   fn body_ui_leaves_repainting_to_the_host() {
       let ctx = themed_ctx();
       let meter = meter_from(&[(16, 2), (16, 3)]);
-      let mut repaint = false;
+      let mut repaint = true;
+
+      // Two warm-up frames absorb egui's own first-frame repaint request.
+      for _ in 0..2 {
+         let output = ctx.run_ui(RawInput::default(), |_ui| {});
+         output.drop_without_applying_deltas();
+      }
 
       let output = ctx.run_ui(RawInput::default(), |ui| {
          meter.body_ui(ui);
@@ -468,7 +507,7 @@ mod tests {
       });
       output.drop_without_applying_deltas();
 
-      assert!(repaint, "a visible metric must keep measuring");
+      assert!(!repaint, "the body must not drive the frame loop");
    }
 
    #[test]

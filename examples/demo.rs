@@ -324,7 +324,11 @@ impl eframe::App for DemoApp {
       // The meter measures this demo's own frame: tick once with the host
       // clock, then paint the floating window (a no-op while it is closed).
       self.fps.frame(start.elapsed());
-      self.fps.show_window(ui.ctx());
+      if self.fps.show_window(ui.ctx()).is_some() {
+         // The meter never schedules frames; keep the demo live while its
+         // window is open.
+         ui.ctx().request_repaint();
+      }
 
       // The toast stack is an overlay (Order::Tooltip): render it after every panel
       // so it floats above them, whichever surface fired it.
