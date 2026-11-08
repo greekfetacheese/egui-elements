@@ -80,6 +80,7 @@ Table::new("tx_history", &rows)
     .gap(theme.spacing.md)
     .row_gap(theme.spacing.md)
     .header_rule(true)
+    .row_divider(true)
     .key(rows.len())
     .show(ui, |t| {
         t.header(|h| {
@@ -91,9 +92,6 @@ Table::new("tx_history", &rows)
             });
         });
         t.rows(|r, tx| {
-            if r.index() % 2 == 1 {
-                r.fill(theme.colors.widget_bg);
-            }
             r.cell(|ui| {
                 ui.add(Label::new(tx.wallet, None));
             });
@@ -280,10 +278,15 @@ Table::new("tx_history", &rows).key(page).show(ui, |t| { /* … */ });
 ### Row chrome
 
 `header_rule(true)` reserves one `item_spacing.y` step under the header text and draws the 1px separator at
-the bottom of that band, so the rule never touches the header's descenders. For zebra rows or a card band,
-use the row hook: `TableRow::fill(color)` paints the row's full-width band before its cells, and
-`TableRow::rect()` returns that band so a host can draw its own chrome. `TableRow::index()` is the row's
-index in the slice.
+the bottom of that band, so the rule never touches the header's descenders. `row_divider(true)` draws the
+same 1px separator in the middle of the gap under each body row — the space above and below the rule is
+equal, and the last row has no gap under it and gets no rule. Rows are separated by a rule, not by a zebra
+fill.
+
+A band that carries state — a selected row, a card — is the row hook: `TableRow::fill(color)` paints the
+row's full-width band before its cells, and `TableRow::rect()` returns that band so a host can draw its own
+chrome. `TableRow::index()` is the row's index in the slice. Use `fill` for selection; striping alternate
+rows is what the divider replaces.
 
 **Chrome overhang is the host's to budget.** A cell is a rect, not a clip: a themed `Button` paints about
 6 pt above and below its band, and the table cannot measure painted chrome. A table of buttons therefore
@@ -291,23 +294,53 @@ needs `row_gap >= 2 × the overhang` — 12 pt, which is `theme.spacing.md` or t
 `item_spacing.y`. `theme.spacing.xs` (4 pt) lets one row's button reach into the next row. This is a
 documented host duty, not something the container can infer.
 
-### The viewport: only visible rows are placed
+### Uniform row height
 
-A table inside a `ScrollArea` is virtualised without the host doing anything. On the placing pass the
-table skips every row whose band does not intersect `ui.clip_rect()`: no cell is built and no host closure
-runs for it, so the per-frame cost is the viewport rather than the list.
+Every body row is placed at one height: the tallest cell measured anywhere in the list. A row whose tallest
+cell is a `Button` therefore does not run taller than a text-only row, and the pitch does not alternate
+down the list. `.row_height(px)` pins the height instead when the host wants one number regardless of
+content — a cell taller than the row is clipped by its column, not by the row.
+
+### The sticky header
+
+A header drawn inside a `ScrollArea` cannot stay put: everything the scroll area lays out moves with it.
+So the table owns the scroll area instead — `.scroll(TableScroll::new())` puts the header above a
+rows-only `ScrollArea`, which is what keeps it pinned:
 
 ```rust
-// Nothing to pass: the container reads the clip rect the ScrollArea already set.
-ScrollArea::vertical().show(ui, |ui| {
-    Table::new("portfolio_tokens", &rows).columns(/* … */).show(ui, |t| { /* … */ });
-});
+use egui_elements::layout::TableScroll;
+
+Table::new("portfolio_tokens", &rows)
+    .columns(/* … */)
+    .header_rule(true)
+    .row_divider(true)
+    .scroll(TableScroll::new())
+    .show(ui, |t| {
+        t.header(|h| { /* … */ });
+        t.rows(|r, item| { /* … */ });
+    });
 ```
+
+`TableScroll::new()` fills the space the table has left and shrinks in height to its rows;
+`.max_height(px)` caps the viewport and `.auto_shrink([x, y])` overrides the fit (default
+`[false, true]`: fill the width, shrink the height). `.content_margin(Margin::symmetric(8, 4))` pads
+the rows inside the viewport: the horizontal insets are applied to the header band too, so the columns stay
+aligned, and the vertical ones are space between the rows and the viewport edges. The header and the rows
+are still one table — the measure pass covers the whole list, so an `Auto` column fits its widest body cell
+and both bands share one set of column extents, with no `Fixed` workaround for the header. Do not also wrap the table in a host
+`ScrollArea`: that one would scroll the header too.
+
+### The viewport: only visible rows are placed
+
+A table is virtualised without the host doing anything. On the placing pass the table skips every row whose
+band does not intersect `ui.clip_rect()`: no cell is built and no host closure runs for it, so the per-frame
+cost is the viewport rather than the list — inside a host `ScrollArea` and inside the table's own area
+alike.
 
 Three properties make this safe:
 
-- **The band still spans every row.** An off-screen row's space is reserved from the cached heights, so the
-  `ScrollArea` sees the full content extent and the scrollbar is right.
+- **The band still spans every row.** An off-screen row's space is reserved from the cached row height, so
+  the `ScrollArea` sees the full content extent and the scrollbar is right.
 - **Column extents stay put.** `Auto` and the measure pass still run over the whole list, so the columns do
   not resize as rows scroll past.
 - **Nothing interactive is dropped.** A fully clipped row cannot be hovered or clicked, so skipping it
@@ -320,11 +353,11 @@ whole list. Keep the widest column `Fixed`/`Fr` where the list is long, and a fr
 ### Recipe: the `tx_history` shape
 
 Five columns (`fr / fr / fr / auto / fixed`), a header with a cell per column — including the empty one over
-the Details column — and zebra rows:
+the Details column — a divider under each row and a header that stays put:
 
 ```rust
 use eframe::egui::*;
-use egui_elements::layout::{Column, Table};
+use egui_elements::layout::{Column, Table, TableScroll};
 use egui_elements::widgets::{Button, Label};
 use egui_elements::Theme;
 
@@ -347,7 +380,9 @@ fn tx_history(ui: &mut Ui, theme: &Theme, rows: &[Tx], page: usize) {
       .gap(theme.spacing.md)
       .row_gap(theme.spacing.md)
       .header_rule(true)
+      .row_divider(true)
       .key(page)
+      .scroll(TableScroll::new().max_height(360.0))
       .show(ui, |t| {
          t.header(|h| {
             for text in ["Wallet", "Chain", "Action", "Age", ""] {
@@ -363,9 +398,6 @@ fn tx_history(ui: &mut Ui, theme: &Theme, rows: &[Tx], page: usize) {
             }
          });
          t.rows(|r, tx| {
-            if r.index() % 2 == 1 {
-               r.fill(theme.colors.widget_bg);
-            }
             for text in [tx.wallet, tx.chain, tx.action, tx.age] {
                r.cell(|ui| {
                   ui.add(Label::new(

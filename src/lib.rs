@@ -94,7 +94,7 @@ pub mod visuals;
 pub mod widgets;
 
 pub use gradient::{Fill, Gradient, GradientDir};
-pub use layout::{Column, Flex, Item, Table};
+pub use layout::{Column, Flex, Item, Table, TableScroll};
 pub use motion::{
    Collapse, Easing, Fade, FadeMode, InteractT, Lerp, Motion, animate, animate_from, animate_with,
 };

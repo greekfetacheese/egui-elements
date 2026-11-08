@@ -17,7 +17,7 @@ crate's widgets *after* `use eframe::egui::*`, or alias one of the two.
 | Area | What you get |
 |---|---|
 | **Widgets** | `Button` (+ hold-to-confirm), `Badge`, `Label` / `MultiLabel`, `ComboBox`, `Menu` / `MenuItem` / `SubMenuItem` / `MenuSection`, `Chip`, `Divider`, `Slider`, the toggle family, `Tabs`, `AvatarGroup`, `Indicator`, `FpsMeter`, `Modal`, `Window`, `Popover`, `Toast` / `Toasts`, and the `Spinner` / `Ripple` / `Orb` loaders → [docs/widgets.md](docs/widgets.md) |
-| **Layout** | a CSS-flexbox subset (`Flex`, `Item`) and a data-driven `Table` with `fixed` / `auto` / `fr` columns → [docs/layout.md](docs/layout.md) |
+| **Layout** | a CSS-flexbox subset (`Flex`, `Item`) and a data-driven `Table` with `fixed` / `auto` / `fr` columns, a pinned header and row dividers → [docs/layout.md](docs/layout.md) |
 | **Motion** | eased values (`animate`, `Motion`, `Easing`), interpolation (`Lerp`), and the `Fade` / `Collapse` containers → [docs/motion.md](docs/motion.md) |
 | **Particles** | `Snow`, `Light` and `Lightning`, each with a themed settings window → [docs/particles.md](docs/particles.md) |
 | **Components** | credentials form, virtual keyboard, secure / plain input fields, QR image, QR scanner — feature-gated → [docs/components.md](docs/components.md) |
