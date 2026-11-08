@@ -41,4 +41,4 @@ pub use solver::{
    Axis, Column, ColumnOut, CrossAlign, ItemSize, ItemSpec, Justify, LayoutOut, resolve,
    resolve_columns,
 };
-pub use table::{Table, TableHeader, TableRow, TableUi};
+pub use table::{Table, TableHeader, TableRow, TableScroll, TableUi};

@@ -27,19 +27,34 @@
 //! [`Column::Fixed`] column keeps its width. Cells are **not clipped** — chrome such as a button's
 //! hover expansion or a badge may paint outside its cell, so budget the gap for it.
 //!
+//! # Uniform rows
+//!
+//! Every body row is placed at one height: the tallest cell measured anywhere in the list, so a row
+//! whose tallest cell is a `Button` cannot run taller than a text-only row. [`Table::row_height`]
+//! pins that height instead of measuring it, and [`Table::row_divider`] draws a rule in the middle of
+//! the gap under each row.
+//!
+//! # Sticky header
+//!
+//! [`Table::scroll`] puts the rows in a vertical [`egui::ScrollArea`] and leaves the header outside
+//! it, so the header stays put while the rows scroll. It is still one table: the measure pass covers
+//! the whole list, so a [`Column::Auto`] column fits its widest body cell instead of settling on the
+//! header's width, and the header and the rows share one set of column extents.
+//!
 //! # The viewport
 //!
-//! Only the rows the host's clip rect shows are laid out, so a table in a `ScrollArea` costs its
-//! viewport, not its list. The band still spans every row — the space an off-screen row would take is
-//! reserved from the cached heights — so the scroll extent and the column extents (measured over the
-//! whole list) stay correct. A row that is scrolled out of view costs one height lookup and nothing
-//! else; the host needs no API for it, because only the table knows the row heights.
+//! Only the rows the clip rect shows are laid out, so a table inside a `ScrollArea` — the host's or
+//! the table's own — costs its viewport, not its list. The band still spans every row — the space an
+//! off-screen row would take is reserved from the cached row height — so the scroll extent and the
+//! column extents (measured over the whole list) stay correct. A row that is scrolled out of view
+//! costs one height lookup and nothing else; the host needs no API for it, because only the table
+//! knows the row heights.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use egui::{
-   Align, Color32, Id, InnerResponse, Layout, Rect, Response, Sense, Ui, UiBuilder, Vec2, pos2,
-   vec2,
+   Align, Color32, Id, InnerResponse, Layout, Margin, Rangef, Rect, Response, ScrollArea, Sense,
+   Ui, UiBuilder, Vec2, pos2, vec2,
 };
 
 use super::solver::{Column, resolve_columns};
@@ -49,6 +64,8 @@ use super::state::TableState;
 ///
 /// The table measures once, then places on every frame: the header and every row share the same column
 /// extents, `Auto` columns fit their widest measured cell, and `Fr` columns share the leftover width.
+/// Every row is placed at one height — the tallest measured row, or [`Table::row_height`] — and
+/// [`Table::scroll`] keeps the header above a rows-only scroll area.
 /// See the [module docs](self) for the measure-pass contract and [`Table::key`].
 #[must_use = "You should call .show()"]
 pub struct Table<'a, T> {
@@ -57,6 +74,9 @@ pub struct Table<'a, T> {
    columns: Vec<Column>,
    gap: Option<f32>,
    row_gap: Option<f32>,
+   row_height: Option<f32>,
+   row_divider: bool,
+   scroll: Option<TableScroll>,
    header_rule: bool,
    key: u64,
 }
@@ -68,26 +88,74 @@ enum Mode {
    Measuring,
 }
 
+/// The scroll area a [`Table`] puts its rows in, with the header left outside it.
+///
+/// Pass to [`Table::scroll`]. The default fills the space the table has left and shrinks in height to
+/// its rows, so a short list does not leave a blank viewport under the last row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TableScroll {
+   max_height: Option<f32>,
+   auto_shrink: [bool; 2],
+   content_margin: Option<Margin>,
+}
+
+impl TableScroll {
+   pub fn new() -> Self {
+      Self {
+         max_height: None,
+         auto_shrink: [false, true],
+         content_margin: None,
+      }
+   }
+
+   /// Cap the viewport's height. Default: the space the table has left when the rows are added.
+   pub fn max_height(mut self, max_height: f32) -> Self {
+      self.max_height = Some(max_height);
+      self
+   }
+
+   /// Shrink the viewport to its content on an axis. Default `[false, true]`: fill the width, shrink
+   /// the height.
+   pub fn auto_shrink(mut self, auto_shrink: [bool; 2]) -> Self {
+      self.auto_shrink = auto_shrink;
+      self
+   }
+
+   /// Pad the rows inside the viewport. The left/right insets also apply to the header band, so the
+   /// two bands keep one set of column extents; the top/bottom insets sit between the rows and the
+   /// viewport's edges. Default: the installed [`egui::ScrollStyle`]`::content_margin`.
+   pub fn content_margin(mut self, content_margin: impl Into<Margin>) -> Self {
+      self.content_margin = Some(content_margin.into());
+      self
+   }
+}
+
+impl Default for TableScroll {
+   fn default() -> Self {
+      Self::new()
+   }
+}
+
 /// The layout every cell's child `Ui` starts from: left-to-right, vertically centred, not clipped.
 fn cell_layout() -> Layout {
    Layout::left_to_right(Align::Center)
 }
 
-/// The height of the table band: the header, the pad under it, the gap under it, and every row plus
-/// the gaps between them.
+/// The height of the whole table band: the header, the pad under it, and every row plus the gaps
+/// between them.
 fn band_height(
    has_header: bool,
    header_height: f32,
    header_pad: f32,
-   heights: &[f32],
+   rows: usize,
+   row_height: f32,
    row_gap: f32,
 ) -> f32 {
-   let rows = heights.len();
    let mut height = header_height + header_pad;
    if has_header && rows > 0 {
       height += row_gap;
    }
-   height += heights.iter().sum::<f32>();
+   height += row_height * rows as f32;
    if rows > 1 {
       height += row_gap * (rows - 1) as f32;
    }
@@ -118,6 +186,9 @@ impl<'a, T> Table<'a, T> {
          columns: Vec::new(),
          gap: None,
          row_gap: None,
+         row_height: None,
+         row_divider: false,
+         scroll: None,
          header_rule: false,
          key: 0,
       }
@@ -137,6 +208,35 @@ impl<'a, T> Table<'a, T> {
    /// The gap between rows. Defaults to [`egui::Spacing::item_spacing`]`.y`.
    pub fn row_gap(mut self, row_gap: f32) -> Self {
       self.row_gap = Some(row_gap);
+      self
+   }
+
+   /// Place every body row at this height. Default: the tallest row measured anywhere in the list, so
+   /// all rows share one height.
+   ///
+   /// Set this to a pixel value when the host wants one pitch regardless of its content, and note that
+   /// a cell taller than it is clipped by the column, not by the row.
+   pub fn row_height(mut self, row_height: f32) -> Self {
+      self.row_height = Some(row_height.max(0.0));
+      self
+   }
+
+   /// Draw a 1px separator in the middle of the gap under every body row, in the header rule's stroke,
+   /// so the space above and below the rule is equal. The last row has no gap under it and gets no
+   /// rule. Default: `false`.
+   pub fn row_divider(mut self, row_divider: bool) -> Self {
+      self.row_divider = row_divider;
+      self
+   }
+
+   /// Put the rows in a vertical [`egui::ScrollArea`], leaving the header above it so it stays put
+   /// while the rows scroll. See [`TableScroll`].
+   ///
+   /// The header and the rows are still one table: the measure pass covers the whole list, so an
+   /// `Auto` column fits its widest body cell. Do not also wrap the table in a host `ScrollArea` —
+   /// that one would scroll the header too.
+   pub fn scroll(mut self, scroll: TableScroll) -> Self {
+      self.scroll = Some(scroll);
       self
    }
 
@@ -178,7 +278,26 @@ impl<'a, T> Table<'a, T> {
    ) -> InnerResponse<R> {
       let id = ui.make_persistent_id(self.id);
       let prev = TableState::load(ui.ctx(), id);
-      let avail = ui.available_size();
+      // The header band sits outside the scroll area, so the columns resolve against the width the
+      // rows will actually get: the viewport minus a solid scroll bar and the content margin. A
+      // floating bar takes nothing by default, which is egui's default style.
+      let content_margin = self
+         .scroll
+         .map(|scroll| scroll.content_margin.unwrap_or(ui.spacing().scroll.content_margin))
+         .unwrap_or(Margin::ZERO);
+      let scroll_bar = ui.spacing().scroll.allocated_width();
+      let avail = if self.scroll.is_some() {
+         vec2(
+            (ui.available_width()
+               - scroll_bar
+               - content_margin.left as f32
+               - content_margin.right as f32)
+               .max(0.0),
+            ui.available_height(),
+         )
+      } else {
+         ui.available_size()
+      };
       let gap = self.gap.unwrap_or(ui.spacing().item_spacing.x);
       let row_gap = self.row_gap.unwrap_or(ui.spacing().item_spacing.y);
       let header_pad = if self.header_rule {
@@ -190,7 +309,7 @@ impl<'a, T> Table<'a, T> {
       let placing = prev.as_ref().is_some_and(|p| {
          p.same_space(avail)
             && p.columns == self.columns
-            && p.heights.len() == self.rows.len()
+            && p.row_count == self.rows.len()
             && p.key == self.key
       });
       let mode = if placing {
@@ -203,9 +322,12 @@ impl<'a, T> Table<'a, T> {
       } else {
          Vec::new()
       };
+      let row_height =
+         self.row_height.unwrap_or_else(|| prev.as_ref().map_or(0.0, |p| p.row_height));
 
       let mut table = TableUi {
          ui,
+         id,
          data: self.rows,
          columns: self.columns,
          widths,
@@ -214,6 +336,10 @@ impl<'a, T> Table<'a, T> {
          prev,
          gap,
          row_gap,
+         row_height,
+         row_divider: self.row_divider,
+         content_margin,
+         scroll: self.scroll,
          header_rule: self.header_rule,
          header_pad,
          key: self.key,
@@ -222,6 +348,7 @@ impl<'a, T> Table<'a, T> {
          header_height: 0.0,
          has_header: false,
          band: None,
+         rows_rect: None,
       };
       let inner = add(&mut table);
       let response = table.teardown(id, avail);
@@ -232,6 +359,7 @@ impl<'a, T> Table<'a, T> {
 /// The per-call state of a [`Table`]; the header and the rows are added through it.
 pub struct TableUi<'a, 'ui, T> {
    ui: &'ui mut Ui,
+   id: Id,
    data: &'a [T],
    columns: Vec<Column>,
    /// The resolved column extents when placing, the measured natural widths when measuring.
@@ -242,6 +370,13 @@ pub struct TableUi<'a, 'ui, T> {
    prev: Option<TableState>,
    gap: f32,
    row_gap: f32,
+   /// The height every body row is placed at: [`Table::row_height`] or the tallest measured row.
+   row_height: f32,
+   row_divider: bool,
+   /// The padding inside the table's own scroll viewport; the horizontal part is applied to the
+   /// header band too, so the columns stay aligned.
+   content_margin: Margin,
+   scroll: Option<TableScroll>,
    header_rule: bool,
    /// The gap the header rule reserves under the header text: one `item_spacing.y` step when
    /// `header_rule` is on, `0.0` otherwise.
@@ -252,6 +387,9 @@ pub struct TableUi<'a, 'ui, T> {
    header_height: f32,
    has_header: bool,
    band: Option<(Rect, Response)>,
+   /// The rows' viewport when the table owns the scroll area; the table's response spans the header
+   /// band and this rect.
+   rows_rect: Option<Rect>,
 }
 
 impl<T> TableUi<'_, '_, T> {
@@ -260,12 +398,9 @@ impl<T> TableUi<'_, '_, T> {
       self.columns.len()
    }
 
-   /// Resolve the cached widths and allocate the whole table band once, on the first `header()` or
-   /// `rows()` call.
-   fn ensure_band(&mut self) {
-      if self.band.is_some() {
-         return;
-      }
+   /// Resolve the cached widths and header height into this pass's extents. Returns the table's
+   /// width.
+   fn resolve(&mut self) -> f32 {
       let prev = self.prev.as_ref().expect("placing requires a cache");
       let out = resolve_columns(
          &self.columns,
@@ -274,16 +409,35 @@ impl<T> TableUi<'_, '_, T> {
          self.gap,
       );
       self.widths = out.widths;
-      self.heights = prev.heights.clone();
       self.header_height = prev.header_height;
-      let height = band_height(
-         self.has_header,
-         self.header_height,
-         self.header_pad,
-         &self.heights,
-         self.row_gap,
-      );
-      let (rect, response) = self.ui.allocate_exact_size(vec2(out.total, height), Sense::hover());
+      out.total
+   }
+
+   /// Resolve the cached extents and allocate the header band — or the whole table band when the
+   /// table is not scrolling — on the first `header()` or `rows()` call.
+   fn ensure_band(&mut self) {
+      if self.band.is_some() {
+         return;
+      }
+      let total = self.resolve();
+      let height = if self.scroll.is_some() {
+         self.header_height + self.header_pad
+      } else {
+         band_height(
+            self.has_header,
+            self.header_height,
+            self.header_pad,
+            self.data.len(),
+            self.row_height,
+            self.row_gap,
+         )
+      };
+      let width = if self.scroll.is_some() {
+         total + self.content_margin.left as f32 + self.content_margin.right as f32
+      } else {
+         total
+      };
+      let (rect, response) = self.ui.allocate_exact_size(vec2(width, height), Sense::hover());
       self.band = Some((rect, response));
    }
 
@@ -298,7 +452,7 @@ impl<T> TableUi<'_, '_, T> {
             let header_height = self.header_height;
             let mut cells = std::mem::take(&mut self.scratch);
             cells.clear();
-            let mut x = band.min.x;
+            let mut x = band.min.x + self.content_margin.left as f32;
             for width in &self.widths {
                cells.push(Rect::from_min_size(
                   pos2(x, band.min.y),
@@ -308,8 +462,13 @@ impl<T> TableUi<'_, '_, T> {
             }
             if self.header_rule {
                let stroke = self.ui.visuals().widgets.noninteractive.bg_stroke;
+               let inset = &self.content_margin;
+               let rule = Rangef::new(
+                  band.min.x + inset.left as f32,
+                  band.max.x - inset.right as f32,
+               );
                self.ui.painter().hline(
-                  band.x_range(),
+                  rule,
                   band.min.y + header_height + self.header_pad,
                   stroke,
                );
@@ -350,50 +509,33 @@ impl<T> TableUi<'_, '_, T> {
    /// fewer cells than columns leaves the remaining columns empty.
    pub fn rows(&mut self, mut add: impl FnMut(&mut TableRow<'_>, &T)) {
       match self.mode {
-         Mode::Placing => {
-            self.ensure_band();
-            let band = self.band.as_ref().expect("the band is allocated above").0;
-            let clip = self.ui.clip_rect();
-            let mut y = band.min.y + self.header_height + self.header_pad;
-            if self.has_header {
-               y += self.row_gap;
+         Mode::Placing => match self.scroll {
+            Some(scroll) => self.rows_scrolling(scroll, &mut add),
+            None => {
+               self.ensure_band();
+               let band = self.band.as_ref().expect("the band is allocated above").0;
+               let mut top = band.min.y + self.header_height + self.header_pad;
+               if self.has_header {
+                  top += self.row_gap;
+               }
+               let mut placer = RowPlacer {
+                  data: self.data,
+                  widths: &self.widths,
+                  scratch: &mut self.scratch,
+                  row_height: self.row_height,
+                  row_gap: self.row_gap,
+                  gap: self.gap,
+                  row_divider: self.row_divider,
+               };
+               placer.place(
+                  &mut *self.ui,
+                  top,
+                  band.min.x,
+                  band.width(),
+                  &mut add,
+               );
             }
-            for (i, item) in self.data.iter().enumerate() {
-               let height = self.heights[i];
-               let row_band = Rect::from_min_size(pos2(band.min.x, y), vec2(band.width(), height));
-               y += height + self.row_gap;
-
-               // The band already reserved this row's space, so a row the viewport does not show is
-               // skipped rather than placed: no cell is built and no closure runs for it.
-               if !clip.intersects(row_band) {
-                  continue;
-               }
-
-               let mut cells = std::mem::take(&mut self.scratch);
-               cells.clear();
-               let mut x = band.min.x;
-               for width in &self.widths {
-                  // The band's own top, never `y`: `y` has already advanced to the next row.
-                  cells.push(Rect::from_min_size(
-                     pos2(x, row_band.min.y),
-                     vec2(*width, height),
-                  ));
-                  x += *width + self.gap;
-               }
-               {
-                  let mut row = TableRow {
-                     ui: &mut *self.ui,
-                     cells: &cells,
-                     measure: None,
-                     next: 0,
-                     rect: row_band,
-                     index: i,
-                  };
-                  add(&mut row, item);
-               }
-               self.scratch = cells;
-            }
-         }
+         },
          Mode::Measuring => {
             let data = self.data;
             let measure_rect = self.ui.available_rect_before_wrap();
@@ -421,17 +563,95 @@ impl<T> TableUi<'_, '_, T> {
       }
    }
 
+   /// Place the rows in the table's own scroll area, under the header `header()` already placed.
+   fn rows_scrolling(&mut self, scroll: TableScroll, add: &mut impl FnMut(&mut TableRow<'_>, &T)) {
+      self.resolve();
+      let content_height = self.content_height();
+
+      // The rows start exactly `row_gap` under the header band, or at the table's top when there is
+      // no header. Allocating the scroll area at the cursor would insert `item_spacing.y` instead, so
+      // the viewport is placed into a child ui at the rect the table chose.
+      let available = self.ui.available_rect_before_wrap();
+      let band = self.band.as_ref().map(|(band, _)| *band);
+      let top = band.map_or(available.min.y, |band| band.max.y + self.row_gap);
+      let viewport = scroll.max_height.unwrap_or_else(|| available.bottom() - top).max(0.0);
+      let rect = Rect::from_min_size(
+         pos2(available.min.x, top),
+         vec2(available.width(), viewport),
+      );
+      let id = self.id;
+
+      let rows_rect = {
+         let TableUi {
+            ui,
+            data,
+            widths,
+            scratch,
+            row_height,
+            row_gap,
+            gap,
+            row_divider,
+            content_margin,
+            ..
+         } = self;
+         let mut placer = RowPlacer {
+            data: *data,
+            widths: &widths[..],
+            scratch,
+            row_height: *row_height,
+            row_gap: *row_gap,
+            gap: *gap,
+            row_divider: *row_divider,
+         };
+         ui.scope_builder(
+            UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)),
+            |ui| {
+               ScrollArea::vertical()
+                  .id_salt(id.with("rows"))
+                  .auto_shrink(scroll.auto_shrink)
+                  .max_height(viewport)
+                  .content_margin(*content_margin)
+                  .show(ui, |ui| {
+                     let (band, _) = ui.allocate_exact_size(
+                        vec2(ui.available_width(), content_height),
+                        Sense::hover(),
+                     );
+                     placer.place(ui, band.min.y, band.min.x, band.width(), add);
+                  })
+                  .inner_rect
+            },
+         )
+         .inner
+      };
+      self.rows_rect = Some(rows_rect);
+   }
+
+   /// The height of the rows alone, without the header: the scroll area's content extent.
+   fn content_height(&self) -> f32 {
+      let rows = self.data.len();
+      let mut height = self.row_height * rows as f32;
+      if rows > 1 {
+         height += self.row_gap * (rows - 1) as f32;
+      }
+      height
+   }
+
    /// Resolve the column extents, store the cache and return the table's band response.
    fn teardown(mut self, id: Id, avail: Vec2) -> Response {
       let out = resolve_columns(&self.columns, &self.widths, avail.x, self.gap);
-      let response = match self.band.take() {
-         Some((_, response)) => response,
-         None => {
+      let response = match (self.band.take(), self.rows_rect) {
+         (Some((band, _)), Some(rows)) => {
+            self.ui.interact(band.union(rows), id.with("band"), Sense::hover())
+         }
+         (Some((_, response)), None) => response,
+         (None, Some(rows)) => self.ui.interact(rows, id.with("band"), Sense::hover()),
+         (None, None) => {
             let height = band_height(
                self.has_header,
                self.header_height,
                self.header_pad,
-               &self.heights,
+               0,
+               self.row_height,
                self.row_gap,
             );
             self.ui.allocate_exact_size(vec2(out.total, height), Sense::hover()).1
@@ -439,10 +659,12 @@ impl<T> TableUi<'_, '_, T> {
       };
 
       if self.mode == Mode::Measuring {
+         let row_height = self.heights.iter().copied().fold(0.0, f32::max);
          let state = TableState {
             columns: self.columns,
             widths: self.widths,
-            heights: self.heights,
+            row_count: self.data.len(),
+            row_height,
             header_height: self.header_height,
             key: self.key,
             avail,
@@ -454,6 +676,74 @@ impl<T> TableUi<'_, '_, T> {
       }
 
       response
+   }
+}
+
+/// The cached extents one row needs, split out of [`TableUi`] so a scroll area can own the child
+/// [`Ui`] while the rows still read the table's cache.
+struct RowPlacer<'a, 'x, T> {
+   data: &'a [T],
+   widths: &'x [f32],
+   scratch: &'x mut Vec<Rect>,
+   row_height: f32,
+   row_gap: f32,
+   gap: f32,
+   row_divider: bool,
+}
+
+impl<T> RowPlacer<'_, '_, T> {
+   /// Stamp every row into a band that starts at `top` / `left`.
+   fn place(
+      &mut self,
+      ui: &mut Ui,
+      top: f32,
+      left: f32,
+      width: f32,
+      add: &mut impl FnMut(&mut TableRow<'_>, &T),
+   ) {
+      let clip = ui.clip_rect();
+      let mut y = top;
+      for (i, item) in self.data.iter().enumerate() {
+         let row_band = Rect::from_min_size(pos2(left, y), vec2(width, self.row_height));
+         y += self.row_height + self.row_gap;
+
+         // The band already reserved this row's space, so a row the viewport does not show is
+         // skipped rather than placed: no cell is built and no closure runs for it.
+         if !clip.intersects(row_band) {
+            continue;
+         }
+
+         let mut cells = std::mem::take(self.scratch);
+         cells.clear();
+         let mut x = left;
+         for column in self.widths {
+            // The row's own top, never `y`: `y` has already advanced to the next row.
+            cells.push(Rect::from_min_size(
+               pos2(x, row_band.min.y),
+               vec2(*column, self.row_height),
+            ));
+            x += *column + self.gap;
+         }
+         {
+            let mut row = TableRow {
+               ui: &mut *ui,
+               cells: &cells,
+               measure: None,
+               next: 0,
+               rect: row_band,
+               index: i,
+            };
+            add(&mut row, item);
+         }
+         // The rule sits in the middle of the gap under the row, so the space above and below it is
+         // equal. The last row has no gap under it, so it gets no rule.
+         if self.row_divider && i + 1 < self.data.len() {
+            let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
+            let y = row_band.max.y + self.row_gap * 0.5;
+            ui.painter().hline(row_band.x_range(), y, stroke);
+         }
+         *self.scratch = cells;
+      }
    }
 }
 
@@ -1008,5 +1298,384 @@ mod tests {
             above.max.y
          );
       }
+   }
+
+   /// One row's tall cell sets the pitch for every row: the table no longer alternates heights.
+   #[test]
+   fn table_every_row_takes_the_tallest_cell_height() {
+      let rows = [Row("text", "a"), Row("text", "b"), Row("text", "c")];
+      let ctx = themed_ctx();
+      let rects = std::cell::RefCell::new(Vec::new());
+      for _ in 0..2 {
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            rects.borrow_mut().clear();
+            scope(ui, |ui| {
+               Table::new("uniform", &rows)
+                  .columns([Column::Auto, Column::Fixed(80.0)])
+                  .row_gap(10.0)
+                  .show(ui, |table| {
+                     table.rows(|row, item| {
+                        rects.borrow_mut().push(row.rect());
+                        row.cell(|ui| {
+                           ui.add(crate::widgets::Label::new("Height", None));
+                        });
+                        row.cell(|ui| {
+                           if item.1 == "b" {
+                              ui.add(crate::widgets::Button::new("x").min_size(vec2(80.0, 44.0)));
+                           }
+                        });
+                     });
+                  });
+            });
+         }));
+      }
+      let rects = rects.borrow();
+      assert_eq!(rects.len(), 3, "expected three placed rows");
+      for rect in rects.iter() {
+         assert!(
+            (rect.height() - 44.0).abs() < 0.5,
+            "row height {} != the tallest row's 44",
+            rect.height()
+         );
+      }
+      for pair in rects.windows(2) {
+         assert!(
+            (pair[1].min.y - (pair[0].max.y + 10.0)).abs() < 0.5,
+            "the pitch broke between rows at {} and {}",
+            pair[0].min.y,
+            pair[1].min.y
+         );
+      }
+   }
+
+   /// `row_height` wins over the measured tallest cell, and the band follows the pinned pitch.
+   #[test]
+   fn table_row_height_pins_every_row_to_one_pitch() {
+      let rows = [Row("a", "1"), Row("b", "2")];
+      let ctx = themed_ctx();
+      let rects = std::cell::RefCell::new(Vec::new());
+      let table_rect = std::cell::Cell::new(Rect::ZERO);
+      for _ in 0..2 {
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            rects.borrow_mut().clear();
+            scope(ui, |ui| {
+               let response = Table::new("pitch", &rows)
+                  .columns([Column::Auto])
+                  .row_gap(10.0)
+                  .row_height(30.0)
+                  .show(ui, |table| {
+                     table.rows(|row, _item| {
+                        rects.borrow_mut().push(row.rect());
+                        row.cell(|ui| {
+                           // Taller than the pinned height: the row must still be 30.
+                           ui.add(crate::widgets::Button::new("x").min_size(vec2(80.0, 44.0)));
+                        });
+                     });
+                  })
+                  .response;
+               table_rect.set(response.rect);
+            });
+         }));
+      }
+      let rects = rects.borrow();
+      assert_eq!(rects.len(), 2);
+      for rect in rects.iter() {
+         assert!(
+            (rect.height() - 30.0).abs() < 0.5,
+            "row height {} != the pinned 30",
+            rect.height()
+         );
+      }
+      assert!(
+         (table_rect.get().height() - 70.0).abs() < 0.5,
+         "band height {} != 2 rows + one gap",
+         table_rect.get().height()
+      );
+   }
+
+   /// The header is placed above the table's own scroll area, so it cannot scroll away, and the
+   /// rows still virtualise to the viewport.
+   #[test]
+   fn table_scroll_keeps_the_header_above_the_rows_viewport() {
+      let rows: Vec<Row> = (0..40).map(|_| Row("row", "cell")).collect();
+      let ctx = themed_ctx();
+      let header = std::cell::Cell::new(Rect::ZERO);
+      let first_row = std::cell::Cell::new(Rect::ZERO);
+      let drawn = std::cell::Cell::new(0usize);
+      let table_rect = std::cell::Cell::new(Rect::ZERO);
+
+      let mut outputs = Vec::new();
+      for _ in 0..3 {
+         outputs.push(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            drawn.set(0);
+            scope(ui, |ui| {
+               let response = Table::new("sticky", &rows)
+                  .columns([Column::Auto, Column::Fr(1.0)])
+                  .row_gap(10.0)
+                  .row_height(30.0)
+                  .scroll(TableScroll::new().max_height(120.0))
+                  .show(ui, |table| {
+                     table.header(|header_ui| {
+                        header.set(
+                           header_ui
+                              .cell(|ui| {
+                                 ui.add(crate::widgets::Label::new("Token", None));
+                                 ui.max_rect()
+                              })
+                              .inner,
+                        );
+                     });
+                     table.rows(|row, _item| {
+                        if drawn.get() == 0 {
+                           first_row.set(row.rect());
+                        }
+                        drawn.set(drawn.get() + 1);
+                        row.cell(|ui| {
+                           ui.allocate_space(vec2(10.0, 30.0));
+                        });
+                     });
+                  })
+                  .response;
+               table_rect.set(response.rect);
+            });
+         }));
+      }
+
+      let passes: Vec<_> = outputs.iter().map(extra_passes).collect();
+      assert!(
+         passes[0] >= 1,
+         "first frame did not measure: {passes:?}"
+      );
+      assert_eq!(
+         passes[1], 0,
+         "second frame ran a second pass: {passes:?}"
+      );
+      assert_eq!(
+         passes[2], 0,
+         "third frame ran a second pass: {passes:?}"
+      );
+
+      let header = header.get();
+      let table_rect = table_rect.get();
+      assert!(
+         (header.min.y - table_rect.min.y).abs() < 0.5,
+         "header top {} is not the table's top {}",
+         header.min.y,
+         table_rect.min.y
+      );
+      assert!(
+         (first_row.get().min.y - (header.max.y + 10.0)).abs() < 1.0,
+         "first row top {} is not one row_gap under the header {}",
+         first_row.get().min.y,
+         header.max.y
+      );
+      assert!(
+         (table_rect.height() - (header.height() + 10.0 + 120.0)).abs() < 1.0,
+         "table height {} != header {} + gap + viewport 120",
+         table_rect.height(),
+         header.height()
+      );
+      assert!(
+         (1..=6).contains(&drawn.get()),
+         "the viewport laid out {} rows instead of its 4-5",
+         drawn.get()
+      );
+   }
+
+   /// `row_divider` paints one hairline per row, in the middle of the gap under it, so the space
+   /// above and below the rule is equal.
+   #[test]
+   fn table_row_divider_sits_in_the_middle_of_the_gap() {
+      let rows = [Row("a", "1"), Row("b", "2")];
+      let ctx = themed_ctx();
+      let bands = std::cell::RefCell::new(Vec::new());
+      let mut output = None;
+      for _ in 0..2 {
+         output = Some(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            bands.borrow_mut().clear();
+            scope(ui, |ui| {
+               Table::new("divider", &rows)
+                  .columns([Column::Fixed(120.0)])
+                  .row_gap(10.0)
+                  .row_divider(true)
+                  .show(ui, |table| {
+                     table.rows(|row, _item| {
+                        bands.borrow_mut().push(row.rect());
+                        row.cell(|ui| {
+                           ui.allocate_space(vec2(10.0, 20.0));
+                        });
+                     });
+                  });
+            });
+         }));
+      }
+      let bands = bands.borrow();
+      let output = output.expect("two frames ran");
+      let lines: Vec<[Pos2; 2]> = output
+         .shapes
+         .iter()
+         .filter_map(|clipped| match &clipped.shape {
+            egui::Shape::LineSegment { points, .. } => Some(*points),
+            _ => None,
+         })
+         .collect();
+      assert_eq!(
+         lines.len(),
+         bands.len() - 1,
+         "expected a rule between the rows, and none after the last"
+      );
+      for (line, band) in lines.iter().zip(bands.iter()) {
+         let rule_y = band.max.y + 5.0;
+         assert!(
+            (line[0].y - rule_y).abs() < 0.5 && (line[1].y - rule_y).abs() < 0.5,
+            "rule {line:?} is not in the middle of the gap under row {}",
+            band.max.y
+         );
+         assert!(
+            (line[0].x - band.min.x).abs() < 0.5 && (line[1].x - band.max.x).abs() < 0.5,
+            "rule {line:?} does not span the band {band:?}"
+         );
+      }
+   }
+
+   /// A scrolling table still resolves one column set: an `Auto` column fits its widest body cell,
+   /// and the header above the scroll area lands on the same extents.
+   #[test]
+   fn table_scroll_header_and_rows_share_auto_column_extents() {
+      const LONG: &str = "Buy the entire liquidity pool";
+      let rows = [Row(LONG, "row")];
+      let ctx = themed_ctx();
+      let rects = std::cell::RefCell::new(Vec::new());
+      for _ in 0..2 {
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            rects.borrow_mut().clear();
+            scope(ui, |ui| {
+               Table::new("scroll_auto", &rows)
+                  .columns([Column::Auto, Column::Fixed(60.0)])
+                  .scroll(TableScroll::new().max_height(80.0))
+                  .show(ui, |table| {
+                     table.header(|header| {
+                        for _ in 0..2 {
+                           let rect = header.cell(|ui| ui.max_rect()).inner;
+                           rects.borrow_mut().push(rect);
+                        }
+                     });
+                     table.rows(|row, item| {
+                        let rect = row
+                           .cell(|ui| {
+                              ui.add(crate::widgets::Label::new(item.0, None));
+                              ui.max_rect()
+                           })
+                           .inner;
+                        rects.borrow_mut().push(rect);
+                        let rect = row.cell(|ui| ui.max_rect()).inner;
+                        rects.borrow_mut().push(rect);
+                     });
+                  });
+            });
+         }));
+      }
+      let rects = rects.borrow();
+      assert_eq!(
+         rects.len(),
+         4,
+         "expected a header and a row of two cells"
+      );
+      for column in 0..2 {
+         let header = rects[column];
+         let cell = rects[2 + column];
+         assert!(
+            (cell.min.x - header.min.x).abs() < 0.5,
+            "column {column} row min.x {} != header min.x {}",
+            cell.min.x,
+            header.min.x
+         );
+         assert!(
+            (cell.width() - header.width()).abs() < 0.5,
+            "column {column} row width {} != header width {}",
+            cell.width(),
+            header.width()
+         );
+      }
+   }
+
+   /// The scroll content margin pads the rows inside the viewport, and its horizontal part insets
+   /// the header band by the same amount, so the two bands keep one column set.
+   #[test]
+   fn table_scroll_content_margin_insets_both_bands() {
+      let rows = [Row("a", "1"), Row("b", "2")];
+      let ctx = themed_ctx();
+      let rects = std::cell::RefCell::new(Vec::new());
+      let table_rect = std::cell::Cell::new(Rect::ZERO);
+      let first_row = std::cell::Cell::new(Rect::ZERO);
+      for _ in 0..2 {
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            rects.borrow_mut().clear();
+            scope(ui, |ui| {
+               let response = Table::new("margin", &rows)
+                  .columns([Column::Fr(1.0), Column::Fixed(60.0)])
+                  .row_gap(10.0)
+                  .scroll(
+                     TableScroll::new().max_height(120.0).content_margin(Margin::symmetric(8, 4)),
+                  )
+                  .show(ui, |table| {
+                     table.header(|header| {
+                        for _ in 0..2 {
+                           let rect = header.cell(|ui| ui.max_rect()).inner;
+                           rects.borrow_mut().push(rect);
+                        }
+                     });
+                     table.rows(|row, _item| {
+                        if row.index() == 0 {
+                           first_row.set(row.rect());
+                        }
+                        let rect = row.cell(|ui| ui.max_rect()).inner;
+                        rects.borrow_mut().push(rect);
+                        let rect = row.cell(|ui| ui.max_rect()).inner;
+                        rects.borrow_mut().push(rect);
+                     });
+                  })
+                  .response;
+               table_rect.set(response.rect);
+            });
+         }));
+      }
+      let rects = rects.borrow();
+      assert_eq!(
+         rects.len(),
+         6,
+         "expected a header and two rows of two cells"
+      );
+      let table = table_rect.get();
+      assert!(
+         (rects[0].min.x - (table.min.x + 8.0)).abs() < 0.5,
+         "header starts at {} instead of the table's left + 8",
+         rects[0].min.x
+      );
+      for row in [2, 4] {
+         assert!(
+            (rects[row].min.x - rects[0].min.x).abs() < 0.5,
+            "row cell starts at {} instead of the header's {}",
+            rects[row].min.x,
+            rects[0].min.x
+         );
+         assert!(
+            (rects[row].width() - rects[0].width()).abs() < 0.5,
+            "row column width {} != header {}",
+            rects[row].width(),
+            rects[0].width()
+         );
+      }
+      // The Fr column resolves against the viewport minus both horizontal insets: 500 - 16.
+      assert!(
+         (rects[0].width() - 412.0).abs() < 0.5,
+         "Fr column width {} != 500 - 16 - 60 - 12 of gap",
+         rects[0].width()
+      );
+      assert!(
+         (first_row.get().min.y - rects[0].max.y - 10.0 - 4.0).abs() < 1.0,
+         "first row top {} != header bottom + row_gap + margin.top",
+         first_row.get().min.y
+      );
    }
 }

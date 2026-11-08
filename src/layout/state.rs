@@ -32,13 +32,15 @@ impl FlexState {
    }
 }
 
-/// The column widths and row heights a table measured on an earlier frame.
+/// The column widths and uniform row height a table measured on an earlier frame.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TableState {
    pub columns: Vec<Column>,
    pub widths: Vec<f32>,
-   /// One height per body row.
-   pub heights: Vec<f32>,
+   /// How many body rows the state was measured with.
+   pub row_count: usize,
+   /// The tallest measured row: the height every row is placed at unless the host pins one.
+   pub row_height: f32,
    pub header_height: f32,
    pub key: u64,
    pub avail: egui::Vec2,
