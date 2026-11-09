@@ -25,6 +25,7 @@ cargo run --example demo --features full   # the whole gallery
 | [Avatar groups](#avatar-groups) | `cargo run --example avatar` |
 | [Indicators](#indicators) | `cargo run --example indicator` |
 | [FPS meters](#fps-meters) | `cargo run --example fps_meter` |
+| [Rows](#rows) | `cargo run --example row --features lucide` |
 | [Frame](#frame) | `cargo run --example email` |
 | [Surfaces](#surfaces) | `cargo run --example email` |
 | [Gradient fills](#gradient-fills) | `cargo run --example gradient` |
@@ -681,6 +682,36 @@ Two meters need distinct window titles, because the title is the window id. `wit
 resizes the window and `clear` restarts the measurement.
 Proof: `cargo run --example fps_meter`.
 
+## Rows
+
+A product row: a leading icon, a title, an optional subtitle, an optional trailing control and a
+chevron, on the themed hover and selection plate. The row fills the available width; its default
+height is two interaction heights (≈40 pt).
+
+**Signature** `Row::new(icon, text).subtitle(..).selected(..).chevron(..).trailing(..).show(ui)`
+
+```rust
+use egui_elements::{Row, Switch};
+
+ui.add(
+    Row::new(icon, "Notifications")
+        .subtitle("Sounds, popups, badges")
+        .chevron(true)
+        .selected(selected)
+        .trailing(|ui| {
+            ui.add(Switch::without_text(&mut value));
+        }),
+);
+```
+
+- `Row::text(text)` is the icon-less constructor; `Row::new(Image, text)` takes an `egui::Image`
+  (for example `Lucide::Bell.image()` with the `lucide` feature).
+- `.height(points)` overrides the default. `.sense(Sense)` defaults to `Sense::click()`; pass
+  `Sense::hover()` when a trailing control owns the click.
+- The trailing closure runs in a right-aligned child `Ui` whose width the row measures, so the title
+  truncates before it. `.id_salt(..)` salts that child when the same row repeats on several surfaces.
+- Proof: `examples/row.rs` — `cargo run --example row --features lucide`.
+
 ## Frame
 
 The crate's frame: `egui::Frame`'s builder shape plus a per-state fill and stroke, a shadow, optional
@@ -936,8 +967,11 @@ Popover::new("emoji", &mut open)
 - `PopoverSide::{Below (default), Above, Right, Left}`, plus `.gap(points)` and `.width(points)`.
 - Closes on a click outside and on `Esc` by default; `.close_on_click_outside(false)` and
   `.close_on_escape(false)` keep it up.
-- The surface is `Surface::Overlay` (the theme's window frame) unless `.frame(Frame)` overrides it, and
-  `.order(Order)` controls the layer.
+- The surface is `Surface::Overlay` (the theme's window frame) unless `.surface(Surface)` or
+  `.frame(Frame)` overrides it, and `.order(Order)` controls the layer. `.inner_margin(Margin)`
+  overrides the surface frame's margin (`Margin::ZERO` for a picker that pads itself).
+- `.align(Align2)` is the cross-axis alignment against the anchor, so an `Above` card can hug its
+  trigger's right edge; `.screen_margin(points)` insets the constrain rect by that amount.
 - It never flips itself: a host that needs side selection computes it from its own layout.
 - Proof: `examples/popover.rs` — `cargo run --example popover`.
 

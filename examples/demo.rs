@@ -15,8 +15,8 @@ use egui_elements::utils;
 use egui_elements::widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeCorner, BadgePulse, Button, Checkbox, ChipRole,
    ComboBox, FpsMeter, Indicator, IndicatorState, Label, Menu, MenuItem, MenuSection, Modal, Orb,
-   Radio, Ripple, SecureTextEdit, Slider, Spinner, SubMenuItem, Switch, Tabs, TabsStyle, Toast,
-   Toasts, Window,
+   Radio, Ripple, Row, SecureTextEdit, Slider, Spinner, SubMenuItem, Switch, Tabs, TabsStyle,
+   Toast, Toasts, Window,
 };
 
 /// Display budget for the demo's QR symbol. The raster is built for this size and
@@ -967,6 +967,43 @@ impl DemoApp {
          .fill_width(false)
          .show(ui);
       });
+
+      ui.add_space(8.0);
+
+      // Rows: the same composite on bg, frame1 and the window; the id salt keeps
+      // the trailing switch and checkbox from colliding between surfaces.
+      ui.add(
+         Row::new(
+            Lucide::Bell.image(),
+            RichText::new("Notifications").size(size).color(text_color),
+         )
+         .subtitle(RichText::new("Sounds, popups, badges").size(size - 2.0).color(muted))
+         .chevron(true)
+         .selected(self.tabs == 1)
+         .id_salt(format!("{id_salt}_row_subtitle")),
+      );
+
+      ui.add(
+         Row::new(
+            Lucide::Monitor.image(),
+            RichText::new("Default interface scale").size(size).color(text_color),
+         )
+         .trailing(|ui| {
+            ui.add(Switch::without_text(&mut self.switch_on));
+         })
+         .id_salt(format!("{id_salt}_row_switch")),
+      );
+
+      ui.add(
+         Row::new(
+            Lucide::Images.image(),
+            RichText::new("Save to gallery").size(size).color(text_color),
+         )
+         .trailing(|ui| {
+            ui.add(Checkbox::without_text(&mut self.check_on));
+         })
+         .id_salt(format!("{id_salt}_row_check")),
+      );
 
       ui.add_space(8.0);
 
