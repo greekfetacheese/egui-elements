@@ -33,7 +33,8 @@
 //!   [`HoldSettings`] for configurable hold-to-confirm
 //!   fills and completion bursts), [`Label`]
 //!   (including [`Label::sections`](crate::widgets::Label::sections) for mixed styles),
-//!   [`Checkbox`], [`Radio`], [`Slider`], [`ComboBox`], [`Menu`] / [`MenuItem`], [`Chip`], [`Divider`],
+//!   [`Checkbox`], [`Radio`], [`Slider`], [`ComboBox`], [`Row`], [`Menu`] / [`MenuItem`], [`Chip`],
+//!   [`Divider`],
 //!   [`Modal`], [`Toast`] / [`Toasts`], [`Indicator`], [`FpsMeter`], [`AvatarGroup`],
 //!   [`SecureTextEdit`], [`MultiLabel`], the loaders ([`Spinner`],
 //!   [`Ripple`], [`Orb`]), [`Window`]
@@ -112,7 +113,7 @@ pub use widgets::{
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
    ComboBox, Divider, FpsMeter, FpsStats, Frame, HoldBurst, HoldSettings, Indicator,
    IndicatorState, IntoModalId, Label, Menu, MenuItem, MenuSection, Modal, MultiLabel, Orb,
-   Popover, PopoverSide, Radio, Ripple, Slider, SliderVisuals, Spinner, SpinnerShadow, Spread,
+   Popover, PopoverSide, Radio, Ripple, Row, Slider, SliderVisuals, Spinner, SpinnerShadow, Spread,
    SubMenuItem, Switch, Tabs, TabsStyle, TabsVisuals, TextEdit, TextEditOutput, Toast, Toasts,
    ToggleShadow, ToggleVisuals, Window,
 };

@@ -156,6 +156,8 @@ impl PopoverApp {
                }
                let _ = Popover::new("above", &mut open)
                   .side(PopoverSide::Above)
+                  .align(Align2::RIGHT_BOTTOM)
+                  .screen_margin(space.md)
                   .width(280.0)
                   .show(ui.ctx(), button.rect, |ui| {
                      ui.label(
