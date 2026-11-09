@@ -178,6 +178,20 @@ pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
    )
 }
 
+/// `color` at `alpha` (0..=255), preserving its hue.
+///
+/// The alpha is applied unmultiplied, so fading a glow never dims its RGB.
+pub fn with_alpha(color: Color32, alpha: u8) -> Color32 {
+   let [red, green, blue, _] = color.to_srgba_unmultiplied();
+   Color32::from_rgba_unmultiplied(red, green, blue, alpha)
+}
+
+/// `color` as `#rrggbb` (the alpha channel is dropped).
+pub fn hex(color: Color32) -> String {
+   let [red, green, blue, _] = color.to_srgba_unmultiplied();
+   format!("#{red:02x}{green:02x}{blue:02x}")
+}
+
 /// WCAG 2.2 contrast ratio between two opaque colours, from 1.0 to 21.0.
 ///
 /// Use [`CONTRAST_AA_TEXT`] for body text and [`CONTRAST_AA_UI`] for large text and component
@@ -436,6 +450,27 @@ mod tests {
       assert!(
          width >= widest + 40.0,
          "button {width} vs text {widest}"
+      );
+   }
+
+   #[test]
+   fn with_alpha_replaces_only_the_alpha() {
+      let color = with_alpha(Color32::from_rgb(10, 20, 30), 128);
+      assert_eq!(color.to_srgba_unmultiplied(), [10, 20, 30, 128]);
+   }
+
+   #[test]
+   fn hex_formats_the_rgb_channels() {
+      assert_eq!(
+         hex(Color32::from_rgb(0x12, 0xab, 0xff)),
+         "#12abff"
+      );
+      assert_eq!(
+         hex(Color32::from_rgba_unmultiplied(
+            0x12, 0xab, 0xff, 128
+         )),
+         "#12abff",
+         "alpha is dropped"
       );
    }
 }

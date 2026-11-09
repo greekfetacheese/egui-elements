@@ -515,8 +515,16 @@ impl Theme {
    /// Raised is half the shadow, Floating is the window shadow itself, Overlay is double. The
    /// colour is untouched, so a light palette keeps its soft neutral shadow.
    pub fn shadow(&self, elevation: Elevation) -> Shadow {
+      self.shadow_scaled(elevation, 1.0)
+   }
+
+   /// [`Self::shadow`] with a caller-supplied strength multiplier.
+   ///
+   /// `1.0` is the step's normal shadow, `0.0` flattens it, and values above `1.0` lift a card
+   /// further than its step allows. The palette still owns the colour.
+   pub fn shadow_scaled(&self, elevation: Elevation, strength: f32) -> Shadow {
       let base = self.style().visuals.window_shadow;
-      let scale = elevation.scale();
+      let scale = elevation.scale() * strength.max(0.0);
 
       Shadow {
          offset: [
