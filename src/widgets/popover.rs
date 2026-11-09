@@ -64,11 +64,11 @@ impl PopoverSide {
    fn placement(self, align: Align2, anchor: Rect, gap: f32) -> (Align2, Pos2) {
       match self {
          Self::Below => (
-            Align2::new(align.x(), Align::Max),
+            Align2::new(align.x(), Align::Min),
             pos2(x_at(anchor, align.x()), anchor.bottom() + gap),
          ),
          Self::Above => (
-            Align2::new(align.x(), Align::Min),
+            Align2::new(align.x(), Align::Max),
             pos2(x_at(anchor, align.x()), anchor.top() - gap),
          ),
          Self::Right => (
@@ -246,6 +246,10 @@ impl<'a> Popover<'a> {
       if let Some(margin) = self.inner_margin {
          frame = frame.inner_margin(margin);
       }
+      if self.width.is_some() {
+         // `.width` is the card's width: let the content fill what the margins leave.
+         frame = frame.fill_width(true);
+      }
 
       let mut area = Area::new(id).order(self.order).pivot(pivot).fixed_pos(pos);
       area = if self.screen_margin > 0.0 {
@@ -363,7 +367,84 @@ mod tests {
          output.textures_delta.clear();
       }
 
-      assert!((rect.expect("open").right() - anchor.right()).abs() < 0.5);
+      let rect = rect.expect("open");
+      assert!((rect.right() - anchor.right()).abs() < 0.5);
+      assert!(rect.bottom() <= anchor.top() - 5.5);
+   }
+
+   #[test]
+   fn width_sets_the_card_width() {
+      let ctx = Context::default();
+      let mut open = true;
+      let mut width = 0.0;
+      for _ in 0..2 {
+         let mut output = ctx.run_ui(RawInput::default(), |ctx| {
+            if let Some(shown) =
+               Popover::new("width", &mut open).width(220.0).show(ctx, anchor(), |ui| {
+                  ui.label("x");
+               })
+            {
+               width = shown.response.rect.width();
+            }
+         });
+         output.textures_delta.clear();
+      }
+
+      assert!((width - 220.0).abs() < 0.5, "width was {width}");
+   }
+
+   #[test]
+   fn each_side_places_the_card_on_that_side() {
+      let ctx = Context::default();
+      let sides = [
+         PopoverSide::Below,
+         PopoverSide::Above,
+         PopoverSide::Right,
+         PopoverSide::Left,
+      ];
+      let anchors = [
+         Rect::from_min_size(pos2(100.0, 100.0), vec2(80.0, 32.0)),
+         Rect::from_min_size(pos2(300.0, 100.0), vec2(80.0, 32.0)),
+         Rect::from_min_size(pos2(500.0, 100.0), vec2(80.0, 32.0)),
+         Rect::from_min_size(pos2(650.0, 100.0), vec2(80.0, 32.0)),
+      ];
+      let mut open = [true; 4];
+      let mut rects: [Option<Rect>; 4] = [None; 4];
+
+      // An `Area` knows its size only after the first pass; the pivot lands on the second.
+      for _ in 0..2 {
+         let mut output = ctx.run_ui(RawInput::default(), |ctx| {
+            for (index, side) in sides.iter().enumerate() {
+               if let Some(shown) = Popover::new(("side", index), &mut open[index])
+                  .side(*side)
+                  .show(ctx, anchors[index], |ui| {
+                     ui.label("x");
+                  })
+               {
+                  rects[index] = Some(shown.response.rect);
+               }
+            }
+         });
+         output.textures_delta.clear();
+      }
+
+      let rects: [Rect; 4] = rects.map(|rect| rect.expect("open"));
+      assert!(
+         rects[0].top() >= anchors[0].bottom() + 5.5,
+         "below"
+      );
+      assert!(
+         rects[1].bottom() <= anchors[1].top() - 5.5,
+         "above"
+      );
+      assert!(
+         rects[2].left() >= anchors[2].right() + 5.5,
+         "right"
+      );
+      assert!(
+         rects[3].right() <= anchors[3].left() - 5.5,
+         "left"
+      );
    }
 
    /// Record a shown popover's rect, if it drew.

@@ -62,6 +62,8 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   instant.
 - `ComboBox` gained an elevated popup surface, `.popup_gap`, `.popup_content_margin`, an animated
   disclosure chevron and the virtualized `show_rows_ui`.
+- `Popover::width` now fills the card to that width, so a picker's content no longer shrink-wraps inside
+  a wider card.
 - `Table` pins its header, gives every row one pitch and lays out only the rows the viewport shows.
 - `Tabs` can paint a fitted underline strip, and a click keeps its wash until release.
 - The theme editor gained a live preview, naming, save/load and theme-following chrome; its host IO hooks
