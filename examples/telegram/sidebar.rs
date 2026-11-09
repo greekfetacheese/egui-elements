@@ -5,8 +5,7 @@ use egui_elements::egui_lucide::Lucide;
 use egui_elements::layout::{CrossAlign, Flex, Item};
 use egui_elements::theme::{ThemeColors, ThemeSpacing};
 use egui_elements::utils::mix;
-use egui_elements::widgets::SecureTextEdit;
-use egui_elements::widgets::{Avatar, AvatarGroup, AvatarVisuals, Badge, Label};
+use egui_elements::widgets::{Avatar, AvatarGroup, AvatarVisuals, Badge, Label, TextEdit};
 
 use crate::TelegramApp;
 use crate::data::{self, Chat};
@@ -67,26 +66,24 @@ fn header(app: &mut TelegramApp, ui: &mut Ui) {
             .gap(space.sm)
             .align_items(CrossAlign::Center)
             .show(ui, |f| {
-               f.item(Item::fixed(36.0), |ui| {
+               f.item(Item::new(), |ui| {
                   if paint::icon_button(
                      ui,
                      Lucide::UserPlus,
                      20.0,
                      app.theme.colors.text_muted,
-                     app.theme.colors.hover,
                   )
                   .clicked()
                   {
                      app.new_contact_open = true;
                   }
                });
-               f.item(Item::fixed(36.0), |ui| {
+               f.item(Item::new(), |ui| {
                   let _ = paint::icon_button(
                      ui,
                      Lucide::Menu,
                      20.0,
                      app.theme.colors.text_muted,
-                     app.theme.colors.hover,
                   );
                });
                f.item(Item::grow(1.0), |ui| search(app, ui));
@@ -147,22 +144,14 @@ fn edit(app: &mut TelegramApp, ui: &mut Ui) {
    let width = ui.available_width();
    let height = ui.available_height();
 
-   let mut visuals = app.theme.text_edit_visuals();
-   visuals.bg = Color32::TRANSPARENT.into();
-   visuals.border = Stroke::NONE;
-   visuals.border_hover = Stroke::NONE;
-   visuals.border_open = Stroke::NONE;
-   visuals.shadow = Shadow::NONE;
-   visuals.corner_radius = CornerRadius::ZERO;
-
    ui.add(
-      SecureTextEdit::singleline(&mut app.search)
+      TextEdit::singleline(&mut app.search)
          .id_salt("telegram_search")
          .hint_text(RichText::new("Search").size(13.5).color(colors.text_muted))
          .margin(Margin::ZERO)
+         .frame(false)
          .desired_width(width)
-         .min_size(vec2(width, height))
-         .visuals(visuals),
+         .min_size(vec2(width, height)),
    );
 }
 

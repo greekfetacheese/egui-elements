@@ -1,5 +1,6 @@
 //! Hand-rolled painting for the Telegram demo: wallpaper, a procedural photo,
-//! a waveform, read ticks, an icon button and a soft shadow.
+//! a waveform and read ticks. The ramps are the crate's `Gradient`, and the
+//! floating chrome is the theme's own surface and shadow.
 //!
 //! Everything is drawn from palette colours and deterministic geometry — the
 //! demo ships no binary assets and never calls an RNG.
@@ -7,8 +8,10 @@
 use eframe::egui::epaint::RectShape;
 use eframe::egui::*;
 use egui_elements::egui_lucide::Lucide;
+use egui_elements::gradient::Gradient;
 use egui_elements::theme::Theme;
 use egui_elements::utils::mix;
+use egui_elements::widgets::Button;
 
 use crate::style;
 
@@ -31,7 +34,7 @@ pub fn wallpaper(ui: &Ui, rect: Rect, theme: &Theme) {
 
    let top = mix(colors.bg, colors.accent, 0.16);
    let bottom = mix(colors.bg, colors.info, 0.10);
-   vertical(&painter, rect, top, bottom);
+   Gradient::vertical(top, bottom).paint_rounded(&painter, rect, CornerRadius::ZERO);
 
    let radius = rect.width().max(rect.height()) * 0.55;
    bloom(
@@ -92,7 +95,7 @@ pub fn photo(ui: &Ui, rect: Rect, seed: u32, theme: &Theme) {
       rect.max,
    );
    if body.height() > 0.0 {
-      vertical(&painter, body, sky_top, sky_low);
+      Gradient::vertical(sky_top, sky_low).paint_rounded(&painter, body, CornerRadius::ZERO);
    }
 
    // A thin band of haze across the horizon, under the hills.
@@ -100,23 +103,21 @@ pub fn photo(ui: &Ui, rect: Rect, seed: u32, theme: &Theme) {
    let band_h = rect.height() * 0.16;
    let haze = style::translucent(mix(colors.bg, colors.warning, 0.30), 96);
    let clear = style::translucent(colors.bg, 0);
-   vertical(
+   Gradient::vertical(clear, haze).paint_rounded(
       &painter,
       Rect::from_min_max(
          pos2(rect.left(), horizon - band_h * 0.5),
          pos2(rect.right(), horizon),
       ),
-      clear,
-      haze,
+      CornerRadius::ZERO,
    );
-   vertical(
+   Gradient::vertical(haze, clear).paint_rounded(
       &painter,
       Rect::from_min_max(
          pos2(rect.left(), horizon),
          pos2(rect.right(), horizon + band_h * 0.5),
       ),
-      haze,
-      clear,
+      CornerRadius::ZERO,
    );
 
    let sun = mix(colors.warning, colors.text, 0.35);
@@ -215,64 +216,12 @@ pub fn ticks(painter: &Painter, rect: Rect, read: bool, color: Color32) {
    painter.line_segment([back[1], back[2]], stroke);
 }
 
-/// A chrome-less icon button: `size` is the icon, the hit box adds the theme's
-/// small step on every side (a 16 pt icon yields a 32 pt button).
-pub fn icon_button(
-   ui: &mut Ui,
-   icon: Lucide,
-   size: f32,
-   color: Color32,
-   hover: Color32,
-) -> Response {
-   let pad = Theme::spacing_from_ctx(ui.ctx()).sm;
-   let (rect, response) = ui.allocate_exact_size(Vec2::splat(size + pad * 2.0), Sense::click());
-   if !ui.is_rect_visible(rect) {
-      return response;
-   }
-
-   if response.hovered() {
-      ui.painter().rect_filled(
-         rect,
-         CornerRadius::same(style::ICON_RADIUS),
-         hover,
-      );
-      ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-   }
-
-   let icon_rect = Rect::from_center_size(rect.center(), Vec2::splat(size));
-   icon.size(size).color(color).image().paint_at(ui, icon_rect);
-   response
-}
-
-/// A blurred rounded rect under a card; `radius` also scales the blur.
-pub fn soft_shadow(painter: &Painter, rect: Rect, radius: f32, color: Color32) {
-   let shadow = RectShape::filled(rect, CornerRadius::same(radius as u8), color)
-      .with_blur_width(radius * 1.2);
-   painter.add(Shape::Rect(shadow));
-}
-
-/// A vertical two-colour gradient filling `rect`.
-fn vertical(painter: &Painter, rect: Rect, top: Color32, bottom: Color32) {
-   let mut mesh = Mesh::default();
-   mesh.colored_vertex(rect.left_top(), top);
-   mesh.colored_vertex(rect.right_top(), top);
-   mesh.colored_vertex(rect.right_bottom(), bottom);
-   mesh.colored_vertex(rect.left_bottom(), bottom);
-   mesh.add_triangle(0, 1, 2);
-   mesh.add_triangle(0, 2, 3);
-   painter.add(Shape::mesh(mesh));
-}
-
-/// A horizontal two-colour gradient filling `rect`.
-fn horizontal(painter: &Painter, rect: Rect, left: Color32, right: Color32) {
-   let mut mesh = Mesh::default();
-   mesh.colored_vertex(rect.left_top(), left);
-   mesh.colored_vertex(rect.right_top(), right);
-   mesh.colored_vertex(rect.right_bottom(), right);
-   mesh.colored_vertex(rect.left_bottom(), left);
-   mesh.add_triangle(0, 1, 2);
-   mesh.add_triangle(0, 2, 3);
-   painter.add(Shape::mesh(mesh));
+/// A chrome-less icon button: the crate `Button` with its frame only while
+/// hovered, so the plate is the theme's `hover` slot and the press and focus
+/// states come with it.
+pub fn icon_button(ui: &mut Ui, icon: Lucide, size: f32, color: Color32) -> Response {
+   ui.add(Button::new(icon.size(size).color(color).image()).frame_when_inactive(false))
+      .on_hover_cursor(CursorIcon::PointingHand)
 }
 
 /// A daisy-like fan of overlapping petals: the decorative wallpaper motif.
@@ -344,22 +293,22 @@ fn vignette(painter: &Painter, rect: Rect, color: Color32) {
       rect.left_top(),
       pos2(rect.right(), rect.top() + band_h),
    );
-   vertical(painter, top, edge, clear);
+   Gradient::vertical(edge, clear).paint_rounded(painter, top, CornerRadius::ZERO);
    let bottom = Rect::from_min_max(
       pos2(rect.left(), rect.bottom() - band_h),
       rect.right_bottom(),
    );
-   vertical(painter, bottom, clear, edge);
+   Gradient::vertical(clear, edge).paint_rounded(painter, bottom, CornerRadius::ZERO);
    let left = Rect::from_min_max(
       rect.left_top(),
       pos2(rect.left() + band_w, rect.bottom()),
    );
-   horizontal(painter, left, edge, clear);
+   Gradient::horizontal(edge, clear).paint_rounded(painter, left, CornerRadius::ZERO);
    let right = Rect::from_min_max(
       pos2(rect.right() - band_w, rect.top()),
       rect.right_bottom(),
    );
-   horizontal(painter, right, clear, edge);
+   Gradient::horizontal(clear, edge).paint_rounded(painter, right, CornerRadius::ZERO);
 }
 
 /// A hill silhouette: the area under a gentle wave, as one triangle strip.

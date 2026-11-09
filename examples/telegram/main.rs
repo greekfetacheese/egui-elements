@@ -18,6 +18,7 @@ mod sidebar;
 mod style;
 
 use eframe::egui::*;
+use egui_elements::components::InputField;
 use egui_elements::editor::ThemeEditor;
 use egui_elements::egui_lucide::Lucide;
 use egui_elements::layout::{CrossAlign, Flex, Item, Justify};
@@ -50,16 +51,20 @@ pub struct TelegramApp {
    pub(crate) new_contact_open: bool,
    /// When the mock create started, or `None` while CREATE is idle.
    pub(crate) creating_since: Option<f64>,
-   /// First-name input in the New Contact form.
-   pub(crate) contact_first: String,
-   /// Last-name input in the New Contact form.
-   pub(crate) contact_last: String,
-   /// Phone input in the New Contact form; starts on the `+49` prefix.
-   pub(crate) contact_phone: String,
+   /// First-name field in the New Contact form; it owns its text.
+   pub(crate) contact_first: InputField,
+   /// Last-name field in the New Contact form.
+   pub(crate) contact_last: InputField,
+   /// Phone field in the New Contact form; starts on the `+49` prefix.
+   pub(crate) contact_phone: InputField,
    /// Settings modal open, from the title strip's gear.
    pub(crate) settings_open: bool,
    /// Theme-audit window open, from the title strip's palette button.
    pub(crate) audit_open: bool,
+   /// Composer button the emoji picker hangs off, recorded each frame.
+   pub(crate) emoji_anchor: Rect,
+   /// Composer button the attachment menu hangs off.
+   pub(crate) attach_anchor: Rect,
    /// Settings or its Advanced sub-page.
    pub(crate) settings_page: settings::SettingsPage,
    /// Selected language index in the settings picker.
@@ -78,6 +83,13 @@ pub struct TelegramApp {
    pub(crate) channels_media: bool,
    /// Interface-scale switch; the strip below it is visual only.
    pub(crate) scale_enabled: bool,
+}
+
+/// One New Contact field: it owns its text, and the label doubles as its id.
+fn contact_field(label: &'static str, text: &str) -> InputField {
+   let mut field = InputField::new(label, true).qr_enabled(false);
+   field.set_text(text);
+   field
 }
 
 fn main() -> eframe::Result {
@@ -115,11 +127,13 @@ impl TelegramApp {
          attach_open: false,
          new_contact_open: false,
          creating_since: None,
-         contact_first: String::new(),
-         contact_last: String::new(),
-         contact_phone: "+49 ".to_owned(),
+         contact_first: contact_field("First Name", ""),
+         contact_last: contact_field("Last Name", ""),
+         contact_phone: contact_field("Phone Number", "+49 "),
          settings_open: false,
          audit_open: false,
+         emoji_anchor: Rect::NOTHING,
+         attach_anchor: Rect::NOTHING,
          settings_page: settings::SettingsPage::default(),
          language: 0,
          connection: 0,
@@ -208,27 +222,19 @@ impl TelegramApp {
                }
             });
             f.item(Item::new(), |ui| {
-               if paint::icon_button(
-                  ui,
-                  Lucide::Settings,
-                  16.0,
-                  colors.text_muted,
-                  colors.hover,
-               )
-               .clicked()
-               {
+               if paint::icon_button(ui, Lucide::Settings, 16.0, colors.text_muted).clicked() {
                   self.settings_open = true;
                }
             });
             f.item(Item::new(), |ui| {
                let audit = Lucide::Palette;
-               if paint::icon_button(ui, audit, 16.0, colors.text_muted, colors.hover).clicked() {
+               if paint::icon_button(ui, audit, 16.0, colors.text_muted).clicked() {
                   self.audit_open = !self.audit_open;
                }
             });
             f.item(Item::new(), |ui| {
                let editor = Lucide::SlidersHorizontal;
-               if paint::icon_button(ui, editor, 16.0, colors.text_muted, colors.hover).clicked() {
+               if paint::icon_button(ui, editor, 16.0, colors.text_muted).clicked() {
                   self.editor.open = !self.editor.open;
                }
             });

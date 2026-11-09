@@ -2,18 +2,20 @@
 //! and the attachment menu.
 //!
 //! Every colour comes from the installed theme and every gap from
-//! `Theme::spacing`; the floating panels are `Area`s with the window frame's
-//! fill, a hairline and a soft shadow, so they read as the same material as
-//! the modal card. State the panels need across frames lives on
-//! `TelegramApp`.
+//! `Theme::spacing`; the floating panels are `Popover`s on the theme's overlay
+//! surface, so they read as the same material as the modal card and inherit its
+//! outside-click and Escape dismissal. State the panels need across frames lives
+//! on `TelegramApp`.
 
 use eframe::egui::*;
 use egui_elements::components::InputField;
 use egui_elements::egui_lucide::Lucide;
 use egui_elements::layout::{CrossAlign, Flex, Item, Justify};
-use egui_elements::theme::Theme;
+use egui_elements::theme::{Surface, Theme};
 use egui_elements::utils::mix;
-use egui_elements::widgets::{Button, Modal, Spinner};
+use egui_elements::widgets::{
+   Button, Frame, Modal, Popover, PopoverSide, Spinner, Tabs, TabsStyle,
+};
 
 use crate::TelegramApp;
 use crate::paint;
@@ -68,15 +70,6 @@ pub enum EmojiTab {
 impl EmojiTab {
    /// Tabs in display order.
    const ALL: [EmojiTab; 3] = [EmojiTab::Emoji, EmojiTab::Stickers, EmojiTab::Gifs];
-
-   /// Uppercase tab label.
-   fn label(self) -> &'static str {
-      match self {
-         EmojiTab::Emoji => "EMOJI",
-         EmojiTab::Stickers => "STICKERS",
-         EmojiTab::Gifs => "GIFS",
-      }
-   }
 }
 
 /// Draw every overlay surface on top of the shell.
@@ -113,7 +106,7 @@ fn new_contact(app: &mut TelegramApp, ctx: &Context) {
    let colors = theme.colors;
    let space = theme.spacing;
    let pending = app.creating_since.is_some();
-   let can_create = !app.contact_first.trim().is_empty() && !pending;
+   let can_create = !app.contact_first.text().trim().is_empty() && !pending;
    // The disabled CREATE is a painted-down accent, not just reduced alpha:
    // an alpha-dimmed solid accent still read as enabled on the dark palettes.
    let enabled_fill = colors.accent;
@@ -210,9 +203,9 @@ fn contact_body(app: &mut TelegramApp, ui: &mut Ui) {
          });
          f.item(Item::grow(1.0).stack(), |ui| {
             ui.spacing_mut().item_spacing.y = space.md;
-            field(ui, &theme, "First Name", &mut app.contact_first);
-            field(ui, &theme, "Last Name", &mut app.contact_last);
-            field(ui, &theme, "Phone Number", &mut app.contact_phone);
+            field(ui, &theme, &mut app.contact_first);
+            field(ui, &theme, &mut app.contact_last);
+            field(ui, &theme, &mut app.contact_phone);
          });
       });
 }
@@ -236,23 +229,18 @@ fn avatar_slot(ui: &mut Ui, theme: &Theme) {
    );
 }
 
-/// One owning `InputField` bound to a host `String`.
-fn field(ui: &mut Ui, theme: &Theme, name: &'static str, value: &mut String) {
-   let width = ui.available_width();
-   let mut field = InputField::new(name, true)
-      .with_min_size(vec2(width, style::CONTACT_FIELD_H))
-      .inner_margin(theme.spacing.margin(theme.spacing.sm))
-      .qr_enabled(false);
-   field.set_text(value);
-   let _ = field.show(ui);
-   *value = field.text().to_owned();
+/// One stored `InputField` drawn at the form's width.
+fn field(ui: &mut Ui, theme: &Theme, value: &mut InputField) {
+   value.set_min_size(vec2(ui.available_width(), style::CONTACT_FIELD_H));
+   value.set_inner_margin(theme.spacing.margin(theme.spacing.sm));
+   let _ = value.show(ui);
 }
 
 /// Close the form and restore its starting state.
 fn reset_contact(app: &mut TelegramApp) {
-   app.contact_first.clear();
-   app.contact_last.clear();
-   app.contact_phone = "+49 ".to_owned();
+   app.contact_first.set_text("");
+   app.contact_last.set_text("");
+   app.contact_phone.set_text("+49 ");
    app.creating_since = None;
 }
 
@@ -260,126 +248,72 @@ fn reset_contact(app: &mut TelegramApp) {
 // Emoji / stickers / GIFs
 // ---------------------------------------------------------------------------
 
-/// The picker, anchored above the composer on the conversation side.
+/// The picker, anchored above the composer's smiley.
 fn emoji_panel(app: &mut TelegramApp, ctx: &Context) {
-   let was_open = sync_open(ctx, "emoji_panel_open", app.emoji_open);
-   if !app.emoji_open {
-      return;
-   }
-
    let theme = app.theme.clone();
    let space = theme.spacing;
-   let screen = ctx.content_rect();
-   let origin = pos2(
-      screen.right() - space.md - style::EMOJI_PANEL_W,
-      screen.bottom() - style::COMPOSER_H - space.sm - style::EMOJI_PANEL_H,
-   );
+   let anchor = app.emoji_anchor;
+   let mut open = app.emoji_open;
+   let mut tab = app.emoji_tab;
+   let composer = &mut app.composer;
 
-   let area = Area::new(Id::unique("emoji_panel"))
-      .order(Order::Foreground)
-      .fixed_pos(origin)
-      .show(ctx, |ui| {
-         panel_frame(&theme, style::PANEL_RADIUS).show(ui, |ui| {
-            ui.set_width(style::EMOJI_PANEL_W);
-            ui.set_height(style::EMOJI_PANEL_H);
-            ui.spacing_mut().item_spacing = Vec2::ZERO;
+   let _ = Popover::new("emoji_panel", &mut open)
+      .side(PopoverSide::Above)
+      .gap(space.sm)
+      .frame(panel_frame(&theme, style::PANEL_RADIUS))
+      .show(ctx, anchor, |ui| {
+         ui.set_width(style::EMOJI_PANEL_W);
+         ui.set_height(style::EMOJI_PANEL_H);
+         ui.spacing_mut().item_spacing = Vec2::ZERO;
 
-            // The category strip owns the bottom edge; the grid gets exactly
-            // the band between the tabs and the strip, so no dead row opens up
-            // between them.
-            let content = ui.max_rect();
-            let strip = Rect::from_min_max(
-               pos2(
-                  content.left(),
-                  content.bottom() - style::EMOJI_STRIP_H,
-               ),
-               content.max,
-            );
-            let body = Rect::from_min_max(
-               pos2(content.left(), content.top() + style::EMOJI_TAB_H),
-               pos2(content.right(), strip.top()),
-            );
+         // The category strip owns the bottom edge; the grid gets exactly the
+         // band between the tabs and the strip, so no dead row opens up between
+         // them.
+         let content = ui.max_rect();
+         let strip = Rect::from_min_max(
+            pos2(
+               content.left(),
+               content.bottom() - style::EMOJI_STRIP_H,
+            ),
+            content.max,
+         );
+         let body = Rect::from_min_max(
+            pos2(content.left(), content.top() + style::EMOJI_TAB_H),
+            pos2(content.right(), strip.top()),
+         );
 
-            tabs(app, ui, &theme);
-            match app.emoji_tab {
-               EmojiTab::Emoji => emoji_grid(app, ui, body, &theme),
-               EmojiTab::Stickers => stickers(ui, body, &theme),
-               EmojiTab::Gifs => gifs(ui, body, &theme),
-            }
-            categories(ui, &theme, strip);
-         });
+         tabs(&mut tab, ui);
+         match tab {
+            EmojiTab::Emoji => emoji_grid(composer, ui, body, &theme),
+            EmojiTab::Stickers => stickers(ui, body, &theme),
+            EmojiTab::Gifs => gifs(ui, body, &theme),
+         }
+         categories(ui, &theme, strip);
       });
 
-   // The click that opened the panel is still the frame's click position, so
-   // it must not also read as a click outside it.
-   if was_open {
-      let escape = ctx.input(|i| i.key_pressed(Key::Escape));
-      if escape || area.response.clicked_elsewhere() {
-         app.emoji_open = false;
-      }
-   }
+   app.emoji_tab = tab;
+   app.emoji_open = open;
 }
 
-/// Three equal tabs, the active one underlined in the accent.
-fn tabs(app: &mut TelegramApp, ui: &mut Ui, theme: &Theme) {
-   let colors = theme.colors;
-   let (rect, _) = ui.allocate_exact_size(
-      vec2(ui.available_width(), style::EMOJI_TAB_H),
-      Sense::hover(),
-   );
-   let column = rect.width() / EmojiTab::ALL.len() as f32;
-   let painter = ui.painter();
+/// The three page tabs, the active one marked by the crate's travelling underline.
+fn tabs(selected: &mut EmojiTab, ui: &mut Ui) {
+   let mut index = *selected as usize;
+   let response = Tabs::new(
+      "emoji_tabs",
+      &mut index,
+      ["EMOJI", "STICKERS", "GIFS"],
+   )
+   .style(TabsStyle::Underline)
+   .height(style::EMOJI_TAB_H)
+   .show(ui);
 
-   for (index, tab) in EmojiTab::ALL.iter().enumerate() {
-      let tab_rect = Rect::from_min_max(
-         pos2(rect.left() + column * index as f32, rect.top()),
-         pos2(
-            rect.left() + column * (index + 1) as f32,
-            rect.bottom(),
-         ),
-      );
-      let response = ui.interact(
-         tab_rect,
-         ui.scope_id().with(("emoji_tab", index)),
-         Sense::click(),
-      );
-      let active = *tab == app.emoji_tab;
-      if response.hovered() && !active {
-         painter.rect_filled(
-            tab_rect.shrink2(vec2(theme.spacing.sm, theme.spacing.xs)),
-            CornerRadius::same(style::EMOJI_RADIUS),
-            colors.hover,
-         );
-      }
-      painter.text(
-         tab_rect.center(),
-         Align2::CENTER_CENTER,
-         tab.label(),
-         FontId::proportional(13.0),
-         if active {
-            colors.accent
-         } else {
-            colors.text_muted
-         },
-      );
-      if active {
-         let underline = Rect::from_min_max(
-            pos2(
-               tab_rect.center().x - 26.0,
-               tab_rect.bottom() - 2.0,
-            ),
-            pos2(tab_rect.center().x + 26.0, tab_rect.bottom()),
-         );
-         painter.rect_filled(underline, CornerRadius::ZERO, colors.accent);
-      }
-      if response.clicked() {
-         app.emoji_tab = *tab;
-      }
+   if response.changed() {
+      *selected = EmojiTab::ALL[index];
    }
 }
 
 /// The glyph grid, seven columns wide, filling the band above the strip.
-fn emoji_grid(app: &mut TelegramApp, ui: &mut Ui, body: Rect, theme: &Theme) {
+fn emoji_grid(composer: &mut String, ui: &mut Ui, body: Rect, theme: &Theme) {
    let space = theme.spacing;
    let rows = EMOJI.len().div_ceil(style::EMOJI_COLS).max(1);
 
@@ -404,7 +338,7 @@ fn emoji_grid(app: &mut TelegramApp, ui: &mut Ui, body: Rect, theme: &Theme) {
                   ui.horizontal(|ui| {
                      ui.add_space(pad);
                      for emoji in row {
-                        emoji_cell(app, ui, emoji, cell_w, cell_h, theme);
+                        emoji_cell(composer, ui, emoji, cell_w, cell_h, theme);
                      }
                   });
                }
@@ -416,7 +350,7 @@ fn emoji_grid(app: &mut TelegramApp, ui: &mut Ui, body: Rect, theme: &Theme) {
 
 /// One grid cell: a rounded hover plate under the glyph, click to append.
 fn emoji_cell(
-   app: &mut TelegramApp,
+   composer: &mut String,
    ui: &mut Ui,
    emoji: &'static str,
    width: f32,
@@ -449,7 +383,7 @@ fn emoji_cell(
       colors.text,
    );
    if response.clicked() {
-      app.composer.push_str(emoji);
+      composer.push_str(emoji);
    }
 }
 
@@ -570,12 +504,14 @@ fn categories(ui: &mut Ui, theme: &Theme, rect: Rect) {
    for (index, icon) in CATEGORIES.iter().enumerate() {
       let cell = Rect::from_min_size(pos2(x, y), Vec2::splat(size));
       ui.scope_builder(UiBuilder::new().max_rect(cell), |ui| {
+         // The crate button adds its padding to the icon; match the 36 pt cell.
+         ui.spacing_mut().button_padding = Vec2::splat(space.sm);
          let ink = if index == 0 {
             colors.accent
          } else {
             colors.text_muted
          };
-         let _ = paint::icon_button(ui, *icon, 20.0, ink, colors.hover);
+         let _ = paint::icon_button(ui, *icon, 20.0, ink);
       });
       x += size + gap;
    }
@@ -587,91 +523,62 @@ fn categories(ui: &mut Ui, theme: &Theme, rect: Rect) {
 
 /// The paperclip menu, anchored above the paperclip in the composer.
 fn attach_menu(app: &mut TelegramApp, ctx: &Context) {
-   let was_open = sync_open(ctx, "attach_menu_open", app.attach_open);
-   if !app.attach_open {
-      return;
-   }
-
    let theme = app.theme.clone();
    let colors = theme.colors;
    let space = theme.spacing;
-   let screen = ctx.content_rect();
-   let height = ATTACH.len() as f32 * style::ATTACH_ROW_H + space.sm * 2.0;
-   let origin = pos2(
-      style::SIDEBAR_W + space.md,
-      screen.bottom() - style::COMPOSER_H - space.sm - height,
-   );
+   let anchor = app.attach_anchor;
+   let mut open = app.attach_open;
 
-   let area = Area::new(Id::unique("attach_menu"))
-      .order(Order::Foreground)
-      .fixed_pos(origin)
-      .show(ctx, |ui| {
-         panel_frame(&theme, style::ATTACH_RADIUS as f32)
-            .inner_margin(space.margin(space.sm))
-            .show(ui, |ui| {
-               ui.set_width(style::ATTACH_W - space.sm * 2.0);
-               ui.spacing_mut().item_spacing = Vec2::ZERO;
-               for (icon, label) in ATTACH {
-                  let (rect, response) = ui.allocate_exact_size(
-                     vec2(ui.available_width(), style::ATTACH_ROW_H),
-                     Sense::click(),
-                  );
-                  if response.hovered() {
-                     ui.painter().rect_filled(
-                        rect,
-                        CornerRadius::same(style::EMOJI_RADIUS),
-                        colors.hover,
-                     );
-                  }
-                  let icon_rect = Rect::from_center_size(
-                     pos2(rect.left() + space.sm + 9.0, rect.center().y),
-                     Vec2::splat(18.0),
-                  );
-                  icon.size(18.0).color(colors.text_muted).image().paint_at(ui, icon_rect);
-                  ui.painter().text(
-                     pos2(icon_rect.right() + space.sm, rect.center().y),
-                     Align2::LEFT_CENTER,
-                     label,
-                     FontId::proportional(14.0),
-                     colors.text,
-                  );
-                  if response.clicked() {
-                     app.attach_open = false;
-                  }
-               }
-            });
-      });
+   let picked = Popover::new("attach_menu", &mut open)
+      .side(PopoverSide::Above)
+      .gap(space.sm)
+      .frame(panel_frame(&theme, style::ATTACH_RADIUS as f32).inner_margin(space.margin(space.sm)))
+      .show(ctx, anchor, |ui| {
+         ui.set_width(style::ATTACH_W - space.sm * 2.0);
+         ui.spacing_mut().item_spacing = Vec2::ZERO;
+         let mut picked = false;
 
-   if was_open {
-      let escape = ctx.input(|i| i.key_pressed(Key::Escape));
-      if escape || area.response.clicked_elsewhere() {
-         app.attach_open = false;
-      }
-   }
-}
+         for (icon, label) in ATTACH {
+            let (rect, response) = ui.allocate_exact_size(
+               vec2(ui.available_width(), style::ATTACH_ROW_H),
+               Sense::click(),
+            );
+            if response.hovered() {
+               ui.painter().rect_filled(
+                  rect,
+                  CornerRadius::same(style::EMOJI_RADIUS),
+                  colors.hover,
+               );
+            }
+            let icon_rect = Rect::from_center_size(
+               pos2(rect.left() + space.sm + 9.0, rect.center().y),
+               Vec2::splat(18.0),
+            );
+            icon.size(18.0).color(colors.text_muted).image().paint_at(ui, icon_rect);
+            ui.painter().text(
+               pos2(icon_rect.right() + space.sm, rect.center().y),
+               Align2::LEFT_CENTER,
+               label,
+               FontId::proportional(14.0),
+               colors.text,
+            );
+            if response.clicked() {
+               picked = true;
+            }
+         }
 
-/// The shared floating-panel chrome: window fill, hairline, soft shadow.
-fn panel_frame(theme: &Theme, radius: f32) -> Frame {
-   Frame::new()
-      .fill(theme.window_frame.fill)
-      .stroke(Stroke::new(1.0, theme.colors.border))
-      .corner_radius(CornerRadius::same(radius as u8))
-      .shadow(Shadow {
-         offset: (0, 6).into(),
-         blur: 24,
-         spread: 0,
-         color: style::translucent(Color32::BLACK, 90),
+         picked
       })
+      .map(|shown| shown.inner)
+      .unwrap_or(false);
+
+   app.attach_open = open && !picked;
 }
 
-/// Record whether a panel was open last frame; returns that value.
-///
-/// Both pickers are toggled in the frame the click that opens them lands, so
-/// the same click would read as a click outside the panel. `was_open` lets the
-/// outside-click check skip that first frame.
-fn sync_open(ctx: &Context, key: &'static str, open: bool) -> bool {
-   let id = Id::unique(key);
-   let previous = ctx.data(|data| data.get_temp::<bool>(id)).unwrap_or(false);
-   ctx.data_mut(|data| data.insert_temp(id, open));
-   previous
+/// The shared floating-panel chrome: the theme's overlay surface on the demo's
+/// own corner radius.
+fn panel_frame(theme: &Theme, radius: f32) -> Frame {
+   Frame::from_egui(theme.surface_frame(Surface::Overlay))
+      .inner_margin(Margin::ZERO)
+      .corner_radius(CornerRadius::same(radius as u8))
 }

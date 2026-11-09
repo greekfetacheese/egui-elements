@@ -8,9 +8,9 @@
 use eframe::egui::*;
 use egui_elements::egui_lucide::Lucide;
 use egui_elements::layout::{CrossAlign, Flex, Item};
-use egui_elements::theme::{Theme, ThemeColors};
+use egui_elements::theme::{Elevation, Theme, ThemeColors};
 use egui_elements::utils::mix;
-use egui_elements::widgets::{Avatar, AvatarGroup, AvatarVisuals, Frame, Label, SecureTextEdit};
+use egui_elements::widgets::{Avatar, AvatarGroup, AvatarVisuals, Frame, Label, TextEdit};
 
 use crate::TelegramApp;
 use crate::data::{self, Chat, Msg, MsgBody, MsgStatus, Quote};
@@ -133,19 +133,12 @@ fn header_actions(ui: &mut Ui, theme: &Theme) {
    let space = theme.spacing;
 
    ui.spacing_mut().item_spacing.x = space.xs;
-   let _ = paint::icon_button(
-      ui,
-      Lucide::Search,
-      18.0,
-      colors.text_muted,
-      colors.hover,
-   );
+   let _ = paint::icon_button(ui, Lucide::Search, 18.0, colors.text_muted);
    let _ = paint::icon_button(
       ui,
       Lucide::EllipsisVertical,
       18.0,
       colors.text_muted,
-      colors.hover,
    );
 }
 
@@ -663,12 +656,10 @@ fn empty(ui: &Ui, rect: Rect, theme: &Theme) {
    let radius = style::PANEL_RADIUS as u8;
    let painter = ui.painter();
 
-   paint::soft_shadow(
-      painter,
+   painter.add(theme.shadow(Elevation::Overlay).as_shape(
       card.translate(vec2(0.0, space.xs)),
-      style::PANEL_RADIUS,
-      style::translucent(theme.frame1.shadow.color, 90),
-   );
+      CornerRadius::same(radius),
+   ));
    painter.rect_filled(
       card,
       CornerRadius::same(radius),
@@ -696,6 +687,15 @@ fn empty(ui: &Ui, rect: Rect, theme: &Theme) {
    );
 }
 
+/// The trigger's column through the composer band: what an overlay anchors to,
+/// so its bottom edge keeps the band's top minus the popover gap.
+fn anchor_column(band: Rect, trigger: Rect) -> Rect {
+   Rect::from_min_max(
+      pos2(trigger.left(), band.top()),
+      pos2(trigger.right(), band.bottom()),
+   )
+}
+
 /// The 64 pt composer: attach, the message field, emoji and send / mic.
 fn composer(app: &mut TelegramApp, ui: &mut Ui) {
    let colors = app.theme.colors;
@@ -721,31 +721,20 @@ fn composer(app: &mut TelegramApp, ui: &mut Ui) {
             .align_items(CrossAlign::Center)
             .show(ui, |f| {
                f.item(Item::new(), |ui| {
-                  if paint::icon_button(
-                     ui,
-                     Lucide::Paperclip,
-                     18.0,
-                     colors.text_muted,
-                     colors.hover,
-                  )
-                  .clicked()
-                  {
+                  let button = paint::icon_button(ui, Lucide::Paperclip, 18.0, colors.text_muted);
+                  if button.clicked() {
                      app.attach_open = !app.attach_open;
                   }
+                  app.attach_anchor = anchor_column(rect, button.rect);
                });
                f.item(Item::grow(1.0), |ui| composer_field(app, ui));
                f.item(Item::new(), |ui| {
-                  if paint::icon_button(
-                     ui,
-                     Lucide::FaceGrinning,
-                     18.0,
-                     colors.text_muted,
-                     colors.hover,
-                  )
-                  .clicked()
-                  {
+                  let button =
+                     paint::icon_button(ui, Lucide::FaceGrinning, 18.0, colors.text_muted);
+                  if button.clicked() {
                      app.emoji_open = !app.emoji_open;
                   }
+                  app.emoji_anchor = anchor_column(rect, button.rect);
                });
                f.item(Item::new(), |ui| {
                   let empty = app.composer.trim().is_empty();
@@ -755,7 +744,7 @@ fn composer(app: &mut TelegramApp, ui: &mut Ui) {
                      (Lucide::SendHorizontal, colors.accent)
                   };
                   // Mock: the send state is visual only.
-                  let _ = paint::icon_button(ui, icon, 18.0, ink, colors.hover);
+                  let _ = paint::icon_button(ui, icon, 18.0, ink);
                });
             });
       },
@@ -794,22 +783,14 @@ fn composer_field(app: &mut TelegramApp, ui: &mut Ui) {
          let width = ui.available_width();
          let height = ui.available_height();
 
-         let mut visuals = app.theme.text_edit_visuals();
-         visuals.bg = Color32::TRANSPARENT.into();
-         visuals.border = Stroke::NONE;
-         visuals.border_hover = Stroke::NONE;
-         visuals.border_open = Stroke::NONE;
-         visuals.shadow = Shadow::NONE;
-         visuals.corner_radius = CornerRadius::ZERO;
-
          ui.add(
-            SecureTextEdit::singleline(&mut app.composer)
+            TextEdit::singleline(&mut app.composer)
                .id_salt("telegram_composer")
                .hint_text(RichText::new("Write a message…").size(13.5).color(colors.text_muted))
                .margin(Margin::ZERO)
+               .frame(false)
                .desired_width(width)
-               .min_size(vec2(width, height))
-               .visuals(visuals),
+               .min_size(vec2(width, height)),
          );
       },
    );

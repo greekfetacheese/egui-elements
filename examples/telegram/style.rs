@@ -49,8 +49,6 @@ pub const SEARCH_H: f32 = 40.0;
 pub const SEARCH_RADIUS: u8 = 9;
 /// Chat row corner radius.
 pub const ROW_RADIUS: u8 = 8;
-/// Icon button corner radius.
-pub const ICON_RADIUS: u8 = 8;
 /// Width of the right-hand time / status column in a chat row.
 pub const META_W: f32 = 64.0;
 

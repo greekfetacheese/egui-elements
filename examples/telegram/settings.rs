@@ -485,15 +485,7 @@ fn back_row(app: &mut TelegramApp, ui: &mut Ui, theme: &Theme) {
    ui.scope_builder(
       UiBuilder::new().max_rect(inner).layout(Layout::left_to_right(Align::Center)),
       |ui| {
-         if paint::icon_button(
-            ui,
-            Lucide::ChevronLeft,
-            18.0,
-            colors.text_muted,
-            colors.hover,
-         )
-         .clicked()
-         {
+         if paint::icon_button(ui, Lucide::ChevronLeft, 18.0, colors.text_muted).clicked() {
             app.settings_page = SettingsPage::Settings;
          }
          ui.add_space(space.xs);
