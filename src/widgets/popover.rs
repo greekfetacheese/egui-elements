@@ -1,10 +1,10 @@
 //! An anchored, themed popover: a picker, a menu or a small inspector.
 //!
-//! The Telegram demo's emoji picker, attach menu and contact popover each hand-rolled the same
-//! four things: anchoring a panel to a button, a shadowed overlay surface, close-on-outside-click
-//! and close-on-Escape. `Popover` is that contract in the crate. The caller owns the open flag and
-//! the anchor; the popover owns the overlay frame ([Surface::Overlay], the theme's window frame),
-//! the dismissal rules and the placement.
+//! A picker, a menu or a small inspector anchored to a button hand-rolls the same four things:
+//! anchoring a panel to the button, a shadowed overlay surface, close-on-outside-click and
+//! close-on-Escape. `Popover` is that contract in the crate. The caller owns the open flag and the
+//! anchor; the popover owns the overlay frame ([Surface::Overlay], the theme's window frame), the
+//! dismissal rules and the placement.
 //!
 //! ```
 //! # use egui::{pos2, vec2, Rect, __run_test_ui};
