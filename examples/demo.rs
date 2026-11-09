@@ -761,6 +761,9 @@ impl DemoApp {
             .selected(true)
             .min_size(button_size);
          ui.add(btn);
+
+         // Icon buttons keep the image's own size and pad symmetrically.
+         ui.add(Button::icon(Lucide::Bell.image()).min_size(vec2(36.0, 36.0)));
       });
 
       ui.add_space(8.0);
@@ -1111,7 +1114,7 @@ impl DemoApp {
          );
 
          let _ = Menu::new(format!("{id_salt}_menu")).show_below(&trigger, |ui| {
-            ui.add(MenuItem::new("Edit").shortcut("Ctrl+E"));
+            ui.add(MenuItem::new("Edit").shortcut("Ctrl+E").image(Lucide::Pencil.image()));
             ui.add(MenuItem::new("Duplicate").icon("\u{29C9}"));
             ui.separator();
             ui.add(MenuSection::new("View"));

@@ -98,13 +98,7 @@ impl eframe::App for App {
                .popup_content_margin(self.margin)
                .show_ui(ui, |ui| {
                   for (index, fruit) in FRUIT.iter().enumerate() {
-                     let row = Label::new(*fruit, None)
-                        .expand(Some(4.0))
-                        .selected(index == self.fruit)
-                        .sense(Sense::click())
-                        .fill_width(true);
-
-                     if ui.add(row).clicked() {
+                     if ComboBox::option(ui, *fruit, index == self.fruit).clicked() {
                         self.fruit = index;
                      }
                   }
