@@ -32,18 +32,24 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   with `.surface(Surface)`, `.inner_margin(Margin)`, `.align(Align2)` and `.screen_margin(f32)`.
 - `Checkbox`, `Radio`, `Switch` with the shared `ToggleVisuals` / `ToggleShadow` (the historic
   `CheckboxVisuals` / `CheckboxShadow` names stay as aliases).
+- `Button::icon(image)` — the chrome-less icon form: no font-height clamp and symmetric padding.
 - `Chip` / `ChipRole` — an auto-width chip.
 - `Slider` / `SliderVisuals` — the Web Awesome slider.
 - `Badge`, `BadgeAnchor`, `BadgeCorner`, `BadgePulse`, `BadgeBounce`, `BadgeBounceTrigger` — inside and
   straddling badges with a pulsing halo and a one-shot hop.
-- `Indicator` / `IndicatorState` — a status dot with an optional pulse.
+- `Indicator` / `IndicatorState` — a status dot with an optional pulse and an optional outline
+  (`.ring(Stroke)`).
+- `Label::text(text)` — the common label constructor without a `None` image argument.
 - `Avatar` / `AvatarGroup` / `AvatarVisuals` — an overlapping stack that fans out on hover.
 - `Toast` / `Toasts` — a toast stack with auto-dismiss and a persistent variant.
 - `Menu`, `MenuItem`, `MenuSection`, `SubMenuItem` — the forked menu family.
 - `FpsMeter` / `FpsStats` / `Spread` — an FPS and CPU frame-time window.
 - `Spinner` / `Ripple` / `Orb` / `SpinnerShadow` — the loader family.
 - `TabsStyle::Underline` and `TabsVisuals::underline_from_theme` — the fitted underline strip beside the
-  segmented one.
+  segmented one; `Tabs::text_size` sets the label size and the strip's default height.
+- `ComboBox::show_at` / `ComboBox::option` — place the button at an exact rect, and build the standard
+  option row.
+- `MenuItem::image` — a Lucide (or any) image in the leading gutter, beside `.icon()`.
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
 
 **Theme**
@@ -55,6 +61,9 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - `Gradient`, `GradientDir` and `Fill` — every themed fill is now a flat colour or a two-stop gradient;
   `ThemeVariant::Gradient`, `Theme::gradient_strength` and `Theme::with_gradient_dir` drive it.
 - `ThemeKind::Custom` — a runtime-named theme that keeps its palette when serialized.
+- `Theme::shadow_scaled(elevation, strength)` — the elevation shadow with a caller-supplied strength,
+  for a card that needs more lift than its step allows.
+- `utils::with_alpha` / `utils::hex` — the two colour helpers every host otherwise writes.
 
 ### Changed
 

@@ -122,6 +122,20 @@ impl IndicatorApp {
                });
             }
 
+            ui.horizontal(|ui| {
+               ui.spacing_mut().item_spacing.x = space.md;
+
+               ui.label(RichText::new("Ring").size(normal).color(colors.text_muted));
+
+               for size in [14.0, 20.0, 28.0] {
+                  ui.add(
+                     Indicator::new(IndicatorState::On)
+                        .size(size)
+                        .ring(Stroke::new(2.0, colors.bg)),
+                  );
+               }
+            });
+
             ui.add_space(space.sm);
 
             ui.label(

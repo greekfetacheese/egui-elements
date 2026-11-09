@@ -1,6 +1,8 @@
 //! [`MenuItem`]: one selectable row inside a [`Menu`](super::Menu).
 
-use egui::{CornerRadius, Pos2, Response, Role, Sense, Ui, Vec2, Widget, WidgetInfo, WidgetText};
+use egui::{
+   CornerRadius, Image, Pos2, Rect, Response, Role, Sense, Ui, Vec2, Widget, WidgetInfo, WidgetText,
+};
 
 use super::shared::{allocate_at_least, galley, with_alpha};
 use crate::theme::Theme;
@@ -27,6 +29,7 @@ pub struct MenuItem {
 #[derive(Clone)]
 enum Leading {
    Icon(WidgetText),
+   Image(Image<'static>),
    Checked(bool),
    Radio(bool),
 }
@@ -95,6 +98,15 @@ impl MenuItem {
       self
    }
 
+   /// Show a leading image (typically a Lucide icon) in the same gutter as [`icon`](Self::icon).
+   ///
+   /// The image is tinted with the muted text colour and drawn in the gutter's 16 pt box, so a menu
+   /// of image rows and toggle rows keeps one aligned leading column.
+   pub fn image(mut self, image: impl Into<Image<'static>>) -> Self {
+      self.leading = Some(Leading::Image(image.into()));
+      self
+   }
+
    /// Render the item as a checkbox toggle: a checkmark in the leading gutter
    /// when `on`, an empty gutter when off. The item is announced via accesskit
    /// as a checkbox with the given selected state.
@@ -147,6 +159,7 @@ impl Widget for MenuItem {
 
       let leading_glyph_galley = match &self.leading {
          Some(Leading::Icon(icon)) => Some(galley(ui, icon.text(), typography.normal, false)),
+         Some(Leading::Image(_)) => None,
          Some(Leading::Checked(true)) => Some(galley(ui, "\u{2713}", typography.normal, true)),
          Some(Leading::Radio(true)) => Some(galley(ui, "\u{2022}", typography.normal, true)),
          // Off-state toggles still reserve the gutter so siblings align.
@@ -217,6 +230,17 @@ impl Widget for MenuItem {
             );
 
             ui.painter().galley(pos, glyph, glyph_color);
+         }
+
+         if let Some(Leading::Image(image)) = &self.leading {
+            let slot = Rect::from_center_size(
+               Pos2::new(
+                  rect.min.x + pad_x + gutter_w * 0.5,
+                  rect.center().y,
+               ),
+               Vec2::splat(gutter_w),
+            );
+            image.clone().tint(colors.text_muted).paint_at(ui, slot);
          }
 
          let label_pos = Pos2::new(

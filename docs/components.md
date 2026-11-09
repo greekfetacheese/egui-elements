@@ -51,12 +51,20 @@ secure variant owns a `SecureString` and can mask; `InputField` owns a plain `St
 ```rust
 use egui_elements::{InputField, SecureInputField};
 
-let mut field = InputField::new("search", true).hint_text("Search");
-field.show(ui);
+struct App {
+    search: InputField,
+    password: SecureInputField,
+}
 
-// id, masked, open
-let mut secret = SecureInputField::new("password", true, true);
-secret.show(ui);
+// Store the fields on the app, not in the frame body:
+let mut app = App {
+    search: InputField::new("search", true).hint_text("Search"),
+    // id, masked, open
+    password: SecureInputField::new("password", true, true),
+};
+
+app.search.show(ui);
+app.password.show(ui);
 ```
 
 - Both constructors take the open state: `false` starts the field hidden and `show` returns
@@ -64,8 +72,10 @@ secret.show(ui);
   `Option<SecureTextEditOutput>`.
 - `id` is the field-name label; an **empty `id` skips the label**, so pass `""` when the host already
   labels the field (for example under a `Modal` heading).
-- The field **owns its buffer** — no lifetime parameter, so it can live in a `'static` host. Buffer
-  access: `text() -> &str`, `set_text(..)`, `erase()`.
+- The field **owns its buffer** — no lifetime parameter, so it can live in a `'static` host and
+  must be stored there (a field rebuilt every frame resets the QR scanner it owns). Buffer access:
+  `text() -> &str`, `set_text(..)`, `erase()`; `set_min_size(..)`, `set_inner_margin(..)` and
+  `set_id(..)` are the between-frame builders.
 - Row width is `min_size.x` **plus one icon button and one gap per trailing icon**; the component
   reserves the icons itself.
 - Masking, the `Eye` / `EyeOff` toggle and `is_text_hidden` / `set_text_hidden` exist only on

@@ -230,6 +230,7 @@ pub struct Tabs<'a> {
    shadow: Option<ToggleShadow>,
    motion: Option<Motion>,
    corner_radius: Option<CornerRadius>,
+   text_size: Option<f32>,
    style: TabsStyle,
 }
 
@@ -251,6 +252,7 @@ impl<'a> Tabs<'a> {
          shadow: None,
          motion: None,
          corner_radius: None,
+         text_size: None,
          style: TabsStyle::Segmented,
       }
    }
@@ -271,6 +273,15 @@ impl<'a> Tabs<'a> {
    /// only decides whether the baseline spans the row (as the reference does) or stops at the last tab.
    pub fn fill_width(mut self, fill: bool) -> Self {
       self.fill_width = fill;
+      self
+   }
+
+   /// Label size in points. Default: [`Typography::normal`](crate::theme::Typography::normal).
+   ///
+   /// The strip's default height follows the label size, so a compact strip needs this and nothing
+   /// else.
+   pub fn text_size(mut self, size: f32) -> Self {
+      self.text_size = Some(size.max(1.0));
       self
    }
 
@@ -330,6 +341,7 @@ impl<'a> Tabs<'a> {
          shadow,
          motion,
          corner_radius,
+         text_size,
          style,
       } = self;
 
@@ -341,9 +353,9 @@ impl<'a> Tabs<'a> {
       let enabled = ui.is_enabled();
       let pad_x = ui.spacing().button_padding.x.max(10.0);
       let pad_y = ui.spacing().button_padding.y.max(6.0);
-      let font = FontId::proportional(theme.typography.normal);
-      let height = height
-         .unwrap_or(theme.typography.normal + 2.0 * pad_y + style.reserve(theme.typography.normal));
+      let font_size = text_size.unwrap_or(theme.typography.normal);
+      let font = FontId::proportional(font_size);
+      let height = height.unwrap_or(font_size + 2.0 * pad_y + style.reserve(font_size));
       let radius = corner_radius.unwrap_or(CornerRadius::same(u8::MAX));
       let gap = gap.unwrap_or(match style {
          TabsStyle::Segmented => 2.0,
@@ -451,7 +463,7 @@ impl<'a> Tabs<'a> {
          selected,
          t,
          corner_radius: radius,
-         font_size: theme.typography.normal,
+         font_size,
          enabled,
       };
       let band = match style {
@@ -1100,5 +1112,28 @@ mod tests {
             "the accent bar must read against muted ink"
          );
       }
+   }
+
+   #[test]
+   fn text_size_sets_the_strip_height() {
+      let ctx = themed_ctx();
+      let mut selected = 0;
+      let mut normal = Rect::NOTHING;
+      let mut compact = Rect::NOTHING;
+
+      frame(&ctx, 0.0, vec![], |ui| {
+         normal = Tabs::new("normal_size", &mut selected, ["All", "Media"]).show(ui).rect;
+      });
+      frame(&ctx, 0.1, vec![], |ui| {
+         compact = Tabs::new("compact_size", &mut selected, ["All", "Media"])
+            .text_size(9.0)
+            .show(ui)
+            .rect;
+      });
+
+      assert!(
+         compact.height() < normal.height(),
+         "a smaller label must lower the strip"
+      );
    }
 }

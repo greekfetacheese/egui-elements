@@ -67,6 +67,11 @@ impl Label {
       }
    }
 
+   /// A label with text and no image.
+   pub fn text(text: impl Into<WidgetText>) -> Self {
+      Self::new(text, None)
+   }
+
    /// Mixed-style wrapping paragraph from several [`RichText`] spans.
    ///
    /// Unlike [`super::MultiLabel`], the parts share **one** galley, so the

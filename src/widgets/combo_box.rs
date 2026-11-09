@@ -4,9 +4,9 @@ use crate::motion::{InteractT, Motion, animate_with};
 use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use egui::{
-   Align2, Frame, Id, InnerResponse, NumExt, Painter, Popup, PopupCloseBehavior, PopupKind, Pos2,
-   Rect, Response, ScrollArea, Sense, Shadow, Stroke, TextWrapMode, Ui, Vec2, WidgetText,
-   emath::Rot2, epaint::Shape, style::WidgetVisuals,
+   Align, Align2, Frame, Id, InnerResponse, Layout, NumExt, Painter, Popup, PopupCloseBehavior,
+   PopupKind, Pos2, Rect, Response, ScrollArea, Sense, Shadow, Stroke, TextWrapMode, Ui, UiBuilder,
+   Vec2, WidgetText, emath::Rot2, epaint::Shape, style::WidgetVisuals,
 };
 
 use std::{fmt::Debug, hash::Hash, ops::Range};
@@ -124,6 +124,43 @@ impl ComboBox {
       menu_contents: impl FnOnce(&mut Ui) -> R,
    ) -> Option<InnerResponse<R>> {
       self.show_popup(ui, None, |ui, _| menu_contents(ui))
+   }
+
+   /// Show the combo box at an exact rect.
+   ///
+   /// The button takes `rect`'s top-left and, unless [`Self::width`] was set, its width; its height
+   /// stays the themed button height. This is the alternative to wrapping the call in
+   /// `scope_builder(UiBuilder::new().max_rect(rect)…)`.
+   pub fn show_at<R>(
+      mut self,
+      ui: &mut Ui,
+      rect: Rect,
+      menu_contents: impl FnOnce(&mut Ui) -> R,
+   ) -> Option<InnerResponse<R>> {
+      if self.width.is_none() {
+         self.width = Some(rect.width());
+      }
+
+      ui.scope_builder(
+         UiBuilder::new().max_rect(rect).layout(Layout::left_to_right(Align::Center)),
+         |ui| self.show_ui(ui, menu_contents),
+      )
+      .inner
+   }
+
+   /// Add one themed option row to a popup, with the selected wash.
+   ///
+   /// `ComboBox::option(ui, "Tokyo Night", selected)` is the row a host otherwise writes by hand:
+   /// a full-width clickable [`Label`] with the standard expand and selection fill.
+   pub fn option(ui: &mut Ui, text: impl Into<WidgetText>, selected: bool) -> Response {
+      let space = Theme::spacing_from_ctx(ui.ctx());
+      ui.add(
+         Label::new(text, None)
+            .expand(Some(space.xs))
+            .selected(selected)
+            .sense(Sense::click())
+            .fill_width(true),
+      )
    }
 
    /// Same as [`Self::show_ui`], but only the rows inside the viewport are built

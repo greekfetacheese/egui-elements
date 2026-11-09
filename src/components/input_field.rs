@@ -234,6 +234,11 @@ impl SecureInputField {
 ///
 /// The host app must register egui's SVG loader once:
 /// `egui_extras::install_image_loaders(ctx)` with the `egui_extras` `svg` feature.
+///
+/// Keep it on the app: it is `'static`-storable, and [`set_text`](Self::set_text),
+/// [`set_min_size`](Self::set_min_size), [`set_inner_margin`](Self::set_inner_margin) and
+/// [`set_id`](Self::set_id) work between frames before `show`. Rebuilding it every frame resets the
+/// scanner it owns.
 pub struct InputField {
    open: bool,
    text: String,

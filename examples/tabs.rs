@@ -127,6 +127,20 @@ impl TabsApp {
 
             self.caption(
                ui,
+               "Compact labels — the strip height follows .text_size()",
+            );
+            Tabs::new(
+               "compact",
+               &mut self.range,
+               ["Day", "Week", "Month"],
+            )
+            .text_size(12.0)
+            .fill_width(false)
+            .show(ui);
+            ui.add_space(space.lg);
+
+            self.caption(
+               ui,
                "Accent indicator — TabsVisuals over the palette",
             );
             let accent = colors.accent;

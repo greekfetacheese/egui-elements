@@ -89,6 +89,7 @@ pub struct Indicator {
    state: IndicatorState,
    size: f32,
    pulse: Option<BadgePulse>,
+   ring: Option<Stroke>,
 }
 
 impl Indicator {
@@ -98,6 +99,7 @@ impl Indicator {
          state,
          size: 10.0,
          pulse: None,
+         ring: None,
       }
    }
 
@@ -115,6 +117,15 @@ impl Indicator {
    /// lockstep. Default: no pulse; a pulsing indicator repaints every frame.
    pub fn pulse(mut self, pulse: BadgePulse) -> Self {
       self.pulse = Some(pulse);
+      self
+   }
+
+   /// Outline the indicator with `ring`.
+   ///
+   /// The stroke sits just outside the dot, so a ring in the row's fill reads as the avatar's
+   /// cut-out; its width also extends the area the widget keeps visible.
+   pub fn ring(mut self, ring: Stroke) -> Self {
+      self.ring = Some(ring);
       self
    }
 
@@ -162,6 +173,10 @@ impl Indicator {
             );
          }
       }
+
+      if let Some(ring) = self.ring {
+         painter.circle_stroke(center, radius + ring.width * 0.5, ring);
+      }
    }
 }
 
@@ -173,8 +188,9 @@ impl Widget for Indicator {
 
       let radius = self.size * 0.5;
       let halo_reach = self.pulse.map_or(0.0, |pulse| (pulse.scale.max(1.0) - 1.0) * radius);
-      // The glow and the halo both paint outside the allocated square.
-      if ui.is_rect_visible(rect.expand(halo_reach.max(GLOW_SPREAD) + 1.0)) {
+      let ring_reach = self.ring.map_or(0.0, |ring| ring.width);
+      // The glow, the halo and the ring all paint outside the allocated square.
+      if ui.is_rect_visible(rect.expand(halo_reach.max(GLOW_SPREAD).max(ring_reach) + 1.0)) {
          self.paint(ui, rect.center(), radius, fill, response.id);
       }
 
@@ -254,6 +270,19 @@ mod tests {
       assert_eq!(circles.len(), 2, "glow + dot");
       assert!(circles.iter().any(|c| (c.radius - 5.0).abs() < 1e-4));
       assert!(circles.iter().any(|c| (c.radius - (5.0 + GLOW_SPREAD)).abs() < 1e-4));
+   }
+
+   #[test]
+   fn ring_outlines_the_indicator() {
+      let (shapes, _) =
+         paint(Indicator::new(IndicatorState::On).ring(Stroke::new(2.0, Color32::RED)));
+
+      assert!(
+         circles(&shapes)
+            .iter()
+            .any(|c| (c.radius - 6.0).abs() < 1e-4 && (c.stroke.width - 2.0).abs() < 1e-4),
+         "the ring sits half a stroke outside the dot"
+      );
    }
 
    #[test]

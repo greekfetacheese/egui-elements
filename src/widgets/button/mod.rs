@@ -132,6 +132,7 @@ pub struct Button<'a> {
    selected: bool,
    image_tint_follows_text_color: bool,
    limit_image_size: bool,
+   symmetric_padding: bool,
    hold: Option<HoldSettings>,
 }
 
@@ -152,6 +153,7 @@ impl<'a> Button<'a> {
          selected: false,
          image_tint_follows_text_color: false,
          limit_image_size: false,
+         symmetric_padding: false,
          hold: None,
       }
    }
@@ -180,6 +182,14 @@ impl<'a> Button<'a> {
    /// (using [`egui::AtomExt::atom_max_height_font_size`]).
    pub fn image(image: impl Into<Image<'a>>) -> Self {
       Self::opt_image_and_text(Some(image.into()), None)
+   }
+
+   /// A chrome-less icon button that keeps the image's own size.
+   ///
+   /// Unlike [`Self::image`], the image is not clamped to the fallback font height, and the button
+   /// pads symmetrically (both axes take the larger button padding), so a square icon stays square.
+   pub fn icon(image: impl Into<Image<'a>>) -> Self {
+      Self::new(image.into()).symmetric_padding(true)
    }
 
    /// Creates a button with an image to the left of the text.
@@ -260,6 +270,12 @@ impl<'a> Button<'a> {
    #[inline]
    pub fn min_size(mut self, min_size: Vec2) -> Self {
       self.min_size = min_size;
+      self
+   }
+
+   /// Pad both axes with the larger button padding. Used by [`Self::icon`].
+   fn symmetric_padding(mut self, symmetric: bool) -> Self {
+      self.symmetric_padding = symmetric;
       self
    }
 
@@ -461,6 +477,7 @@ impl<'a> Button<'a> {
          selected,
          image_tint_follows_text_color,
          limit_image_size,
+         symmetric_padding,
          hold,
       } = self;
 
@@ -501,6 +518,9 @@ impl<'a> Button<'a> {
 
       if small {
          button_padding.y = 0.0;
+      }
+      if symmetric_padding {
+         button_padding = Vec2::splat(button_padding.x.max(button_padding.y));
       }
 
       let frame = Frame::new().inner_margin(button_padding);

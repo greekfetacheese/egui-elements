@@ -86,7 +86,7 @@ The crate's button: themed chrome read from the installed theme, egui atoms for 
 crate extras — a corner `Badge` and hold-to-confirm.
 
 **Signature** `Button::new(atoms)` · `Button::selectable(selected, atoms)` · `Button::image(img)` ·
-`Button::image_and_text(img, text)`
+`Button::image_and_text(img, text)` · `Button::icon(img)`
 
 ```rust
 use egui::Align;
@@ -104,7 +104,9 @@ ui.add(Button::new("Delete").visuals(danger));
 
 `Button::new` takes `impl IntoAtoms` — a `&str`, a `WidgetText`, an `Image`, or an `(image, text)`
 tuple. `.min_size(vec2(width, 0.0))` fixes the width and needs `.label_align(Align::Center)`, or a short
-caption sits left-aligned next to a centred sibling. `.small()` shrinks the chrome, `.selected(true)`
+caption sits left-aligned next to a centred sibling. `Button::icon(img)` is the chrome-less icon form:
+the image keeps its own size (`Button::image` clamps it to the fallback font height) and the padding is
+symmetric, so a 20 pt icon with the default 8 pt padding lands in a 36 pt square. `.small()` shrinks the chrome, `.selected(true)`
 paints the `highlight` state, `.visuals(ButtonVisuals)` overrides one slot without touching the theme.
 
 `.bg_color(fill)` replaces the fill and leaves the ink at `colors.text` — right for a surface-coloured
@@ -326,14 +328,12 @@ A themed dropdown: a button-shaped selected value plus a popup list.
 **Signature** `ComboBox::new(id_salt, selected_label).width(w).show_ui(ui, |ui| …)`
 
 ```rust
-use egui::Sense;
 use egui_elements::{ComboBox, Label};
 
 let current = Label::new(text.as_str(), None);
 ComboBox::new("item", current).width(200.0).show_ui(ui, |ui| {
     for item in ["Alpha", "Beta", "Gamma"] {
-        let row = Label::new(item, None).sense(Sense::click()).fill_width(true).expand(Some(4.0));
-        if ui.add(row).clicked() {
+        if ComboBox::option(ui, item, text.as_str() == item).clicked() {
             text = item.to_owned();
         }
     }
@@ -344,6 +344,11 @@ ComboBox::new("item", current).width(200.0).show_ui(ui, |ui| {
   `Window` must use distinct salts, or the open state and the selection are shared.
 - `show_rows_ui(ui, row_height, total_rows, |ui, range| …)` builds only the visible rows for long
   lists; every row must lay out at exactly `row_height` (egui adds `item_spacing.y` itself).
+- `ComboBox::option(ui, text, selected)` is the standard popup row: a full-width clickable `Label`
+  with the `xs` expand and the selection wash — the row hosts otherwise write by hand.
+- `show_at(ui, rect, |ui| …)` places the combo box at an exact rect (the button takes the rect's
+  top-left and, unless `.width()` is set, its width), replacing a `scope_builder(max_rect(rect))`
+  wrapper.
 - `.popup_gap(points)` (default `ThemeSpacing::xs`) and `.popup_content_margin(points)` (default `5`)
   tune the popup chrome; `.label("…")` puts a caption above the button; `.popup_max_height(..)` caps it.
 - It paints a real button, so its height is `inner_height.max(icon_width) + 2 × button_padding` —
@@ -395,11 +400,14 @@ let mut selected = 0usize;
 Tabs::new("filter", &mut selected, ["All", "Media", "Files"]).show(ui);
 Tabs::new("range", &mut selected, ["Day", "Week"]).fill_width(false).show(ui);
 Tabs::new("tall", &mut selected, ["A", "B"]).height(44.0).show(ui);
+Tabs::new("compact", &mut selected, ["A", "B"]).text_size(12.0).show(ui);
 Tabs::new("flat", &mut selected, ["A", "B"]).shadow(ToggleShadow::NONE).show(ui);
 Tabs::new("instant", &mut selected, ["A", "B"]).motion(Motion::instant()).show(ui);
 ```
 
-`.visuals(TabsVisuals { .. })` replaces the colours for one strip — start from
+`.text_size(points)` sets the label size (default `Typography::normal`) and the strip's default height
+follows it, so a compact picker needs that one builder. `.visuals(TabsVisuals { .. })` replaces the
+colours for one strip — start from
 `TabsVisuals::from_theme(theme.colors)` to keep the rest. A first-sight strip is
 still (the indicator is seeded at the selection), and a click reports
 `Response::changed`.
@@ -453,7 +461,7 @@ tinted fill for a role-coloured border with theme text. Sizing knobs: `.padding(
 The crate's text primitive: an optional leading image, click sense, hover/selection chrome, and a
 mixed-style variant that wraps like a paragraph.
 
-**Signature** `Label::new(text, image)` · `Label::sections([RichText, …], image)`
+**Signature** `Label::new(text, image)` · `Label::text(text)` · `Label::sections([RichText, …], image)`
 
 ```rust
 use egui::{RichText, Sense};
@@ -473,6 +481,7 @@ ui.add(
 );
 ```
 
+- `Label::text(text)` is `Label::new(text, None)` spelled for the common case.
 - `Label::sections` builds **one wrapping galley** of mixed styles — store a `Vec<RichText>` and join at
   layout time, because a `Style` is not known in the constructor. `RichText::strong()` is a stronger
   colour, not a bold weight (the default fonts have no bold face).
@@ -632,6 +641,10 @@ ui.add(Indicator::new(IndicatorState::On).pulse(BadgePulse::new()));
 ui.add(Indicator::new(IndicatorState::Connecting).pulse(BadgePulse::new().period(2.0)));
 ```
 
+`.ring(Stroke)` outlines the light just outside the dot — pass the row's fill for an avatar
+presence cut-out, or a border tone for an outlined status light. The ring extends the widget's visible
+reach, so an edge-of-row dot keeps painting.
+
 The phase is derived from each light's id, so siblings in one row are staggered
 instead of beating in lockstep. The glow and the pulse paint outside the allocated
 square, exactly like the badge halo — leave a gap in a tight layout. A pulsing light
@@ -739,6 +752,9 @@ let row = Frame::new()
 - `Frame::new()` is `Frame::NONE`. Builders: `.fill()` (a `Fill`, so a gradient works), `.stroke()`,
   `.corner_radius()`, `.shadow()`, `.inner_margin()` / `.outer_margin()`, `.fill_width(bool)`,
   `.fit()`, `.sense()`.
+- `theme.shadow(Elevation::Raised)` gives the step's shadow; `theme.shadow_scaled(elevation, 2.0)`
+  multiplies it when a card needs more lift than its step allows (0.0 flattens it). The palette still
+  owns the colour.
 - `interactive(false)` (the default) always paints the idle fill; hover and press only paint with
   `.interactive(true)`. `selected(true)` paints `FrameVisuals::bg_selected` (`highlight`) — do not fake
   selection with `.fill()`.
@@ -935,8 +951,8 @@ Menu::new("row_actions").show_below(&trigger, |ui| {
   returns `Some` only while open; `.min_width(..)` defaults to 180.
 - `MenuItem` rows: `.shortcut(..)` is a right-aligned hint (not a key binding), `.danger()` paints
   the error tone and a tinted hover, and `.enabled(false)` blocks clicks. One leading gutter is
-  selectable with `.icon(..)`, `.checked(bool)` or `.radio(bool)`; the off states still reserve it,
-  so rows that opt in stay aligned.
+  selectable with `.icon(..)`, `.image(egui::Image)` (a Lucide icon, tinted muted), `.checked(bool)`
+  or `.radio(bool)`; the off states still reserve it, so rows that opt in stay aligned.
 - `MenuSection` is an uppercased, non-interactive header. `SubMenuItem` renders the same row with a
   chevron and opens its body as a flyout that stays up while the pointer is over trigger or flyout.
 - The popup surface is the theme's `window_frame` with a `ThemeSpacing::xs` margin, and it sits one
