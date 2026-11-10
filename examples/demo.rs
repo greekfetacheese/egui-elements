@@ -1230,21 +1230,37 @@ impl DemoApp {
                });
 
                if self.virtual_keyboard {
+                  // A Slider defaults to the available width, so each row states its controls'
+                  // widths: an un-sized slider eats the row and grows the card past its column.
                   ui.horizontal(|ui| {
                      ui.spacing_mut().item_spacing.x = 16.0;
-                     ui.add(Slider::new(&mut self.vk_key_width, 16.0..=72.0).text("Key width"));
-                     ui.add(Slider::new(&mut self.vk_key_height, 16.0..=72.0).text("Key height"));
-                     ui.add(Slider::new(&mut self.vk_text_size, 8.0..=32.0).text("Text size"));
+                     ui.add(
+                        Slider::new(&mut self.vk_key_width, 16.0..=72.0)
+                           .text("Key width")
+                           .width(180.0),
+                     );
+                     ui.add(
+                        Slider::new(&mut self.vk_key_height, 16.0..=72.0)
+                           .text("Key height")
+                           .width(180.0),
+                     );
+                     ui.add(
+                        Slider::new(&mut self.vk_text_size, 8.0..=32.0)
+                           .text("Text size")
+                           .width(180.0),
+                     );
                   });
                   ui.horizontal(|ui| {
                      ui.spacing_mut().item_spacing.x = 16.0;
                      ui.add(
                         Slider::new(&mut self.vk_button_padding_x, 0.0..=16.0)
-                           .text("Button padding X"),
+                           .text("Button padding X")
+                           .width(240.0),
                      );
                      ui.add(
                         Slider::new(&mut self.vk_button_padding_y, 0.0..=16.0)
-                           .text("Button padding Y"),
+                           .text("Button padding Y")
+                           .width(240.0),
                      );
                   });
                   self
@@ -1266,57 +1282,55 @@ impl DemoApp {
 
       ui.add_space(20.0);
 
-      ui.horizontal(|ui| {
-         ui.add_space(((ui.available_width() - form_width) * 0.5).max(0.0));
-         ui.vertical(|ui| {
+      // Same centring as the credentials card above: both cards are one column wide, so the
+      // section reads as a single stack instead of two differently sized blocks.
+      ui.vertical_centered(|ui| {
+         frame1.show(ui, |ui| {
             ui.set_width(form_width);
-            frame1.show(ui, |ui| {
-               ui.set_width(ui.available_width());
-               ui.vertical_centered(|ui| {
-                  ui.spacing_mut().item_spacing.y = 12.0;
-                  ui.spacing_mut().button_padding = vec2(4.0, 4.0);
+            ui.vertical_centered(|ui| {
+               ui.spacing_mut().item_spacing.y = 12.0;
+               ui.spacing_mut().button_padding = vec2(4.0, 4.0);
 
-                  self.subheading(ui, "Secure input + QR");
-                  self.muted(
-                     ui,
-                     "Toggle visibility, QR scan button available on Linux and Windows.",
-                  );
+               self.subheading(ui, "Secure input + QR");
+               self.muted(
+                  ui,
+                  "Toggle visibility, QR scan button available on Linux and Windows.",
+               );
 
-                  let output = self.secure_field.show(ui);
-                  self.subheading(ui, "QrImage");
+               let output = self.secure_field.show(ui);
+               self.subheading(ui, "QrImage");
 
-                  if let Some(output) = output {
-                     if output.response.changed() {
-                        self.qr.clear(ui.ctx());
-                        let uri = "bytes://egui-elements-demo".to_string();
-                        let text = self.secure_field.text();
+               if let Some(output) = output {
+                  if output.response.changed() {
+                     self.qr.clear(ui.ctx());
+                     let uri = "bytes://egui-elements-demo".to_string();
+                     let text = self.secure_field.text();
 
-                        let data = text.unlock_str(|s| s.to_string());
-                        let new_qr = QrImage::with_encoding(
-                           &data,
-                           uri,
-                           QrEncoding {
-                              target_px: QR_DISPLAY_PX,
-                              ..Default::default()
-                           },
-                        );
-                        self.qr = new_qr;
-                     }
-                  }
-
-                  if self.qr.has_error() {
-                     ui.label(
-                        RichText::new(self.qr.error().map(|e| e.to_string()).unwrap_or_default())
-                           .color(self.theme.colors.error),
+                     let data = text.unlock_str(|s| s.to_string());
+                     let new_qr = QrImage::with_encoding(
+                        &data,
+                        uri,
+                        QrEncoding {
+                           target_px: QR_DISPLAY_PX,
+                           ..Default::default()
+                        },
                      );
-                  } else {
-                     // Draw at the raster's own size: the symbol is built from
-                     // whole modules, so this needs no resampling and the module
-                     // edges stay sharp for a scanner.
-                     let size = self.qr.image_size_pt(ui.ctx().pixels_per_point());
-                     ui.add(self.qr.image().fit_to_exact_size(size));
+                     self.qr = new_qr;
                   }
-               });
+               }
+
+               if self.qr.has_error() {
+                  ui.label(
+                     RichText::new(self.qr.error().map(|e| e.to_string()).unwrap_or_default())
+                        .color(self.theme.colors.error),
+                  );
+               } else {
+                  // Draw at the raster's own size: the symbol is built from
+                  // whole modules, so this needs no resampling and the module
+                  // edges stay sharp for a scanner.
+                  let size = self.qr.image_size_pt(ui.ctx().pixels_per_point());
+                  ui.add(self.qr.image().fit_to_exact_size(size));
+               }
             });
          });
       });
