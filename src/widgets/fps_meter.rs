@@ -331,7 +331,7 @@ impl FpsMeter {
       let window = Window::new(self.title.as_str())
          .open(&mut open)
          .default_width(WINDOW_WIDTH)
-         .resizable([false, false])
+         .resizable([true, true])
          .frame(frame)
          .title_frame(frame.stroke(Stroke::NONE));
 
