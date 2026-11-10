@@ -51,6 +51,8 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   option row.
 - `MenuItem::image` — a Lucide (or any) image in the leading gutter, beside `.icon()`.
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
+- `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
+  egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
 
 **Theme**
 
