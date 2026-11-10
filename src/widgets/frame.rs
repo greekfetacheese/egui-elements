@@ -72,6 +72,8 @@ impl Frame {
 
    /// Copy margins, idle fill, stroke, radius, and shadow from an [`egui::Frame`].
    /// Hover / click start equal to idle.
+   ///
+   /// The inverse of [`Self::to_egui`], and what `Frame::from(frame)` calls.
    pub fn from_egui(frame: egui::Frame) -> Self {
       let fill = frame.fill;
       Self {
@@ -93,6 +95,35 @@ impl Frame {
          selected: false,
          fill_width: false,
          corner_radius_override: None,
+      }
+   }
+
+   /// The static chrome this frame paints, as an [`egui::Frame`].
+   ///
+   /// Use it where egui owns the frame — `Panel::frame`, `CentralPanel::frame`, `Window::frame`,
+   /// a popup — but the margins, radius, shadow, border and fill should come from this crate. The
+   /// conversion is lossy by construction:
+   ///
+   /// - A [`Fill`] is handed over as [`Fill::to_solid`], so a gradient lands on the midpoint of its
+   ///   ramp (egui paints a frame with one colour).
+   /// - `.selected(true)` hands over [`FrameVisuals::bg_selected`]; otherwise the idle fill is used.
+   /// - Hover / click visuals, `sense` and `fill_width` have no `egui::Frame` counterpart and are
+   ///   dropped.
+   #[inline]
+   pub fn to_egui(self) -> egui::Frame {
+      let fill = if self.selected {
+         self.visuals.bg_selected
+      } else {
+         self.visuals.bg
+      };
+
+      egui::Frame {
+         inner_margin: self.inner_margin,
+         fill: fill.to_solid(),
+         stroke: self.visuals.border,
+         corner_radius: self.visuals.corner_radius,
+         outer_margin: self.outer_margin,
+         shadow: self.visuals.shadow,
       }
    }
 
@@ -271,12 +302,9 @@ impl Frame {
 
    fn stack_frame(&self) -> egui::Frame {
       egui::Frame {
-         inner_margin: self.inner_margin,
          fill: Color32::TRANSPARENT,
          stroke: Stroke::new(self.visuals.border.width, Color32::TRANSPARENT),
-         corner_radius: self.visuals.corner_radius,
-         outer_margin: self.outer_margin,
-         shadow: self.visuals.shadow,
+         ..self.to_egui()
       }
    }
 
@@ -288,6 +316,18 @@ impl Frame {
          self.visuals.corner_radius,
          self.visuals.shadow,
       )
+   }
+}
+
+impl From<egui::Frame> for Frame {
+   fn from(frame: egui::Frame) -> Self {
+      Self::from_egui(frame)
+   }
+}
+
+impl From<Frame> for egui::Frame {
+   fn from(frame: Frame) -> Self {
+      frame.to_egui()
    }
 }
 
@@ -442,5 +482,46 @@ mod tests {
    fn fit_shrinks_a_stretched_frame() {
       let frame = Frame::new().fill_width(true).fit();
       assert!(!frame.fill_width);
+   }
+
+   #[test]
+   fn an_egui_frame_round_trips_through_the_crate_frame() {
+      let source = egui::Frame::NONE
+         .inner_margin(Margin::symmetric(10, 6))
+         .outer_margin(Margin::same(2))
+         .fill(Color32::RED)
+         .stroke(Stroke::new(2.0, Color32::BLUE))
+         .corner_radius(CornerRadius::same(5))
+         .shadow(Shadow {
+            offset: (1, 2).into(),
+            blur: 4,
+            spread: 0,
+            color: Color32::BLACK,
+         });
+
+      let frame = Frame::from(source);
+      assert_eq!(frame.inner_margin, Margin::symmetric(10, 6));
+      assert_eq!(frame.visuals.bg, Fill::solid(Color32::RED));
+
+      let back: egui::Frame = frame.into();
+      assert_eq!(back, source);
+   }
+
+   #[test]
+   fn to_egui_collapses_a_gradient_to_its_midpoint() {
+      let fill = Fill::vertical(Color32::BLACK, Color32::WHITE);
+      assert_eq!(
+         Frame::new().fill(fill).to_egui().fill,
+         fill.to_solid()
+      );
+   }
+
+   #[test]
+   fn to_egui_hands_over_the_selected_fill() {
+      let selected = Frame::new().visuals(theme_visuals()).selected(true);
+      assert_eq!(selected.to_egui().fill, Color32::GREEN);
+
+      let idle = Frame::new().visuals(theme_visuals());
+      assert_eq!(idle.to_egui().fill, Color32::RED);
    }
 }

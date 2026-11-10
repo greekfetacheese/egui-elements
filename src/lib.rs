@@ -79,8 +79,10 @@
 //! [`Button`], [`Label`], [`ComboBox`], [`Frame`], [`Window`], [`Spinner`] and [`Checkbox`] shadow
 //! [`egui::Button`], [`egui::Label`], [`egui::ComboBox`], [`egui::Frame`], [`egui::Window`],
 //! [`egui::Spinner`] and [`egui::Checkbox`]. Import this crate's widgets after `use egui::*`, or alias
-//! one of them. [`Frame`] is the *interactive* frame (the one `.frame()` builders take); a static
-//! `egui::Frame` is what [`Theme::surface_frame`] returns.
+//! one of them. [`Frame`] is the *interactive* frame; a static `egui::Frame` is what
+//! [`Theme::surface_frame`] returns and what `Panel` / `CentralPanel` / `Window` / popup builders
+//! take. [`Frame::from_egui`] and [`Frame::to_egui`] (or `From`) convert between them; hover / click
+//! state and a gradient do not cross into `egui::Frame`.
 
 mod glow;
 

@@ -730,7 +730,8 @@ ui.add(
 The crate's frame: `egui::Frame`'s builder shape plus a per-state fill and stroke, a shadow, optional
 hover/click/selection behaviour, and a `Surface` shortcut.
 
-**Signature** `Frame::new()` · `Frame::from_egui(egui::Frame)` · `Frame::surface(&theme, Surface::Panel)`
+**Signature** `Frame::new()` · `Frame::from_egui(egui::Frame)` · `Frame::to_egui()` ·
+`Frame::surface(&theme, Surface::Panel)`
 
 ```rust
 use egui_elements::layout::Flex;
@@ -760,8 +761,14 @@ let row = Frame::new()
   selection with `.fill()`.
 - `show(ui, |ui| …)` returns an `InnerResponse`. `.begin(ui)` hands back the content `Ui` plus a
   `Prepared` when a widget has to paint its own corner chrome (badges, custom rows).
+- `Frame::to_egui()` hands the static chrome to an `egui::Frame`: margins, radius, shadow, border
+  and one fill egui can paint. A gradient lands on `Fill::to_solid` (the ramp's midpoint) and
+  `.selected(true)` hands over `bg_selected`; hover / click visuals, `.sense()` and `.fill_width()`
+  have no `egui::Frame` counterpart and are dropped. `Frame::from_egui` / `Frame::from` go back,
+  starting every state at the idle fill and stroke.
 - Plain chrome stays on `theme.frame1` / `theme.window_frame` (an `egui::Frame`) where no state is
-  wanted; `Frame` is the interactive, stateful one.
+  wanted; `Frame` is the interactive, stateful one. When a slot demands the static type
+  (`Panel::frame`, `Window::frame`, …), convert with `.to_egui()` instead of rebuilding the chrome.
 
 ## Surfaces
 

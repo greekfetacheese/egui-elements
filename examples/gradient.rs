@@ -100,6 +100,9 @@ impl GradientApp {
             self.card(column, dir, index);
          }
       });
+
+      ui.add_space(space.xl);
+      self.converted(ui);
    }
 
    fn card(&mut self, ui: &mut Ui, dir: GradientDir, index: usize) {
@@ -156,6 +159,36 @@ impl GradientApp {
                   .hint_text("Gradient field")
                   .visuals(edit)
                   .desired_width(f32::INFINITY),
+            );
+         });
+   }
+
+   /// A card the theme graded, handed out through `Frame::to_egui`. egui paints one colour, so the
+   /// ramp lands on its midpoint.
+   fn converted(&self, ui: &mut Ui) {
+      let colors = self.theme.colors;
+      let space = self.theme.spacing;
+
+      let mut themed = self.theme.clone();
+      themed.variant = ThemeVariant::Gradient;
+
+      Card::new()
+         .visuals(themed.frame1_visuals())
+         .corner_radius(CornerRadius::same(12))
+         .inner_margin(space.margin(space.lg))
+         .to_egui()
+         .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+               RichText::new("Frame::to_egui()")
+                  .size(self.theme.typography.large)
+                  .color(colors.text)
+                  .strong(),
+            );
+            ui.label(
+               RichText::new("egui paints one colour, so the ramp lands on its midpoint.")
+                  .size(self.theme.typography.normal)
+                  .color(colors.text_muted),
             );
          });
    }
