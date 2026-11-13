@@ -265,6 +265,12 @@ mutates host state outside a widget response applies twice.
 on the first `header()` or `rows()` call, because the `Auto` column widths are only known after the measure
 pass and the header's height feeds the band. Adding the header after `rows()` leaves its cells unplaced.
 
+**The measuring pass reserves the table's footprint**, not just its header: the header, the gap under it,
+and either the rows or their viewport. The measuring pass is discarded, but a host that shrink-wraps around
+the table — a modal, a card — sizes itself from what the table allocated on that pass, so a header-only
+reservation makes it measure a much shorter box and grow a frame later: a visible flinch on every
+`.key(..)` change. A table that never calls `rows()` keeps the header-only reservation.
+
 ### `Table::key`
 
 The size cache sees the table id and the **row count**, not the row content. Swap ten rows for ten other
