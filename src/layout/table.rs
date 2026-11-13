@@ -14,6 +14,11 @@
 //! widget can report an interaction from it, but a closure that mutates host state outside a widget
 //! response would apply twice.
 //!
+//! The measuring pass reserves the table's whole footprint — the header plus the rows, or the rows'
+//! viewport when the table scrolls — so a host that shrink-wraps around the table (a modal, a card)
+//! measures the same height on both passes and does not move on the frame after the cache is
+//! invalidated.
+//!
 //! # `key`
 //!
 //! The cache sees the row count and the `id_salt`, not the row *content*. Pass something that changes
@@ -419,6 +424,7 @@ impl<'a, T> Table<'a, T> {
          has_header: false,
          band: None,
          rows_rect: None,
+         rows_added: false,
       };
       let inner = add(&mut table);
       let response = table.teardown(id, avail);
@@ -463,6 +469,9 @@ pub struct TableUi<'a, 'ui, T> {
    /// The rows' viewport when the table owns the scroll area; the table's response spans the header
    /// band and this rect.
    rows_rect: Option<Rect>,
+   /// Whether the host added rows this pass. A table that never calls [`TableUi::rows`] keeps the
+   /// header-only reservation the measuring pass has always made.
+   rows_added: bool,
 }
 
 impl<T> TableUi<'_, '_, T> {
@@ -588,6 +597,8 @@ impl<T> TableUi<'_, '_, T> {
    /// Add one body row per item. The `i`-th [`TableRow::cell`] call is column `i`; a row that adds
    /// fewer cells than columns leaves the remaining columns empty.
    pub fn rows(&mut self, mut add: impl FnMut(&mut TableRow<'_>, &T)) {
+      self.rows_added = true;
+
       match self.mode {
          Mode::Placing => match self.scroll {
             Some(scroll) => self.rows_scrolling(scroll, &mut add),
@@ -711,12 +722,58 @@ impl<T> TableUi<'_, '_, T> {
 
    /// The height of the rows alone, without the header: the scroll area's content extent.
    fn content_height(&self) -> f32 {
+      self.content_height_with(self.row_pitch())
+   }
+
+   /// [`TableUi::content_height`] at an arbitrary row pitch: the measuring pass has just measured
+   /// the rows, and the pitch it measured is not in the cache yet.
+   fn content_height_with(&self, pitch: f32) -> f32 {
       let rows = self.data.len();
-      let mut height = self.row_pitch() * rows as f32;
+      let mut height = pitch * rows as f32;
       if rows > 1 {
          height += self.row_gap * (rows - 1) as f32;
       }
       height
+   }
+
+   /// The vertical space the table takes when it places, from `top` down: the header band, the gap
+   /// under it, then the rows viewport — or the rows themselves when the table does not scroll.
+   ///
+   /// The measuring pass reserves this instead of the header alone. A host that shrink-wraps
+   /// around the table (a modal, a card) sizes itself from what the table allocates on the pass it
+   /// is shown in, and the *next* pass anchors to that size: a header-only reservation measures a
+   /// host that is much too short, which then visibly grows a frame later. So this mirrors
+   /// [`TableUi::rows_scrolling`] and [`TableUi::ensure_band`] exactly.
+   fn placed_height(&self, top: f32, bottom: f32, row_height: f32) -> f32 {
+      let pitch = row_height + FrameMargin::of(self.row_frame).y;
+
+      let Some(scroll) = self.scroll else {
+         return band_height(
+            self.has_header,
+            self.header_height,
+            self.header_pad,
+            self.data.len(),
+            pitch,
+            self.row_gap,
+         );
+      };
+
+      // Without a header the viewport starts at the table's own top, so there is no gap to add.
+      let rows_top = match self.has_header {
+         true => top + self.header_height + self.header_pad + self.row_gap,
+         false => top,
+      };
+
+      let viewport = scroll.max_height.unwrap_or(bottom - rows_top).max(0.0);
+      let content = self.content_height_with(pitch)
+         + self.content_margin.top as f32
+         + self.content_margin.bottom as f32;
+      let rows = match scroll.auto_shrink[1] {
+         true => viewport.min(content),
+         false => viewport,
+      };
+
+      rows_top - top + rows
    }
 
    /// Resolve the column extents, store the cache and return the table's band response.
@@ -729,15 +786,39 @@ impl<T> TableUi<'_, '_, T> {
          (Some((_, response)), None) => response,
          (None, Some(rows)) => self.ui.interact(rows, id.with("band"), Sense::hover()),
          (None, None) => {
-            let height = band_height(
-               self.has_header,
-               self.header_height,
-               self.header_pad,
-               0,
-               self.row_pitch(),
-               self.row_gap,
-            );
-            self.ui.allocate_exact_size(vec2(out.total, height), Sense::hover()).1
+            // The measuring pass reserves the table's whole footprint, not just its header: the pass
+            // is discarded, but the size a shrink-wrapping host stored from it is what the pass
+            // that paints anchors to.
+            let measured = self.heights.iter().copied().fold(0.0, f32::max);
+            let available = self.ui.available_rect_before_wrap();
+            let margin = FrameMargin::of(self.row_frame);
+
+            let height = match self.rows_added {
+               true => self.placed_height(available.min.y, available.bottom(), measured),
+               false => band_height(
+                  self.has_header,
+                  self.header_height,
+                  self.header_pad,
+                  0,
+                  self.row_pitch(),
+                  self.row_gap,
+               ),
+            };
+
+            // The rows viewport is placed into the whole width the table was given, so that is what
+            // the host sees; a shrinking scroll area only takes its content's width.
+            let width = match self.scroll {
+               Some(scroll) if !scroll.auto_shrink[0] => available.width(),
+               Some(_) => {
+                  out.total
+                     + self.content_margin.left as f32
+                     + self.content_margin.right as f32
+                     + margin.x
+               }
+               None => out.total + margin.x,
+            };
+
+            self.ui.allocate_exact_size(vec2(width, height), Sense::hover()).1
          }
       };
 
@@ -1305,6 +1386,117 @@ mod tests {
       assert_eq!(
          passes[2], 0,
          "third frame ran a second pass: {passes:?}"
+      );
+   }
+
+   /// A measuring pass reserves the footprint the placing pass uses, so a host that shrink-wraps
+   /// around the table keeps one height across a [`Table::key`] change.
+   ///
+   /// Reserving only the header made such a host measure a shorter card on the discarded pass, anchor
+   /// to it, and visibly move a frame later — the flinch a paged table showed on every page switch.
+   #[test]
+   fn a_measuring_pass_reserves_the_rows_viewport() {
+      let ctx = themed_ctx();
+      let mut heights = Vec::new();
+
+      for frame_nr in 0..3u64 {
+         // The new key on the third frame is what puts the table back into its measuring pass.
+         let key = match frame_nr {
+            2 => 1,
+            _ => 0,
+         };
+
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            // A host pinned to a height its content overflows, like a modal body with a pager under
+            // the table: only the line under the table overflows it.
+            ui.set_height(300.0);
+
+            Table::new("reserving", &ROWS)
+               .columns([Column::Fr(1.0), Column::Fixed(60.0)])
+               .scroll(TableScroll::new().auto_shrink([false; 2]))
+               .key(key)
+               .show(ui, |table| {
+                  table.header(|header| {
+                     for _ in 0..2 {
+                        header.cell(|ui| {
+                           ui.add(crate::widgets::Label::new("Header", None));
+                        });
+                     }
+                  });
+                  table.rows(|row, _item| {
+                     for _ in 0..2 {
+                        row.cell(|ui| {
+                           ui.add(crate::widgets::Label::new("Cell", None));
+                        });
+                     }
+                  });
+               });
+
+            ui.add(crate::widgets::Label::new(
+               "Under the table",
+               None,
+            ));
+
+            heights.push(ui.min_rect().height());
+         }));
+      }
+
+      assert_eq!(
+         heights.len(),
+         5,
+         "two frames, then a measuring frame: {heights:?}"
+      );
+      assert!(
+         heights[1] > 300.0,
+         "the fixture must overflow the pinned height: {heights:?}"
+      );
+      assert!(
+         heights.iter().all(|height| (height - heights[1]).abs() < 0.01),
+         "every pass must reserve the same height: {heights:?}"
+      );
+   }
+
+   /// The same reservation without a scroll area: the measured rows set the height, not the header.
+   #[test]
+   fn a_measuring_pass_reserves_the_rows() {
+      let ctx = themed_ctx();
+      let mut heights = Vec::new();
+
+      for frame_nr in 0..3u64 {
+         let key = match frame_nr {
+            2 => 1,
+            _ => 0,
+         };
+
+         drop(frame(&ctx, vec2(500.0, 400.0), |ui| {
+            Table::new("reserving_band", &ROWS)
+               .columns([Column::Fr(1.0), Column::Fixed(60.0)])
+               .key(key)
+               .show(ui, |table| {
+                  table.header(|header| {
+                     for _ in 0..2 {
+                        header.cell(|ui| {
+                           ui.add(crate::widgets::Label::new("Header", None));
+                        });
+                     }
+                  });
+                  table.rows(|row, _item| {
+                     for _ in 0..2 {
+                        row.cell(|ui| {
+                           ui.add(crate::widgets::Label::new("Cell", None));
+                        });
+                     }
+                  });
+               });
+
+            heights.push(ui.min_rect().height());
+         }));
+      }
+
+      assert_eq!(heights.len(), 5, "{heights:?}");
+      assert!(
+         heights.iter().all(|height| (height - heights[1]).abs() < 0.01),
+         "every pass must reserve the same height: {heights:?}"
       );
    }
 
