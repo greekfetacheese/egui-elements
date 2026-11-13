@@ -288,6 +288,35 @@ row's full-width band before its cells, and `TableRow::rect()` returns that band
 chrome. `TableRow::index()` is the row's index in the slice. Use `fill` for selection; striping alternate
 rows is what the divider replaces.
 
+### Row frames
+
+`row_frame(frame)` puts every body row inside a frame — one card per row — instead of a rule:
+
+```rust
+use egui_elements::widgets::Frame;
+
+let card = Frame::new()
+    .interactive(true)
+    .inner_margin(theme.inner_margin)
+    .corner_radius(theme.corner_radius)
+    .visuals(theme.frame2_visuals());
+
+Table::new("tx_history", &rows)
+    .columns(/* … */)
+    .row_gap(theme.spacing.sm)
+    .row_frame(card)
+    .show(ui, |t| { /* … */ });
+```
+
+The frame's margins join the pitch — a row occupies its cells' height plus the margins' top and
+bottom — and inset the cells, so the cells keep the height the measure pass gave them
+and the header keeps sharing their left edge. The card is as wide as the resolved columns: a table with
+no `Fr` column keeps its intrinsic width, and an `Fr` table still fills its parent because the columns
+resolve against `available_width` minus the margins. `row_frame` takes `impl Into<Frame>`, so an
+`egui::Frame` converts — `.row_frame(theme.frame2)` is the static card, while the crate's `Frame` adds
+hover, selected and gradient fills. It is independent of `row_divider`, which a framed list normally
+turns off; `TableRow::fill` still paints behind the cells when a row also needs a state fill.
+
 **Chrome overhang is the host's to budget.** A cell is a rect, not a clip: a themed `Button` paints about
 6 pt above and below its band, and the table cannot measure painted chrome. A table of buttons therefore
 needs `row_gap >= 2 × the overhang` — 12 pt, which is `theme.spacing.md` or the default

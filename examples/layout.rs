@@ -7,7 +7,7 @@
 use eframe::egui::*;
 use egui_elements::layout::{Column, CrossAlign, Flex, Item, Justify, Table};
 use egui_elements::theme::{Theme, ThemeKind};
-use egui_elements::widgets::{Button, Label};
+use egui_elements::widgets::{Button, Frame as CardFrame, Label};
 
 struct Tx {
    wallet: &'static str,
@@ -396,6 +396,62 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
             if r.index() % 2 == 1 {
                r.fill(theme.colors.widget_bg);
             }
+            r.cell(|ui| body(ui, tx.wallet));
+            r.cell(|ui| body(ui, tx.chain));
+            r.cell(|ui| body(ui, tx.action));
+            r.cell(|ui| body(ui, tx.age));
+            r.cell(|ui| {
+               if ui.add(Button::new("Details")).clicked() {
+                  // No-op: the example proves the layout, not the action.
+               }
+            });
+         });
+      });
+
+   ui.add_space(theme.spacing.lg);
+
+   caption(
+      ui,
+      theme,
+      "F2. The same table with .row_frame(..) — one card per row, no divider. The card's margins are part of the pitch, so the cells keep their height and the header still shares their left edge.",
+   );
+
+   // The crate's own frame, so the cards carry hover and the theme's elevation. An `egui::Frame`
+   // converts too: `.row_frame(theme.frame2)` is the static variant.
+   let card = CardFrame::new()
+      .interactive(true)
+      .inner_margin(theme.inner_margin)
+      .corner_radius(theme.corner_radius)
+      .visuals(theme.frame2_visuals());
+
+   Table::new("tx_history_cards", &rows)
+      .columns([
+         Column::Fr(2.2),
+         Column::Fr(1.6),
+         Column::Fr(4.0),
+         Column::Auto,
+         Column::Fixed(100.0),
+      ])
+      .gap(theme.spacing.md)
+      .row_gap(theme.spacing.sm)
+      .row_frame(card)
+      .header_rule(true)
+      .key(*page)
+      .show(ui, |t| {
+         t.header(|h| {
+            for text in ["Wallet", "Chain", "Action", "Age", ""] {
+               h.cell(|ui| {
+                  ui.add(Label::new(
+                     RichText::new(text)
+                        .size(theme.typography.normal)
+                        .strong()
+                        .color(theme.colors.text),
+                     None,
+                  ));
+               });
+            }
+         });
+         t.rows(|r, tx| {
             r.cell(|ui| body(ui, tx.wallet));
             r.cell(|ui| body(ui, tx.chain));
             r.cell(|ui| body(ui, tx.action));
