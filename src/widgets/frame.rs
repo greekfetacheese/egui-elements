@@ -1,7 +1,8 @@
+use egui::emath::GuiRounding;
 use egui::layers::ShapeIdx;
 use egui::{
-   Color32, CornerRadius, InnerResponse, Margin, Rect, Response, Sense, Shadow, Shape, Stroke, Ui,
-   UiBuilder, UiKind, UiStackInfo, epaint::MarginF32,
+   Color32, CornerRadius, Id, InnerResponse, Margin, Rect, Response, Sense, Shadow, Shape, Stroke,
+   Ui, UiBuilder, UiKind, UiStackInfo, epaint::MarginF32,
 };
 
 use crate::gradient::Fill;
@@ -16,6 +17,12 @@ use crate::visuals::FrameVisuals;
 ///
 /// The difference is that the fill is a [`Fill`] — a solid colour or a gradient — and the state
 /// colours live on [`FrameVisuals`] like the other widgets.
+///
+/// Contents come first: the frame's own widget is registered before the widgets inside it, and egui
+/// gives an overlapping click to the widget added last, so a button in the frame takes its click and
+/// the frame takes only what the contents leave — a row card's dots button opens its menu instead of
+/// selecting the row. [`Reply::response`](InnerResponse::response) is therefore `clicked()` for a
+/// click anywhere in the frame that no child claimed.
 ///
 /// Stroke width is taken from the idle border at `begin`. Changing stroke
 /// width on hover after `begin` does not relayout.
@@ -336,6 +343,8 @@ pub struct Prepared {
    where_to_put_background: ShapeIdx,
    pub content_ui: Ui,
    max_content_rect: Rect,
+   /// The frame's own widget, registered in `begin` so it stays behind `content_ui`'s widgets.
+   id: Id,
 }
 
 impl Frame {
@@ -357,11 +366,22 @@ impl Frame {
          content_ui.set_min_width(max_content_rect.width());
       }
 
+      // Register the frame's own widget before anything inside it does. egui clicks the last widget
+      // it finds under the pointer, so a frame registered after its contents covers them and takes
+      // every click they should have had. `Ui::new` registers a child `Ui` the same way — with
+      // `Rect::NOTHING`, because the rect is only known once the contents are laid out — and `end`
+      // fills in the real rect through this same id, which updates the widget where it already
+      // stands instead of moving it on top. `next_auto_id` only reads the salt, so the layout is
+      // unchanged: the id is the one `allocate_space` advances past.
+      let id = ui.next_auto_id();
+      ui.interact(Rect::NOTHING, id, Sense::empty());
+
       Prepared {
          frame: self,
          where_to_put_background,
          content_ui,
          max_content_rect,
+         id,
       }
    }
 
@@ -388,7 +408,13 @@ impl Prepared {
    }
 
    pub fn allocate_space(&self, ui: &mut Ui) -> Response {
-      ui.allocate_rect(self.allocated_outer_rect(), self.frame.sense)
+      let outer_rect = self.allocated_outer_rect().round_ui();
+
+      // Move the layout past the frame, but do not add a widget here: `self.id` is the one
+      // `begin` registered before the contents, and `interact` fills in its rect in place.
+      ui.advance_cursor_after_rect(outer_rect);
+
+      ui.interact(outer_rect, self.id, self.frame.sense)
    }
 
    pub fn paint(&self, ui: &Ui, response: &Response) {
@@ -436,6 +462,7 @@ impl Prepared {
 #[cfg(test)]
 mod tests {
    use super::*;
+   use egui::{Context, Event, Modifiers, PointerButton, Pos2, RawInput, vec2};
 
    #[test]
    fn fill_propagates_to_matching_states() {
@@ -523,5 +550,92 @@ mod tests {
 
       let idle = Frame::new().visuals(theme_visuals());
       assert_eq!(idle.to_egui().fill, Color32::RED);
+   }
+
+   /// One frame of a clickable card holding a button: `(card clicked, button clicked, button rect)`.
+   ///
+   /// The button stands in for a row's dots button and the frame for the row around it: the row
+   /// selects the token, the button opens the token's menu, and the two must not both fire.
+   fn card(ctx: &Context, time: f64, events: Vec<Event>) -> (bool, bool, Rect) {
+      let input = RawInput {
+         events,
+         time: Some(time),
+         screen_rect: Some(Rect::from_min_size(
+            Pos2::ZERO,
+            vec2(400.0, 300.0),
+         )),
+         ..Default::default()
+      };
+
+      let mut card_clicked = false;
+      let mut button_clicked = false;
+      let mut button_rect = Rect::NOTHING;
+
+      let mut output = ctx.run_ui(input, |ui| {
+         let frame = Frame::new().interactive(true).inner_margin(8).visuals(theme_visuals());
+
+         let response = frame.show(ui, |ui| {
+            let button = ui.add(egui::Button::new("Dots").min_size(vec2(24.0, 20.0)));
+            button_rect = button.rect;
+            button_clicked = button.clicked();
+         });
+
+         // How a row takes its own click: the card's response, given the click sense.
+         card_clicked = response.response.interact(Sense::click()).clicked();
+      });
+
+      output.textures_delta.clear();
+
+      (card_clicked, button_clicked, button_rect)
+   }
+
+   fn pointer(pos: Pos2, pressed: bool) -> Event {
+      Event::PointerButton {
+         pos,
+         button: PointerButton::Primary,
+         pressed,
+         modifiers: Modifiers::NONE,
+      }
+   }
+
+   #[test]
+   fn a_widget_inside_the_frame_takes_its_click() {
+      let ctx = Context::default();
+
+      let (_, _, button_rect) = card(&ctx, 0.0, vec![]);
+      let at = button_rect.center();
+
+      card(&ctx, 0.1, vec![pointer(at, true)]);
+      let (frame_clicked, button_clicked, _) = card(&ctx, 0.2, vec![pointer(at, false)]);
+
+      assert!(
+         button_clicked,
+         "the dots button must take its own click"
+      );
+      assert!(
+         !frame_clicked,
+         "the frame must not take the click its contents claimed"
+      );
+   }
+
+   #[test]
+   fn a_click_beside_the_contents_still_clicks_the_frame() {
+      let ctx = Context::default();
+
+      let (_, _, button_rect) = card(&ctx, 0.0, vec![]);
+      // Inside the frame's inner margin, away from the button.
+      let at = button_rect.left_top() - vec2(4.0, 4.0);
+
+      card(&ctx, 0.1, vec![pointer(at, true)]);
+      let (frame_clicked, button_clicked, _) = card(&ctx, 0.2, vec![pointer(at, false)]);
+
+      assert!(
+         !button_clicked,
+         "a click in the margin is not the button's"
+      );
+      assert!(
+         frame_clicked,
+         "the frame is still the click target of its own card"
+      );
    }
 }
