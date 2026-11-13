@@ -34,6 +34,11 @@
 //! pins that height instead of measuring it, and [`Table::row_divider`] draws a rule in the middle of
 //! the gap under each row.
 //!
+//! [`Table::row_frame`] draws every row inside a frame instead — one card per row. The frame's margins
+//! join the pitch and inset the cells, so the card never squeezes a row and the header still shares the
+//! cells' columns; a cell is still not clipped, so a card's own chrome overhang is the host's to
+//! budget.
+//!
 //! # Sticky header
 //!
 //! [`Table::scroll`] puts the rows in a vertical [`egui::ScrollArea`] and leaves the header outside
@@ -59,6 +64,7 @@ use egui::{
 
 use super::solver::{Column, resolve_columns};
 use super::state::TableState;
+use crate::widgets::Frame;
 
 /// A header-plus-rows table over a slice of data.
 ///
@@ -76,6 +82,7 @@ pub struct Table<'a, T> {
    row_gap: Option<f32>,
    row_height: Option<f32>,
    row_divider: bool,
+   row_frame: Option<Frame>,
    scroll: Option<TableScroll>,
    header_rule: bool,
    key: u64,
@@ -142,24 +149,63 @@ fn cell_layout() -> Layout {
 }
 
 /// The height of the whole table band: the header, the pad under it, and every row plus the gaps
-/// between them.
+/// between them. `row_pitch` is one row's full height, its cells included.
 fn band_height(
    has_header: bool,
    header_height: f32,
    header_pad: f32,
    rows: usize,
-   row_height: f32,
+   row_pitch: f32,
    row_gap: f32,
 ) -> f32 {
    let mut height = header_height + header_pad;
    if has_header && rows > 0 {
       height += row_gap;
    }
-   height += row_height * rows as f32;
+   height += row_pitch * rows as f32;
    if rows > 1 {
       height += row_gap * (rows - 1) as f32;
    }
    height
+}
+
+/// The space one row frame adds around that row's cells.
+#[derive(Clone, Copy, Debug, Default)]
+struct FrameMargin {
+   /// Left + right: taken out of the width the columns resolve against, so a card fits the table.
+   x: f32,
+   /// Top + bottom: added to every row's pitch, so a card pads its cells instead of squeezing them.
+   y: f32,
+   /// How far a row's cells start from its band's left edge, which is the header's left edge too.
+   left: f32,
+}
+
+impl FrameMargin {
+   /// All zeros for a table with no row frame.
+   fn of(row_frame: Option<Frame>) -> Self {
+      let Some(frame) = row_frame else {
+         return Self::default();
+      };
+      let margin = frame.total_margin();
+      Self {
+         x: margin.left + margin.right,
+         y: margin.top + margin.bottom,
+         left: margin.left,
+      }
+   }
+}
+
+/// Fill `cells` with one rect per column, in column order, starting at `content`'s left edge.
+fn place_cells(cells: &mut Vec<Rect>, widths: &[f32], content: Rect, height: f32, gap: f32) {
+   cells.clear();
+   let mut x = content.min.x;
+   for width in widths {
+      cells.push(Rect::from_min_size(
+         pos2(x, content.min.y),
+         vec2(*width, height),
+      ));
+      x += *width + gap;
+   }
 }
 
 /// The column a cell call belongs to. A call past the column count is a host bug: it is asserted in
@@ -188,6 +234,7 @@ impl<'a, T> Table<'a, T> {
          row_gap: None,
          row_height: None,
          row_divider: false,
+         row_frame: None,
          scroll: None,
          header_rule: false,
          key: 0,
@@ -226,6 +273,23 @@ impl<'a, T> Table<'a, T> {
    /// rule. Default: `false`.
    pub fn row_divider(mut self, row_divider: bool) -> Self {
       self.row_divider = row_divider;
+      self
+   }
+
+   /// Draw every body row inside `frame` — one card per row — instead of a rule or a zebra fill.
+   ///
+   /// The frame's margins join the row pitch — a row occupies its cells' height plus the margins'
+   /// top and bottom — and inset its cells by their left and right, so the columns fit inside the
+   /// card and the header keeps sharing their left edge. The card is as wide as the resolved
+   /// columns, so a table with no `Fr` column keeps its intrinsic width.
+   ///
+   /// Takes the crate's own [`Frame`] (hover / selected / gradient fills) or an
+   /// [`egui::Frame`](egui::Frame) through `Into`, so a themed card needs no new type.
+   ///
+   /// Independent of [`Table::row_divider`], which a framed list normally turns off. The frame is
+   /// host chrome, not a selection state — [`TableRow::fill`] still paints behind the cells.
+   pub fn row_frame(mut self, frame: impl Into<Frame>) -> Self {
+      self.row_frame = Some(frame.into());
       self
    }
 
@@ -298,6 +362,11 @@ impl<'a, T> Table<'a, T> {
       } else {
          ui.available_size()
       };
+      // A row frame insets its cells, so the columns resolve against the card's content width. The
+      // margins ride in `avail`, which is also the cache's space key: changing the frame re-measures.
+      let row_margin = FrameMargin::of(self.row_frame);
+      let avail = vec2((avail.x - row_margin.x).max(0.0), avail.y);
+
       let gap = self.gap.unwrap_or(ui.spacing().item_spacing.x);
       let row_gap = self.row_gap.unwrap_or(ui.spacing().item_spacing.y);
       let header_pad = if self.header_rule {
@@ -338,6 +407,7 @@ impl<'a, T> Table<'a, T> {
          row_gap,
          row_height,
          row_divider: self.row_divider,
+         row_frame: self.row_frame,
          content_margin,
          scroll: self.scroll,
          header_rule: self.header_rule,
@@ -370,9 +440,12 @@ pub struct TableUi<'a, 'ui, T> {
    prev: Option<TableState>,
    gap: f32,
    row_gap: f32,
-   /// The height every body row is placed at: [`Table::row_height`] or the tallest measured row.
+   /// The height every body row's cells are placed at: [`Table::row_height`] or the tallest
+   /// measured row.
    row_height: f32,
    row_divider: bool,
+   /// The card drawn around every body row, when the host asked for one.
+   row_frame: Option<Frame>,
    /// The padding inside the table's own scroll viewport; the horizontal part is applied to the
    /// header band too, so the columns stay aligned.
    content_margin: Margin,
@@ -398,6 +471,11 @@ impl<T> TableUi<'_, '_, T> {
       self.columns.len()
    }
 
+   /// The height one body row occupies: its cells plus a row frame's vertical margins.
+   fn row_pitch(&self) -> f32 {
+      self.row_height + FrameMargin::of(self.row_frame).y
+   }
+
    /// Resolve the cached widths and header height into this pass's extents. Returns the table's
    /// width.
    fn resolve(&mut self) -> f32 {
@@ -420,6 +498,7 @@ impl<T> TableUi<'_, '_, T> {
          return;
       }
       let total = self.resolve();
+      let margin = FrameMargin::of(self.row_frame);
       let height = if self.scroll.is_some() {
          self.header_height + self.header_pad
       } else {
@@ -428,14 +507,14 @@ impl<T> TableUi<'_, '_, T> {
             self.header_height,
             self.header_pad,
             self.data.len(),
-            self.row_height,
+            self.row_pitch(),
             self.row_gap,
          )
       };
       let width = if self.scroll.is_some() {
-         total + self.content_margin.left as f32 + self.content_margin.right as f32
+         total + self.content_margin.left as f32 + self.content_margin.right as f32 + margin.x
       } else {
-         total
+         total + margin.x
       };
       let (rect, response) = self.ui.allocate_exact_size(vec2(width, height), Sense::hover());
       self.band = Some((rect, response));
@@ -450,9 +529,10 @@ impl<T> TableUi<'_, '_, T> {
             self.ensure_band();
             let band = self.band.as_ref().expect("the band is allocated above").0;
             let header_height = self.header_height;
+            let margin = FrameMargin::of(self.row_frame);
             let mut cells = std::mem::take(&mut self.scratch);
             cells.clear();
-            let mut x = band.min.x + self.content_margin.left as f32;
+            let mut x = band.min.x + self.content_margin.left as f32 + margin.left;
             for width in &self.widths {
                cells.push(Rect::from_min_size(
                   pos2(x, band.min.y),
@@ -526,6 +606,7 @@ impl<T> TableUi<'_, '_, T> {
                   row_gap: self.row_gap,
                   gap: self.gap,
                   row_divider: self.row_divider,
+                  row_frame: self.row_frame,
                };
                placer.place(
                   &mut *self.ui,
@@ -591,6 +672,7 @@ impl<T> TableUi<'_, '_, T> {
             row_gap,
             gap,
             row_divider,
+            row_frame,
             content_margin,
             ..
          } = self;
@@ -602,6 +684,7 @@ impl<T> TableUi<'_, '_, T> {
             row_gap: *row_gap,
             gap: *gap,
             row_divider: *row_divider,
+            row_frame: *row_frame,
          };
          ui.scope_builder(
             UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)),
@@ -629,7 +712,7 @@ impl<T> TableUi<'_, '_, T> {
    /// The height of the rows alone, without the header: the scroll area's content extent.
    fn content_height(&self) -> f32 {
       let rows = self.data.len();
-      let mut height = self.row_height * rows as f32;
+      let mut height = self.row_pitch() * rows as f32;
       if rows > 1 {
          height += self.row_gap * (rows - 1) as f32;
       }
@@ -651,7 +734,7 @@ impl<T> TableUi<'_, '_, T> {
                self.header_height,
                self.header_pad,
                0,
-               self.row_height,
+               self.row_pitch(),
                self.row_gap,
             );
             self.ui.allocate_exact_size(vec2(out.total, height), Sense::hover()).1
@@ -689,6 +772,7 @@ struct RowPlacer<'a, 'x, T> {
    row_gap: f32,
    gap: f32,
    row_divider: bool,
+   row_frame: Option<Frame>,
 }
 
 impl<T> RowPlacer<'_, '_, T> {
@@ -701,11 +785,23 @@ impl<T> RowPlacer<'_, '_, T> {
       width: f32,
       add: &mut impl FnMut(&mut TableRow<'_>, &T),
    ) {
+      let data = self.data;
+      let margin = FrameMargin::of(self.row_frame);
+      let pitch = self.row_height + margin.y;
+      // The cells' own extent, gaps included: a card hugs it, where the band a scroll area hands over
+      // is the viewport width and would stretch the card past the columns.
+      let content_width =
+         self.widths.iter().sum::<f32>() + self.gap * self.widths.len().saturating_sub(1) as f32;
+      let band_width = if self.row_frame.is_some() {
+         content_width + margin.x
+      } else {
+         width
+      };
       let clip = ui.clip_rect();
       let mut y = top;
-      for (i, item) in self.data.iter().enumerate() {
-         let row_band = Rect::from_min_size(pos2(left, y), vec2(width, self.row_height));
-         y += self.row_height + self.row_gap;
+      for (i, item) in data.iter().enumerate() {
+         let row_band = Rect::from_min_size(pos2(left, y), vec2(band_width, pitch));
+         y += pitch + self.row_gap;
 
          // The band already reserved this row's space, so a row the viewport does not show is
          // skipped rather than placed: no cell is built and no closure runs for it.
@@ -714,30 +810,63 @@ impl<T> RowPlacer<'_, '_, T> {
          }
 
          let mut cells = std::mem::take(self.scratch);
-         cells.clear();
-         let mut x = left;
-         for column in self.widths {
-            // The row's own top, never `y`: `y` has already advanced to the next row.
-            cells.push(Rect::from_min_size(
-               pos2(x, row_band.min.y),
-               vec2(*column, self.row_height),
-            ));
-            x += *column + self.gap;
+
+         match self.row_frame {
+            Some(frame) => {
+               // The frame owns the row's Ui: it shrinks the band by its own margins and paints
+               // behind what it holds, which is exactly the geometry a card needs.
+               let mut row_ui = ui.new_child(
+                  UiBuilder::new()
+                     .max_rect(row_band)
+                     .layout(Layout::top_down(Align::Min))
+                     .id_salt(("row_frame", i)),
+               );
+               let widths = self.widths;
+               let gap = self.gap;
+               let row_height = self.row_height;
+
+               frame.show(&mut row_ui, |ui| {
+                  // A frame sizes itself from this Ui's `min_rect`, and a cell's child Ui never grows
+                  // it, so the cells' extent is reserved here and the cells are placed inside it.
+                  let (content, _) =
+                     ui.allocate_exact_size(vec2(content_width, row_height), Sense::hover());
+                  place_cells(&mut cells, widths, content, row_height, gap);
+
+                  let mut row = TableRow {
+                     ui,
+                     cells: &cells,
+                     measure: None,
+                     next: 0,
+                     rect: row_band,
+                     index: i,
+                  };
+                  add(&mut row, item);
+               });
+            }
+            None => {
+               place_cells(
+                  &mut cells,
+                  self.widths,
+                  row_band,
+                  self.row_height,
+                  self.gap,
+               );
+
+               let mut row = TableRow {
+                  ui: &mut *ui,
+                  cells: &cells,
+                  measure: None,
+                  next: 0,
+                  rect: row_band,
+                  index: i,
+               };
+               add(&mut row, item);
+            }
          }
-         {
-            let mut row = TableRow {
-               ui: &mut *ui,
-               cells: &cells,
-               measure: None,
-               next: 0,
-               rect: row_band,
-               index: i,
-            };
-            add(&mut row, item);
-         }
+
          // The rule sits in the middle of the gap under the row, so the space above and below it is
          // equal. The last row has no gap under it, so it gets no rule.
-         if self.row_divider && i + 1 < self.data.len() {
+         if self.row_divider && i + 1 < data.len() {
             let stroke = ui.visuals().widgets.noninteractive.bg_stroke;
             let y = row_band.max.y + self.row_gap * 0.5;
             ui.painter().hline(row_band.x_range(), y, stroke);
@@ -811,7 +940,8 @@ impl TableRow<'_> {
       self.index
    }
 
-   /// The row's band: the table's full width and the row's height.
+   /// The row's band: the table's width and the row's height, which with [`Table::row_frame`]
+   /// includes the frame's margins.
    pub fn rect(&self) -> Rect {
       self.rect
    }
@@ -864,7 +994,7 @@ impl TableRow<'_> {
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeKind};
-   use egui::{Pos2, vec2};
+   use egui::{Pos2, Shape, epaint::RectShape, vec2};
 
    fn themed_ctx() -> egui::Context {
       let ctx = egui::Context::default();
@@ -1676,6 +1806,115 @@ mod tests {
          (first_row.get().min.y - rects[0].max.y - 10.0 - 4.0).abs() < 1.0,
          "first row top {} != header bottom + row_gap + margin.top",
          first_row.get().min.y
+      );
+   }
+
+   /// Every filled rect painted this frame, including the ones nested in a `Shape::Vec`.
+   fn filled_rects(shape: &Shape, out: &mut Vec<RectShape>) {
+      match shape {
+         Shape::Rect(rect) => out.push(rect.clone()),
+         Shape::Vec(shapes) => {
+            for shape in shapes {
+               filled_rects(shape, out);
+            }
+         }
+         _ => {}
+      }
+   }
+
+   #[test]
+   fn row_frame_insets_the_cells_and_paints_a_card_per_row() {
+      let ctx = themed_ctx();
+      let card = Color32::from_rgb(0x12, 0x34, 0x56);
+      let card_frame = Frame::new().inner_margin(Margin::same(8)).fill(card);
+      let rects = std::cell::RefCell::new(Vec::new());
+      let mut painted = Vec::new();
+
+      for _ in 0..2 {
+         let out = frame(&ctx, vec2(500.0, 400.0), |ui| {
+            rects.borrow_mut().clear();
+            scope(ui, |ui| {
+               Table::new("row_frame", &ROWS)
+                  .columns([Column::Fixed(100.0), Column::Fr(1.0)])
+                  .row_gap(0.0)
+                  .row_frame(card_frame)
+                  .show(ui, |table| {
+                     table.header(|header| {
+                        for _ in 0..2 {
+                           let rect = header.cell(|ui| ui.max_rect()).inner;
+                           rects.borrow_mut().push(rect);
+                        }
+                     });
+                     table.rows(|row, _item| {
+                        for _ in 0..2 {
+                           let rect = row.cell(|ui| ui.max_rect()).inner;
+                           rects.borrow_mut().push(rect);
+                        }
+                     });
+                  });
+            });
+         });
+
+         painted.clear();
+         for clipped in &out.shapes {
+            filled_rects(&clipped.shape, &mut painted);
+         }
+      }
+
+      let rects = rects.borrow();
+      assert_eq!(
+         rects.len(),
+         6,
+         "a header and two rows of two cells"
+      );
+
+      // The header shares the inset cells' left edge, not the card's.
+      for column in 0..2 {
+         assert!(
+            (rects[column].min.x - rects[2 + column].min.x).abs() < 0.5,
+            "header column {column} starts at {} but its cells start at {}",
+            rects[column].min.x,
+            rects[2 + column].min.x
+         );
+      }
+      assert!(
+         (rects[2].min.x - 8.0).abs() < 0.5,
+         "a cell starts at {} instead of the frame's 8 pt inner margin",
+         rects[2].min.x
+      );
+
+      // The card's margins are added to the pitch, so the cells keep their measured height: two rows
+      // of `row_height` plus 8 pt above and below.
+      let pitch = rects[2].height() + 16.0;
+      assert!(
+         (rects[4].min.y - rects[2].min.y - pitch).abs() < 0.5,
+         "row pitch {} != cells {} + 16 of margins",
+         rects[4].min.y - rects[2].min.y,
+         rects[2].height()
+      );
+
+      let cards: Vec<_> = painted.iter().filter(|painted| painted.fill == card).collect();
+      assert_eq!(
+         cards.len(),
+         2,
+         "one card per row, got {}",
+         cards.len()
+      );
+      for painted in &cards {
+         assert!(
+            (painted.rect.height() - pitch).abs() < 0.5,
+            "card height {} != the row pitch {pitch}",
+            painted.rect.height()
+         );
+         assert!(
+            (painted.rect.width() - 500.0).abs() < 0.5,
+            "card width {} != the table's 500",
+            painted.rect.width()
+         );
+      }
+      assert!(
+         (cards[1].rect.min.y - cards[0].rect.min.y - pitch).abs() < 0.5,
+         "cards stack by the pitch, not by the viewport"
       );
    }
 }
