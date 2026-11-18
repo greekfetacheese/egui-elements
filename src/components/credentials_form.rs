@@ -1,5 +1,7 @@
 use super::input_field::SecureInputField;
 use super::virtual_keyboard::VirtualKeyboard;
+use crate::announce::Announcer;
+use crate::widgets::secure_text_edit::SecureSpeech;
 use egui::*;
 
 use secure_types::SecureString;
@@ -15,6 +17,8 @@ pub struct CredentialsForm {
    x_spacing: f32,
    last_focused: &'static str,
    virtual_keyboard: VirtualKeyboard,
+   speech: SecureSpeech,
+   announcer: Announcer,
 }
 
 impl CredentialsForm {
@@ -37,6 +41,8 @@ impl CredentialsForm {
          x_spacing: 10.0,
          last_focused: "Username",
          virtual_keyboard: VirtualKeyboard::new(false),
+         speech: SecureSpeech::Masked,
+         announcer: Announcer::new("credentials_form"),
       }
    }
 
@@ -65,6 +71,20 @@ impl CredentialsForm {
    /// Reset the state of the credentials form.
    pub fn reset(&mut self) {
       *self = Self::new();
+   }
+
+   /// Builder: what assistive technology receives while the password is masked.
+   pub fn with_speech(mut self, speech: SecureSpeech) -> Self {
+      self.set_speech(speech);
+      self
+   }
+
+   /// What assistive technology receives while the password is masked.
+   pub fn set_speech(&mut self, speech: SecureSpeech) {
+      self.speech = speech;
+      self.username.set_speech(speech);
+      self.password.set_speech(speech);
+      self.confirm_password.set_speech(speech);
    }
 
    /// Whether the confirm-password row is enabled.
@@ -252,6 +272,22 @@ impl CredentialsForm {
       self.username.min_size().max(self.password.min_size())
    }
 
+   /// What the live status node says about the field in focus.
+   ///
+   /// Only the masked fields are counted: the username is not hidden, so a screen reader
+   /// already echoes its keystrokes. The count is the whole point -- the text never leaves
+   /// the process.
+   fn announce_text(&self) -> String {
+      match self.last_focused {
+         "Password" => count_text("Password", self.password.text.char_len()),
+         "Confirm Password" => count_text(
+            "Confirm password",
+            self.confirm_password.text.char_len(),
+         ),
+         _ => "Username field".to_owned(),
+      }
+   }
+
    /// Paint the form (and the virtual keyboard, if enabled).
    pub fn show(&mut self, ui: &mut Ui) {
       if !self.open {
@@ -299,6 +335,77 @@ impl CredentialsForm {
          ui.add_space(10.0);
 
          self.virtual_keyboard.show(target_text, ui);
+
+         self.announcer.announce(ui, self.announce_text());
       });
+   }
+}
+
+/// `"Password, 3 characters"` -- the shape of the secret, never its content.
+fn count_text(field: &str, count: usize) -> String {
+   match count {
+      0 => format!("{field}, empty"),
+      1 => format!("{field}, 1 character"),
+      count => format!("{field}, {count} characters"),
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use crate::theme::{Theme, ThemeKind};
+   use egui::accesskit::{Live, Node, Role};
+   use egui::{Context, RawInput, Ui};
+
+   fn frame(ctx: &Context, add: impl FnMut(&mut Ui)) -> Vec<Node> {
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), add);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      nodes
+   }
+
+   #[test]
+   fn announce_text_counts_the_focused_password() {
+      let mut form = CredentialsForm::new();
+
+      assert_eq!(form.announce_text(), "Username field");
+
+      form.last_focused = "Password";
+      assert_eq!(form.announce_text(), "Password, empty");
+
+      form.set_password_text(SecureString::from("abc"));
+      assert_eq!(form.announce_text(), "Password, 3 characters");
+
+      form.last_focused = "Confirm Password";
+      form.set_confirm_password_text(SecureString::from("x"));
+      assert_eq!(
+         form.announce_text(),
+         "Confirm password, 1 character"
+      );
+   }
+
+   #[test]
+   fn show_keeps_a_live_status_node() {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut form = CredentialsForm::new().with_open(true);
+
+      let nodes = frame(&ctx, |ui| form.show(ui));
+      let node = nodes
+         .iter()
+         .find(|node| node.role() == Role::Status)
+         .expect("no live status node in the tree");
+
+      assert_eq!(node.live(), Some(Live::Polite));
+      assert_eq!(node.label(), Some("Username field"));
    }
 }

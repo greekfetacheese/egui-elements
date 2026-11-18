@@ -53,6 +53,18 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
 - `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
   egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
+- `CredentialsForm` announces the focused password field's length through its own `Announcer`, so a
+  host gets the feedback without wiring anything: `with_speech` / `set_speech` (also on
+  `SecureInputField`) choose what assistive technology receives, and the row labels now name their
+  input.
+- `Announcer` — a `Status` node marked `Live::Polite` whose text changes a screen reader speaks
+  (AccessKit turns the name change into an AT-SPI announcement). It exists because a text field's
+  value does not reach the AT-SPI text interface, so a password field is otherwise silent under a
+  reader that suppresses key echo.
+- `SecureSpeech` / `SecureTextEdit::speech` — what a password field hands to assistive technology:
+  the mask by default (one mask character per character) instead of the previous empty value, and the
+  plaintext only when the host opts in with `SecureSpeech::Plaintext` (which drops the password role, since
+  a password role lets the platform withhold the value).
 
 **Theme**
 

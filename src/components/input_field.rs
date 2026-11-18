@@ -1,7 +1,7 @@
 use crate::theme::Theme;
 use crate::widgets::{
    Button,
-   secure_text_edit::{SecureTextEdit, SecureTextEditOutput, TextBuffer},
+   secure_text_edit::{SecureSpeech, SecureTextEdit, SecureTextEditOutput, TextBuffer},
 };
 use egui::*;
 use egui_lucide::Lucide;
@@ -26,6 +26,7 @@ pub struct SecureInputField {
    open: bool,
    pub(crate) text: SecureString,
    text_hidden: bool,
+   speech: SecureSpeech,
    id: &'static str,
    icon_size: Vec2,
    min_size: Vec2,
@@ -55,6 +56,7 @@ impl SecureInputField {
          open,
          text: SecureString::new_with_capacity(32).unwrap(),
          text_hidden,
+         speech: SecureSpeech::Masked,
          id,
          icon_size: vec2(20.0, 20.0),
          min_size: vec2(300.0, 20.0),
@@ -124,6 +126,19 @@ impl SecureInputField {
       self.text_hidden
    }
 
+   /// What assistive technology receives while the text is masked.
+   ///
+   /// Defaults to [`SecureSpeech::Masked`].
+   pub fn with_speech(mut self, speech: SecureSpeech) -> Self {
+      self.speech = speech;
+      self
+   }
+
+   /// What assistive technology receives while the text is masked.
+   pub fn set_speech(&mut self, speech: SecureSpeech) {
+      self.speech = speech;
+   }
+
    /// Return a clone of the text
    pub fn text(&self) -> SecureString {
       self.text.clone()
@@ -190,6 +205,7 @@ impl SecureInputField {
          WidgetText::default(),
          self.icon_size,
          self.qr_enabled,
+         self.speech,
       );
 
       #[cfg(all(
@@ -420,6 +436,7 @@ impl InputField {
          self.hint_text.clone(),
          self.icon_size,
          self.qr_enabled,
+         SecureSpeech::Masked,
       );
 
       #[cfg(all(
@@ -503,12 +520,16 @@ fn show_field_chrome(
    hint_text: WidgetText,
    icon_size: Vec2,
    qr_enabled: bool,
+   speech: SecureSpeech,
 ) -> (SecureTextEditOutput, bool) {
    let theme = Theme::current(ui.ctx());
 
-   if !id.is_empty() {
-      ui.label(RichText::new(id).size(theme.typography.large));
-   }
+   // The visible field name above the row is also the field's accessible name.
+   let label = if id.is_empty() {
+      None
+   } else {
+      Some(ui.label(RichText::new(id).size(theme.typography.large)))
+   };
 
    let margin = inner_margin.unwrap_or_else(|| Margin::same(theme.inner_margin));
    let row_height = (theme.typography.normal + margin.sum().y).max(min_size.y);
@@ -520,6 +541,7 @@ fn show_field_chrome(
       .margin(margin)
       .hint_text(hint_text)
       .password(password)
+      .speech(speech)
       .font(FontId::proportional(theme.typography.normal));
 
    #[cfg_attr(
@@ -535,7 +557,11 @@ fn show_field_chrome(
       row_size,
       Layout::left_to_right(Align::Center),
       |ui| {
-         let output = text_edit.show(ui);
+         let mut output = text_edit.show(ui);
+
+         if let Some(label) = &label {
+            output.response = output.response.clone().labelled_by(label.id);
+         }
 
          let text_color = theme.colors.text;
          if let Some(state) = hidden.as_deref_mut() {

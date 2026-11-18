@@ -1,7 +1,8 @@
 use egui::{
    Align, Align2, Color32, CursorIcon, Event, EventFilter, FontId, FontSelection, Galley,
    IMEPurpose, Id, ImeEvent, Key, KeyboardShortcut, Margin, Modifiers, NumExt, Response, Sense,
-   Shadow, Shape, TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, epaint, output,
+   Shadow, Shape, TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, accesskit, epaint,
+   output,
    text::{self, LayoutJob},
    text_selection::{self, CCursorRange, text_cursor_state::byte_index_from_char_index},
    vec2,
@@ -132,6 +133,23 @@ pub struct SecureTextEditOutput {
    pub cursor_range: Option<CCursorRange>,
 }
 
+/// What a [`SecureTextEdit`] hands to assistive technology while
+/// [`password`](SecureTextEdit::password) is on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SecureSpeech {
+   /// Expose the mask (one bullet per character), so a screen reader says
+   /// "bullet" per keystroke: the user hears that keys registered, never the secret.
+   #[default]
+   Masked,
+   /// Expose the plaintext. Opt-in and warned: the secret enters the accessibility
+   /// tree, the screen reader speech history, and every AT client allowed to read it
+   /// (AT-SPI, UIA, NSAccessibility), not only the screen reader attached now.
+   ///
+   /// The field is announced as an ordinary text input: a password role tells the
+   /// platform to withhold the value, so this mode cannot keep it.
+   Plaintext,
+}
+
 /// A widget for editing text.
 ///
 /// This widget is identical to [`egui::TextEdit`], but it uses a custom [`TextBuffer`]
@@ -141,8 +159,12 @@ pub struct SecureTextEditOutput {
 ///
 /// ## Notes
 ///
-/// - Accessability like screen readers is disabled to avoid multiple unsecure allocations of the entered text.
-/// - If you want to make sure the text you enter doesn't stay in memory in any way you have to set [`Self::password`] to `true`.
+/// - Assistive technology receives the masked text by default: one mask character per character,
+///   never the secret. [`SecureSpeech::Plaintext`] opts into handing the plaintext to the
+///   accessibility tree, and to the screen reader speech history with it.
+/// - If you want to make sure the text you enter doesn't stay in memory in any way you have to set
+///   [`Self::password`] to `true`. Masking the accessibility value alone does not remove the copies
+///   egui makes of a non-password buffer.
 /// - Copy and cut are enabled only for non-secure buffers and are disabled on password fields; a
 ///   secure buffer ignores both.
 ///
@@ -157,6 +179,7 @@ pub struct SecureTextEdit<'a> {
    font_selection: FontSelection,
    text_color: Option<Color32>,
    password: bool,
+   speech: SecureSpeech,
    frame: bool,
    margin: Margin,
    multiline: bool,
@@ -185,6 +208,7 @@ impl<'a> SecureTextEdit<'a> {
          font_selection: FontSelection::default(),
          text_color: None,
          password: false,
+         speech: SecureSpeech::Masked,
          frame: true,
          margin: Margin::symmetric(4, 2),
          multiline: false,
@@ -218,6 +242,7 @@ impl<'a> SecureTextEdit<'a> {
          font_selection: FontSelection::default(),
          text_color: None,
          password: false,
+         speech: SecureSpeech::Masked,
          frame: true,
          margin: Margin::symmetric(4, 2),
          multiline: true,
@@ -292,6 +317,14 @@ impl<'a> SecureTextEdit<'a> {
    /// Required if you want the entered text not to linger in egui allocations.
    pub fn password(mut self, password: bool) -> Self {
       self.password = password;
+      self
+   }
+
+   /// What assistive technology receives while [`Self::password`] is on.
+   ///
+   /// Defaults to [`SecureSpeech::Masked`].
+   pub fn speech(mut self, speech: SecureSpeech) -> Self {
+      self.speech = speech;
       self
    }
 
@@ -717,27 +750,36 @@ impl<'a> SecureTextEdit<'a> {
 
       state.clone().store(ui.ctx(), id);
 
-      // !
-      // This is only for accessibility, so set them to empty is fine
-      /*
-      let _ = self.text.str_scope(|s| {
-         if self.password {
-            std::iter::repeat(epaint::text::PASSWORD_REPLACEMENT_CHAR)
-               .take(s.chars().count())
-               .collect()
-         } else {
-            s.to_string()
-         }
-      });
-      */
+      // The galley text is already the mask when `password` is on, so the value handed to
+      // AccessKit reuses it. Only `Plaintext` speech needs a copy of the secret, and that
+      // copy is dropped with the `Cow` when this call returns.
+      let spoken_text = if self.password && self.speech == SecureSpeech::Plaintext {
+         std::borrow::Cow::Owned(self.text.to_string())
+      } else {
+         display_text_cow
+      };
+
       response.widget_info(|| {
          WidgetInfo::text_edit(
             ui.is_enabled(),
             String::new(),
-            String::new(),
-            String::new(),
+            &*spoken_text,
+            self.hint_text.text(),
          )
       });
+
+      if self.password && self.speech == SecureSpeech::Masked {
+         // `WidgetInfo` only reports the generic role, so refine it the way egui's own
+         // `TextEdit` does. The node exists because `widget_info` registered it above.
+         //
+         // `Plaintext` deliberately keeps the generic role. `PasswordInput` tells the
+         // platform the value is a mask, and assistive technology is entitled to ignore
+         // or withhold it (UIA's `IsPassword`, AT-SPI's `PasswordText`), so announcing the
+         // secret cannot ride a role that means "do not read this".
+         ui.ctx().accesskit_node_builder(id, |builder| {
+            builder.set_role(accesskit::Role::PasswordInput);
+         });
+      }
 
       let output = SecureTextEditOutput {
          response,
@@ -1176,6 +1218,7 @@ fn copy_selection(
 #[cfg(test)]
 mod tests {
    use super::*;
+   use egui::accesskit::{Node, Role};
    use egui::{Context, Event, FullOutput, Id, ImeEvent, Key, Modifiers, OutputCommand, RawInput};
 
    fn run_pass(ctx: &Context, text: &mut String, id: Id, events: Vec<Event>) {
@@ -1420,5 +1463,76 @@ mod tests {
       );
       assert_eq!(cut, None);
       assert_eq!(text.unlock_str(|s| s.to_owned()), "top secret");
+   }
+
+   fn accesskit_nodes(ctx: &Context, add: impl FnMut(&mut Ui)) -> Vec<Node> {
+      ctx.enable_accesskit();
+      let mut output = ctx.run_ui(RawInput::default(), add);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+      nodes
+   }
+
+   fn node_with_role(nodes: &[Node], role: Role) -> &Node {
+      nodes
+         .iter()
+         .find(|node| node.role() == role)
+         .expect("no node with the expected role")
+   }
+
+   #[test]
+   fn password_field_masks_its_value_for_accesskit() {
+      let ctx = Context::default();
+      let mut text = "hunter2".to_owned();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(SecureTextEdit::singleline(&mut text).password(true));
+      });
+
+      let node = node_with_role(&nodes, Role::PasswordInput);
+      let value = node.value().expect("the node must expose a value");
+      let mask = std::iter::repeat(epaint::text::PASSWORD_REPLACEMENT_CHAR)
+         .take(7)
+         .collect::<String>();
+
+      assert_eq!(value, mask.as_str());
+      assert!(!value.contains("hunter2"));
+   }
+
+   #[test]
+   fn password_field_speaks_plaintext_when_asked() {
+      let ctx = Context::default();
+      let mut text = "hunter2".to_owned();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(
+            SecureTextEdit::singleline(&mut text)
+               .password(true)
+               .speech(SecureSpeech::Plaintext),
+         );
+      });
+
+      // Speaking the value means giving up the password role: a `PasswordInput` lets the
+      // platform withhold the text, which is the opposite of what this mode is for.
+      let node = node_with_role(&nodes, Role::TextInput);
+
+      assert_eq!(node.value(), Some("hunter2"));
+   }
+
+   #[test]
+   fn plain_field_exposes_its_value() {
+      let ctx = Context::default();
+      let mut text = "alice".to_owned();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(SecureTextEdit::singleline(&mut text));
+      });
+
+      let node = node_with_role(&nodes, Role::TextInput);
+
+      assert_eq!(node.role(), Role::TextInput);
+      assert_eq!(node.value(), Some("alice"));
    }
 }
