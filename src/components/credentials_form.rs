@@ -1,3 +1,6 @@
+use std::fmt;
+use std::sync::Arc;
+
 use super::input_field::SecureInputField;
 use super::virtual_keyboard::VirtualKeyboard;
 use crate::announce::Announcer;
@@ -5,6 +8,73 @@ use crate::widgets::secure_text_edit::SecureSpeech;
 use egui::*;
 
 use secure_types::SecureString;
+
+/// The row an announcement is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnnouncedField {
+   /// The username row.
+   Username,
+   /// The password row.
+   Password,
+   /// The confirm-password row.
+   ConfirmPassword,
+}
+
+impl AnnouncedField {
+   /// The field's name as it is spoken.
+   pub fn label(self) -> &'static str {
+      match self {
+         Self::Username => "Username",
+         Self::Password => "Password",
+         Self::ConfirmPassword => "Confirm password",
+      }
+   }
+}
+
+/// What the live status node is about, handed to a
+/// [custom announcement](CredentialsForm::with_announce_text).
+///
+/// It carries the field and how many characters it holds -- never the text.
+#[derive(Clone, Copy, Debug)]
+pub struct Announcement {
+   field: AnnouncedField,
+   characters: usize,
+   speech: SecureSpeech,
+}
+
+impl Announcement {
+   /// The field the announcement is about.
+   pub fn field(&self) -> AnnouncedField {
+      self.field
+   }
+
+   /// How many characters the field holds.
+   pub fn characters(&self) -> usize {
+      self.characters
+   }
+
+   /// What the focused field is doing with its mask.
+   pub fn speech(&self) -> SecureSpeech {
+      self.speech
+   }
+
+   /// The built-in wording: the field's name and the length of the secret.
+   pub fn default_text(&self) -> String {
+      match self.field {
+         AnnouncedField::Username => "Username field".to_owned(),
+         field => count_text(field.label(), self.characters),
+      }
+   }
+}
+
+impl fmt::Display for Announcement {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      f.write_str(&self.default_text())
+   }
+}
+
+/// The wording of every announcement the form makes.
+type AnnounceFormatter = Arc<dyn Fn(&Announcement) -> String>;
 
 /// A credentials form that can be used to edit username, password, and optionally confirm password.
 pub struct CredentialsForm {
@@ -19,6 +89,7 @@ pub struct CredentialsForm {
    virtual_keyboard: VirtualKeyboard,
    speech: SecureSpeech,
    announcer: Announcer,
+   announcement_text: Option<AnnounceFormatter>,
 }
 
 impl CredentialsForm {
@@ -43,6 +114,7 @@ impl CredentialsForm {
          virtual_keyboard: VirtualKeyboard::new(false),
          speech: SecureSpeech::Masked,
          announcer: Announcer::new("credentials_form"),
+         announcement_text: None,
       }
    }
 
@@ -85,6 +157,27 @@ impl CredentialsForm {
       self.username.set_speech(speech);
       self.password.set_speech(speech);
       self.confirm_password.set_speech(speech);
+   }
+
+   /// Builder: build the announcement yourself.
+   ///
+   /// The closure runs every frame with the focused field and its character count, and its
+   /// return value replaces the built-in wording. Use it to add context the form does not
+   /// know (remaining attempts, a different language) -- never to speak the secret itself:
+   /// the text enters the accessibility tree and the screen reader's speech history.
+   pub fn with_announce_text(mut self, text: impl Fn(&Announcement) -> String + 'static) -> Self {
+      self.set_announce_text(text);
+      self
+   }
+
+   /// Build the announcement yourself; see [`Self::with_announce_text`].
+   pub fn set_announce_text(&mut self, text: impl Fn(&Announcement) -> String + 'static) {
+      self.announcement_text = Some(Arc::new(text));
+   }
+
+   /// Go back to the built-in wording.
+   pub fn clear_announce_text(&mut self) {
+      self.announcement_text = None;
    }
 
    /// Whether the confirm-password row is enabled.
@@ -278,13 +371,34 @@ impl CredentialsForm {
    /// already echoes its keystrokes. The count is the whole point -- the text never leaves
    /// the process.
    fn announce_text(&self) -> String {
-      match self.last_focused {
-         "Password" => count_text("Password", self.password.text.char_len()),
-         "Confirm Password" => count_text(
-            "Confirm password",
+      let announcement = self.announcement();
+      match &self.announcement_text {
+         Some(text) => text(&announcement),
+         None => announcement.default_text(),
+      }
+   }
+
+   /// The field in focus, as an announcement sees it.
+   fn announcement(&self) -> Announcement {
+      let (field, characters) = match self.last_focused {
+         "Password" => (
+            AnnouncedField::Password,
+            self.password.text.char_len(),
+         ),
+         "Confirm Password" => (
+            AnnouncedField::ConfirmPassword,
             self.confirm_password.text.char_len(),
          ),
-         _ => "Username field".to_owned(),
+         _ => (
+            AnnouncedField::Username,
+            self.username.text.char_len(),
+         ),
+      };
+
+      Announcement {
+         field,
+         characters,
+         speech: self.speech,
       }
    }
 
@@ -336,7 +450,8 @@ impl CredentialsForm {
 
          self.virtual_keyboard.show(target_text, ui);
 
-         self.announcer.announce(ui, self.announce_text());
+         let text = self.announce_text();
+         self.announcer.announce(ui, text);
       });
    }
 }
@@ -393,6 +508,22 @@ mod tests {
    }
 
    #[test]
+   fn a_custom_announcement_replaces_the_wording() {
+      let mut form = CredentialsForm::new().with_announce_text(|announcement| {
+         format!(
+            "{} holds {}",
+            announcement.field().label(),
+            announcement.characters()
+         )
+      });
+
+      form.last_focused = "Password";
+      form.set_password_text(SecureString::from("abc"));
+
+      assert_eq!(form.announce_text(), "Password holds 3");
+   }
+
+   #[test]
    fn show_keeps_a_live_status_node() {
       let ctx = Context::default();
       let mut theme = Theme::new(ThemeKind::TokyoNight);
@@ -407,5 +538,23 @@ mod tests {
 
       assert_eq!(node.live(), Some(Live::Polite));
       assert_eq!(node.label(), Some("Username field"));
+   }
+
+   #[test]
+   fn show_speaks_a_custom_announcement() {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut form = CredentialsForm::new()
+         .with_open(true)
+         .with_announce_text(|announcement| format!("{}, last try", announcement.field().label()));
+
+      let nodes = frame(&ctx, |ui| form.show(ui));
+      let node = nodes
+         .iter()
+         .find(|node| node.role() == Role::Status)
+         .expect("no live status node in the tree");
+
+      assert_eq!(node.label(), Some("Username, last try"));
    }
 }

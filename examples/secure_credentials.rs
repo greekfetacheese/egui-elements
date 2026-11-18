@@ -8,8 +8,8 @@
 //! The form announces its own password length, so the host does no accessibility plumbing.
 
 use eframe::egui::*;
-use egui_elements::widgets::{Frame as Card, Radio, SecureSpeech};
-use egui_elements::{CredentialsForm, Theme, ThemeKind, utils};
+use egui_elements::widgets::{Checkbox, Frame as Card, Radio, SecureSpeech};
+use egui_elements::{AnnouncedField, CredentialsForm, Theme, ThemeKind, utils};
 
 fn main() -> eframe::Result {
    let options = eframe::NativeOptions {
@@ -31,6 +31,7 @@ struct SecureCredentialsApp {
    theme: Theme,
    form: CredentialsForm,
    speech: SecureSpeech,
+   custom_wording: bool,
 }
 
 impl SecureCredentialsApp {
@@ -44,6 +45,7 @@ impl SecureCredentialsApp {
          theme,
          form,
          speech: SecureSpeech::Masked,
+         custom_wording: false,
       }
    }
 
@@ -77,6 +79,22 @@ impl SecureCredentialsApp {
                .color(colors.text_muted),
             );
          });
+   }
+
+   /// Swap between the form's built-in count and a wording of our own.
+   fn apply_wording(&mut self) {
+      if self.custom_wording {
+         self.form.set_announce_text(|announcement| match announcement.field() {
+            AnnouncedField::Username => "Username field, type your name".to_owned(),
+            field => format!(
+               "{}, {} characters, then Enter",
+               field.label(),
+               announcement.characters()
+            ),
+         });
+      } else {
+         self.form.clear_announce_text();
+      }
    }
 
    fn card(&mut self, ui: &mut Ui) {
@@ -116,6 +134,21 @@ impl SecureCredentialsApp {
                RichText::new("Ctrl+Shift+S toggles Masked / Plaintext from the keyboard.")
                   .size(normal)
                   .color(colors.text_muted),
+            );
+
+            ui.add_space(space.sm);
+            if ui
+               .add(Checkbox::new(&mut self.custom_wording, "Custom wording"))
+               .changed()
+            {
+               self.apply_wording();
+            }
+            ui.label(
+               RichText::new(
+                  "Custom wording replaces the built-in sentence through with_announce_text: the closure sees the focused field and its length, never the characters.",
+               )
+               .size(normal)
+               .color(colors.text_muted),
             );
 
             if self.speech == SecureSpeech::Plaintext {
