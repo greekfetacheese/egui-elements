@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use egui::{IdSalt, Popup, PopupCloseBehavior, Response, Ui};
+use egui::{IdSalt, Popup, PopupCloseBehavior, Response, Ui, UiKind, UiStackInfo};
 
 use super::shared::menu_frame;
 use crate::theme::Theme;
@@ -55,6 +55,10 @@ impl Menu {
          // Same default as `ComboBox::popup_gap`.
          .gap(theme.spacing.xs)
          .close_behavior(PopupCloseBehavior::CloseOnClick)
+         // A popup is a `Dialog` by default; a menu is a menu. The kind is what gives the
+         // panel its `Role::Menu` node, and `SubMenuItem` already says `UiKind::Menu` for
+         // the same reason.
+         .info(UiStackInfo::new(UiKind::Menu))
          .show(|ui| {
             ui.set_min_width(self.min_width);
             // Tight stacking — `MenuItem` has its own interior padding.
