@@ -217,6 +217,46 @@ mod tests {
    }
 
    #[test]
+   fn a_toast_is_a_live_region_so_readers_speak_it() {
+      use egui::accesskit::{Live, Role};
+
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+
+      Toast::new("Disk full").tone(ChipRole::Error).show(&ctx);
+
+      let mut output = ctx.run_ui(RawInput::default(), |ui| {
+         Toasts::new().render(ui.ctx());
+      });
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes: Vec<_> = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      let alert = nodes.iter().find(|node| node.role() == Role::Alert).unwrap_or_else(|| {
+         let dump: Vec<_> = nodes
+            .iter()
+            .map(|node| {
+               (
+                  node.role(),
+                  node.label().map(str::to_string),
+                  node.live(),
+               )
+            })
+            .collect();
+         panic!("no alert node in the tree: {dump:?}")
+      });
+
+      // The role alone is not a live region: without politeness AccessKit emits no
+      // announcement at all, which is how a toast could sit in the tree unheard.
+      assert_eq!(alert.live(), Some(Live::Assertive));
+      assert_eq!(alert.label(), Some("Disk full"));
+   }
+
+   #[test]
    fn render_caps_the_stack_at_max_visible() {
       let ctx = Context::default();
       for index in 0..4 {
