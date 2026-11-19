@@ -28,8 +28,8 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use egui::{
-   Color32, CornerRadius, FontId, Galley, IdSalt, Rect, Response, Role, Sense, Stroke, Ui,
-   WidgetInfo, pos2, vec2,
+   Color32, CornerRadius, EventFilter, FocusDirection, FontId, Galley, Id, IdSalt, Key, Rect,
+   Response, Role, Sense, Stroke, Ui, UiBuilder, WidgetInfo, pos2, vec2,
 };
 
 use crate::motion::{InteractT, Lerp, Motion, animate_from};
@@ -55,6 +55,48 @@ pub(super) fn shade(color: Color32, enabled: bool) -> Color32 {
    } else {
       color.gamma_multiply(DISABLED_ALPHA)
    }
+}
+
+/// The tab a focused tab's arrow key steps to, if any.
+///
+/// Only the tab that holds the keyboard listens, and the lock filter keeps egui from spending the
+/// arrow on its own focus navigation, the way a slider claims its axis. The strip has no wrapping
+/// model — a click can only land on a segment that exists — so the ends clamp and a press there
+/// does nothing.
+fn arrow_step(ui: &Ui, segment: Id, index: usize, len: usize) -> Option<usize> {
+   if !ui.memory(|memory| memory.has_focus(segment)) {
+      return None;
+   }
+
+   ui.memory_mut(|memory| {
+      memory.set_focus_lock_filter(
+         segment,
+         EventFilter {
+            horizontal_arrows: true,
+            ..Default::default()
+         },
+      );
+   });
+
+   let (back, forward) = ui.input(|input| {
+      (
+         input.key_pressed(Key::ArrowLeft),
+         input.key_pressed(Key::ArrowRight),
+      )
+   });
+   let target = match (back, forward) {
+      (true, false) => Some(index.saturating_sub(1)),
+      (false, true) => Some((index + 1).min(len.saturating_sub(1))),
+      _ => None,
+   };
+
+   if target.is_some() {
+      // Drop the focus move egui queued for this frame before it can step a second tab, the way a
+      // menu claims the arrows it reads itself.
+      ui.memory_mut(|memory| memory.move_focus(FocusDirection::None));
+   }
+
+   target
 }
 
 /// The measured, unpainted strip handed to a style module.
@@ -206,6 +248,10 @@ impl Default for TabsVisuals {
 /// The strip eases the indicator between segments and, in the segmented style, lifts it on a shadow;
 /// the duration comes from the installed style's `animation_time`, so [Tabs::motion] is the per-widget
 /// override and [Motion::instant] the reduce-motion answer.
+///
+/// A focused tab answers the horizontal arrows the way the ARIA tabs pattern asks: Left and Right
+/// move the selection to the neighbouring tab and take the keyboard focus with them. The strip has
+/// no wrapping model, so the first and the last tab stay put.
 ///
 /// ```rust
 /// # use egui::__run_test_ui;
@@ -416,12 +462,22 @@ impl<'a> Tabs<'a> {
 
       let strip_id = ui.scope_id().with_salt(id_salt);
 
+      // The strip is one list, not a row of loose tabs: a child Ui over the strip's rect that holds
+      // nothing but the segment interactions, so every tab node hangs under a single tab-list node
+      // instead of under whatever happens to contain the strip. It claims no space (the strip rect
+      // above is already allocated) and paints nothing of its own.
+      let strip_ui = ui.new_child(UiBuilder::new().scope_id(strip_id.with("list")).max_rect(rect));
+      strip_ui.ctx().accesskit_node_builder(strip_ui.unique_id(), |node| {
+         node.set_role(Role::TabList)
+      });
+
       // ---- interaction ---------------------------------------------------
       let mut faces = Vec::with_capacity(segments.len());
       let mut changed = false;
+      let mut focused = None;
 
       for (index, label) in labels.iter().enumerate() {
-         let segment = ui.interact(
+         let segment = strip_ui.interact(
             segments[index],
             strip_id.with(index),
             Sense::click(),
@@ -430,8 +486,14 @@ impl<'a> Tabs<'a> {
             *selected = index;
             changed = true;
          }
-         segment
-            .widget_info(|| WidgetInfo::selected(Role::Tab, enabled, index == *selected, *label));
+         if segment.has_focus() {
+            focused = Some(index);
+         }
+         let chosen = index == *selected;
+         segment.widget_info(|| WidgetInfo::selected(Role::Tab, enabled, chosen, *label));
+         // `WidgetInfo::selected` writes the toggled state; ARIA spells the same bit `selected`,
+         // and a tab needs both, so the second is set from the same value rather than re-derived.
+         ui.ctx().accesskit_node_builder(segment.id, |node| node.set_selected(chosen));
          faces.push(InteractT::of(
             ui,
             segment.id.with("face"),
@@ -439,6 +501,18 @@ impl<'a> Tabs<'a> {
             segment.is_pointer_button_down_on(),
             motion,
          ));
+      }
+
+      // A tab holding the keyboard steps the selection with the arrows and takes the focus with it.
+      // Handled after the loop, so a focus request made here cannot be read back as focus gained by
+      // a later segment of this same frame.
+      if let Some(index) = focused
+         && let Some(target) = arrow_step(ui, strip_id.with(index), index, labels.len())
+         && target != index
+      {
+         *selected = target;
+         changed = true;
+         ui.memory_mut(|memory| memory.request_focus(strip_id.with(target)));
       }
 
       // The clicks above already moved the index, so this is the selection of the frame being painted.
@@ -496,6 +570,7 @@ impl<'a> Tabs<'a> {
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeColors, ThemeKind};
+   use egui::accesskit::Toggled;
    use egui::{
       Context, Event, FullOutput, Modifiers, PointerButton, Pos2, RawInput, Rect, Shape, pos2, vec2,
    };
@@ -541,6 +616,16 @@ mod tests {
          pos,
          button: PointerButton::Primary,
          pressed: false,
+         modifiers: Modifiers::NONE,
+      }
+   }
+
+   fn key(key: Key) -> Event {
+      Event::Key {
+         key,
+         physical_key: None,
+         pressed: true,
+         repeat: false,
          modifiers: Modifiers::NONE,
       }
    }
@@ -1112,6 +1197,113 @@ mod tests {
             "the accent bar must read against muted ink"
          );
       }
+   }
+
+   /// The strip is a tab list in the accessibility tree: one `TabList` node that owns the tab
+   /// nodes, and a tab whose `selected` and `toggled` states agree.
+   #[test]
+   fn the_strip_reports_a_tab_list() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let mut selected = 1usize;
+
+      let mut out = frame(&ctx, 10.0, vec![], |ui| {
+         Tabs::new("list", &mut selected, ["All", "Media"]).show(ui);
+      });
+      let update = out
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+
+      let (_, list) = update
+         .nodes
+         .iter()
+         .find(|(_, node)| node.role() == Role::TabList)
+         .expect("the strip must report a tab list");
+
+      let mut tabs = 0;
+      let mut selected_tabs = 0;
+      for (id, node) in update.nodes.iter().filter(|(_, node)| node.role() == Role::Tab) {
+         tabs += 1;
+         assert!(
+            list.children().contains(id),
+            "every tab must hang under the tab list"
+         );
+         if node.is_selected() == Some(true) {
+            selected_tabs += 1;
+            assert_eq!(
+               node.toggled(),
+               Some(Toggled::True),
+               "a tab's selected and toggled states must agree"
+            );
+         }
+      }
+
+      assert_eq!(tabs, 2, "one node per segment");
+      assert_eq!(
+         selected_tabs, 1,
+         "exactly one tab carries the selection"
+      );
+      assert_eq!(
+         selected, 1,
+         "reporting the list must not move the index"
+      );
+   }
+
+   /// A focused tab steps the selection with the horizontal arrows and takes the keyboard focus
+   /// along, so the next press lands on the next tab. The strip does not wrap: the ends clamp.
+   #[test]
+   fn the_arrows_step_a_focused_tab() {
+      let ctx = themed_ctx();
+      let mut selected = 0usize;
+      let mut changed = false;
+
+      // Tab into the strip: the segments are the only focusable widgets on the row.
+      frame(&ctx, 10.0, vec![key(Key::Tab)], |ui| {
+         Tabs::new("arrows", &mut selected, ["All", "Media", "Files"]).show(ui);
+      });
+      // The lock filter is stored on the first frame the tab is focused and read on the next, as a
+      // slider's is, so give it that frame before pressing an arrow.
+      frame(&ctx, 10.1, vec![], |ui| {
+         Tabs::new("arrows", &mut selected, ["All", "Media", "Files"]).show(ui);
+      });
+
+      frame(&ctx, 10.2, vec![key(Key::ArrowRight)], |ui| {
+         changed = Tabs::new("arrows", &mut selected, ["All", "Media", "Files"]).show(ui).changed();
+      });
+      assert_eq!(
+         selected, 1,
+         "ArrowRight moves the selection one tab on"
+      );
+      assert!(changed, "a moved selection reports `changed`");
+
+      frame(&ctx, 10.3, vec![key(Key::ArrowRight)], |ui| {
+         changed = Tabs::new("arrows", &mut selected, ["All", "Media", "Files"]).show(ui).changed();
+      });
+      assert_eq!(
+         selected, 2,
+         "the focus must travel with the selection, or the next press could not land"
+      );
+      assert!(changed, "and the second press moves again");
+
+      frame(&ctx, 10.4, vec![key(Key::ArrowRight)], |ui| {
+         changed = Tabs::new("arrows", &mut selected, ["All", "Media", "Files"]).show(ui).changed();
+      });
+      assert_eq!(
+         selected, 2,
+         "the last tab clamps instead of wrapping"
+      );
+      assert!(
+         !changed,
+         "a press that cannot move reports nothing"
+      );
+
+      frame(&ctx, 10.5, vec![key(Key::ArrowLeft)], |ui| {
+         changed = Tabs::new("arrows", &mut selected, ["All", "Media", "Files"]).show(ui).changed();
+      });
+      assert_eq!(selected, 1, "ArrowLeft steps back");
+      assert!(changed, "stepping back reports `changed` too");
    }
 
    #[test]
