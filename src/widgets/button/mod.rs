@@ -788,12 +788,13 @@ impl<'a> Button<'a> {
          WidgetAtomResponse::empty(prepared.response)
       };
 
-      response.response.widget_info(|| {
-         if let Some(text) = &text {
-            WidgetInfo::labeled(Role::Button, ui.is_enabled(), text)
-         } else {
-            WidgetInfo::new(Role::Button)
-         }
+      // A selected button is a toggle, and the fill it paints for that is invisible to a
+      // screen reader: the state has to ride the node.
+      response.response.widget_info(|| match (&text, selected) {
+         (Some(text), true) => WidgetInfo::selected(Role::Button, ui.is_enabled(), true, text),
+         (Some(text), false) => WidgetInfo::labeled(Role::Button, ui.is_enabled(), text),
+         (None, true) => WidgetInfo::selected(Role::Button, ui.is_enabled(), true, ""),
+         (None, false) => WidgetInfo::new(Role::Button),
       });
 
       response
@@ -824,6 +825,39 @@ mod tests {
 
    /// The sweep colour used by the shape-inspection tests.
    const SWEEP: Color32 = Color32::from_rgb(1, 2, 3);
+
+   #[test]
+   fn a_selected_button_reports_its_state() {
+      use egui::accesskit::{Node, Toggled};
+
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), |ui| {
+         ui.add(Button::new("Bold").selected(true));
+         ui.add(Button::new("Normal"));
+      });
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes: Vec<Node> = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      // The selected fill is invisible to a screen reader; the node has to carry the state.
+      let bold = nodes
+         .iter()
+         .find(|node| node.label() == Some("Bold"))
+         .expect("the selected button has no node");
+      assert_eq!(bold.toggled(), Some(Toggled::True));
+
+      let normal = nodes
+         .iter()
+         .find(|node| node.label() == Some("Normal"))
+         .expect("the plain button has no node");
+      assert_eq!(normal.toggled(), None);
+   }
 
    fn press(pos: Pos2) -> Event {
       Event::PointerButton {
