@@ -1,7 +1,8 @@
 use super::label::Label;
 use crate::motion::{InteractT, Motion};
 use egui::{
-   Color32, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, Widget, epaint::RectShape,
+   Color32, Pos2, Rect, Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2, Widget, WidgetInfo,
+   epaint::RectShape,
 };
 
 /// A widget that displays multiple [`Label`]s in a single horizontal line,
@@ -50,11 +51,19 @@ impl Widget for MultiLabel {
       let mut max_height: f32 = 0.0;
       let mut label_sizes: Vec<Vec2> = Vec::with_capacity(self.labels.len());
 
+      let mut text = String::new();
       for label in &self.labels {
-         let (_, size) = label.galley_and_size(ui, f32::INFINITY);
+         let (galley, size) = label.galley_and_size(ui, f32::INFINITY);
          label_sizes.push(size);
          total_width += size.x;
          max_height = max_height.max(size.y);
+
+         // The parts are painted one by one, so their text reaches AT only as this one
+         // name. A space keeps the last word of one part off the first of the next.
+         if !text.is_empty() {
+            text.push(' ');
+         }
+         text.push_str(galley.text());
       }
 
       let num_gaps = (self.labels.len() as f32).max(0.0) - 1.0;
@@ -125,6 +134,72 @@ impl Widget for MultiLabel {
             i += 1;
          }
       }
+
+      let clickable = self.sense.is_some_and(|sense| sense.senses_click());
+      response.widget_info(|| {
+         if clickable {
+            WidgetInfo::labeled(Role::Button, ui.is_enabled(), &text)
+         } else {
+            WidgetInfo::labeled(Role::Label, ui.is_enabled(), &text)
+         }
+      });
+
       response
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use egui::accesskit::{Node, Role};
+   use egui::{Context, RawInput};
+
+   fn accesskit_nodes(ctx: &Context, add: impl FnMut(&mut Ui)) -> Vec<Node> {
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), add);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      nodes
+   }
+
+   fn node_with_role(nodes: &[Node], role: Role) -> &Node {
+      nodes
+         .iter()
+         .find(|node| node.role() == role)
+         .expect("no node with the expected role")
+   }
+
+   #[test]
+   fn multilabel_speaks_its_parts_as_one_name() {
+      let ctx = Context::default();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(MultiLabel::new(vec![
+            Label::new("Delete", None),
+            Label::new("3 selected", None),
+         ]));
+      });
+
+      let node = node_with_role(&nodes, Role::Label);
+
+      assert_eq!(node.value(), Some("Delete 3 selected"));
+   }
+
+   #[test]
+   fn a_clickable_multilabel_is_a_button() {
+      let ctx = Context::default();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(MultiLabel::new(vec![Label::new("Open", None)]).sense(Sense::click()));
+      });
+
+      let node = node_with_role(&nodes, Role::Button);
+
+      assert_eq!(node.label(), Some("Open"));
    }
 }
