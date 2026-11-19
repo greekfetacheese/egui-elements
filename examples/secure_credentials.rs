@@ -1,6 +1,6 @@
 //! Secure credentials proof: a `CredentialsForm` a screen reader can drive.
 //!
-//! Run with: `cargo run --example secure_credentials`
+//! Run with: `cargo run --example secure_credentials --features secure-types`
 //!
 //! The dev-dependency enables eframe's `accesskit` feature; without it the window never
 //! reaches the accessibility bus and a screen reader falls back to speaking raw keystrokes.
