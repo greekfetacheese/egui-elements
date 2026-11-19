@@ -2180,14 +2180,14 @@ impl MailApp {
                .key(message.id)
                .show(ui, |table| {
                   table.header(|header| {
-                     header.cell(|ui| {
+                     header.cell_named("File", |ui| {
                         ui.label(
                            RichText::new("File")
                               .size(self.theme.typography.very_small)
                               .color(colors.text_muted),
                         );
                      });
-                     header.cell(|ui| {
+                     header.cell_named("Size", |ui| {
                         ui.label(
                            RichText::new("Size")
                               .size(self.theme.typography.very_small)
@@ -2197,7 +2197,7 @@ impl MailApp {
                      header.cell(|_ui| {});
                   });
                   table.rows(|row, file| {
-                     row.cell(|ui| {
+                     row.cell_named(file.name, |ui| {
                         ui.add(
                            Label::new(
                               RichText::new(file.name)
@@ -2209,7 +2209,7 @@ impl MailApp {
                            .wrap_mode(TextWrapMode::Truncate),
                         );
                      });
-                     row.cell(|ui| {
+                     row.cell_named(file.size, |ui| {
                         ui.label(
                            RichText::new(file.size)
                               .size(self.theme.typography.very_small)
@@ -2217,7 +2217,12 @@ impl MailApp {
                         );
                      });
                      row.cell(|ui| {
-                        ui.add(Button::new("Save").small().min_size(vec2(38.0, 24.0)));
+                        let button = ui.add(Button::new("Save").small().min_size(vec2(38.0, 24.0)));
+
+                        // One per file, all reading "Save": the name leads with the file.
+                        ui.ctx().accesskit_node_builder(button.id, |node| {
+                           node.set_label(format!("{}, save", file.name));
+                        });
                      });
                   });
                });

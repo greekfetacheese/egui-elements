@@ -129,7 +129,7 @@ impl eframe::App for PortfolioApp {
                .show(ui, |table| {
                   table.header(|header| {
                      for text in ["Asset", "Price", "Balance", "Value", ""] {
-                        header.cell(|ui| {
+                        header.cell_named(text, |ui| {
                            if !text.is_empty() {
                               ui.label(
                                  RichText::new(text)
@@ -145,7 +145,7 @@ impl eframe::App for PortfolioApp {
                   table.rows(|row, token| {
                      let index = row.index();
 
-                     row.cell(|ui| {
+                     row.cell_named(token.symbol.as_str(), |ui| {
                         let (rect, _) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::hover());
                         ui.painter().circle_filled(rect.center(), 13.0, token.tint);
                         ui.add(Label::new(
@@ -157,7 +157,7 @@ impl eframe::App for PortfolioApp {
                      });
 
                      for text in [&token.price, &token.balance, &token.value] {
-                        row.cell(|ui| {
+                        row.cell_named(text.as_str(), |ui| {
                            ui.label(
                               RichText::new(text)
                                  .size(theme.typography.normal)
@@ -167,8 +167,17 @@ impl eframe::App for PortfolioApp {
                      }
 
                      row.cell(|ui| {
-                        let button = Button::new(RichText::new("X").size(theme.typography.normal));
-                        if ui.add(button).clicked() {
+                        let glyph = RichText::new("X").size(theme.typography.normal);
+                        let button = ui.add(Button::new(glyph));
+
+                        // "X" says nothing on its own, and the row it removes is painted outside
+                        // the button: the name leads with that row, so the reader knows what it
+                        // acts on before the verb, and sixty buttons are not one word.
+                        ui.ctx().accesskit_node_builder(button.id, |node| {
+                           node.set_label(format!("{}, remove", token.symbol));
+                        });
+
+                        if button.clicked() {
                            remove = Some(index);
                         }
                      });

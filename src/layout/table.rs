@@ -59,12 +59,24 @@
 //! column extents (measured over the whole list) stay correct. A row that is scrolled out of view
 //! costs one height lookup and nothing else; the host needs no API for it, because only the table
 //! knows the row heights.
+//!
+//! # Accessibility
+//!
+//! The table is one [`Role::Table`] node carrying the row and column counts, the header line and
+//! every body row are [`Role::Row`] nodes under it, and every cell is a [`Role::Cell`] (the header's
+//! are [`Role::ColumnHeader`]) under its row. A screen reader therefore reads a table of rows rather
+//! than a flat run of labels.
+//!
+//! Each of those nodes is a child `Ui` that claims no space in its parent: the table's and the rows'
+//! carry the role and nothing else, the cells' hold their widget. The measuring pass creates none of
+//! them, so the sizes it measures are unchanged, and a row the viewport skips has no node at all —
+//! it is not laid out.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use egui::{
-   Align, Color32, Id, InnerResponse, Layout, Margin, Rangef, Rect, Response, ScrollArea, Sense,
-   Ui, UiBuilder, Vec2, pos2, vec2,
+   Align, Color32, Id, InnerResponse, Layout, Margin, Rangef, Rect, Response, Role, ScrollArea,
+   Sense, Ui, UiBuilder, Vec2, pos2, vec2,
 };
 
 use super::solver::{Column, resolve_columns};
@@ -77,7 +89,8 @@ use crate::widgets::Frame;
 /// extents, `Auto` columns fit their widest measured cell, and `Fr` columns share the leftover width.
 /// Every row is placed at one height — the tallest measured row, or [`Table::row_height`] — and
 /// [`Table::scroll`] keeps the header above a rows-only scroll area.
-/// See the [module docs](self) for the measure-pass contract and [`Table::key`].
+/// The table is also one node in the accessibility tree, with a row node per row; see the [module
+/// docs](self) for the tree, the measure-pass contract and [`Table::key`].
 #[must_use = "You should call .show()"]
 pub struct Table<'a, T> {
    id: Id,
@@ -151,6 +164,34 @@ impl Default for TableScroll {
 /// The layout every cell's child `Ui` starts from: left-to-right, vertically centred, not clipped.
 fn cell_layout() -> Layout {
    Layout::left_to_right(Align::Center)
+}
+
+/// Report `ui`'s own node with `role` in the accessibility tree.
+///
+/// Every `Ui` is a node there already (a `GenericContainer`, set when the `Ui` was created), so this
+/// upgrades the role of that node instead of adding one: what is built inside `ui` afterwards hangs
+/// under it, which is what nests the table's rows and their cells.
+fn report_role(ui: &Ui, role: Role) {
+   ui.ctx().accesskit_node_builder(ui.unique_id(), |node| node.set_role(role));
+}
+
+/// Name `ui`'s own node.
+///
+/// A cell has no name of its own otherwise: ARIA derives a cell's name from its contents, and egui
+/// offers no public way to read the widgets a `Ui` added, so the host supplies the text it can see.
+fn name_cell(ui: &Ui, name: String) {
+   ui.ctx().accesskit_node_builder(ui.unique_id(), |node| node.set_label(name));
+}
+
+/// Add a child `Ui` over `rect` as a node of its own with `role`, nested under `parent`.
+///
+/// The `Ui` claims no space in `parent` — a child `Ui` allocates nothing — and holds no cells, so it
+/// cannot change what the table measures or places. Its id is explicit, so a row keeps the same node
+/// id from one frame to the next.
+fn node_ui(parent: &mut Ui, id: Id, rect: Rect, role: Role) -> Ui {
+   let node = parent.new_child(UiBuilder::new().scope_id(id).max_rect(rect));
+   report_role(&node, role);
+   node
 }
 
 /// The height of the whole table band: the header, the pad under it, and every row plus the gaps
@@ -425,6 +466,7 @@ impl<'a, T> Table<'a, T> {
          band: None,
          rows_rect: None,
          rows_added: false,
+         node: None,
       };
       let inner = add(&mut table);
       let response = table.teardown(id, avail);
@@ -472,6 +514,9 @@ pub struct TableUi<'a, 'ui, T> {
    /// Whether the host added rows this pass. A table that never calls [`TableUi::rows`] keeps the
    /// header-only reservation the measuring pass has always made.
    rows_added: bool,
+   /// The table's own node in the accessibility tree, created on the placing pass over the table's
+   /// rect. See [`TableUi::table_node`].
+   node: Option<Ui>,
 }
 
 impl<T> TableUi<'_, '_, T> {
@@ -529,6 +574,29 @@ impl<T> TableUi<'_, '_, T> {
       self.band = Some((rect, response));
    }
 
+   /// The table's own node in the accessibility tree: a child `Ui` over the table's rect, reported
+   /// as [`Role::Table`] with the row and column counts, and the parent every row's node hangs off.
+   ///
+   /// The `Ui` claims no space — the band is allocated already — and holds no cells, so it cannot
+   /// change what the measuring pass measures or the placing pass places. It is created by the first
+   /// of [`TableUi::header`] and [`TableUi::rows`] that places, so `rect` is the table's extent at
+   /// that moment, and reused for the rest of the pass.
+   fn table_node(&mut self, rect: Rect) -> Id {
+      if let Some(node) = &self.node {
+         return node.unique_id();
+      }
+      let scope = self.id.with("table");
+      let node = self.ui.new_child(UiBuilder::new().scope_id(scope).max_rect(rect));
+      let (rows, columns) = (self.data.len(), self.columns.len());
+      node.ctx().accesskit_node_builder(node.unique_id(), |builder| {
+         builder.set_role(Role::Table);
+         builder.set_row_count(rows);
+         builder.set_column_count(columns);
+      });
+      self.node = Some(node);
+      scope
+   }
+
    /// Add the header line. The `i`-th [`TableHeader::cell`] call is column `i`. Add it before
    /// [`TableUi::rows`]: the table band is allocated on the first of those two calls.
    pub fn header(&mut self, add: impl FnOnce(&mut TableHeader<'_>)) {
@@ -562,12 +630,21 @@ impl<T> TableUi<'_, '_, T> {
                   stroke,
                );
             }
+            // The header line is a row of its own, so the column headers a screen reader steps
+            // through hang under a row node instead of straight under the table.
+            self.table_node(band);
+            let header_node = {
+               let parent = self.node.as_mut().expect("the table node is created above");
+               let rect = cells.iter().copied().reduce(Rect::union).unwrap_or(band);
+               node_ui(parent, self.id.with("header"), rect, Role::Row)
+            };
             {
                let mut header = TableHeader {
                   ui: &mut *self.ui,
                   cells: &cells,
                   measure: None,
                   next: 0,
+                  node: header_node.unique_id(),
                };
                add(&mut header);
             }
@@ -585,6 +662,8 @@ impl<T> TableUi<'_, '_, T> {
                      height: &mut height,
                   }),
                   next: 0,
+                  // The measuring pass builds no accessibility nodes: its cells are invisible.
+                  node: Id::NULL,
                };
                add(&mut header);
             }
@@ -609,6 +688,8 @@ impl<T> TableUi<'_, '_, T> {
                if self.has_header {
                   top += self.row_gap;
                }
+               self.table_node(band);
+               let mut node = self.node.take().expect("the table node is created above");
                let mut placer = RowPlacer {
                   data: self.data,
                   widths: &self.widths,
@@ -618,14 +699,17 @@ impl<T> TableUi<'_, '_, T> {
                   gap: self.gap,
                   row_divider: self.row_divider,
                   row_frame: self.row_frame,
+                  name: self.id,
                };
                placer.place(
                   &mut *self.ui,
+                  &mut node,
                   top,
                   band.min.x,
                   band.width(),
                   &mut add,
                );
+               self.node = Some(node);
             }
          },
          Mode::Measuring => {
@@ -645,6 +729,7 @@ impl<T> TableUi<'_, '_, T> {
                      next: 0,
                      rect: measure_rect,
                      index: i,
+                     node: Id::NULL,
                   };
                   add(&mut row, item);
                }
@@ -673,6 +758,10 @@ impl<T> TableUi<'_, '_, T> {
       );
       let id = self.id;
 
+      // The table's node covers the header band and the rows viewport it is about to fill.
+      self.table_node(band.map_or(rect, |band| band.union(rect)));
+      let mut node = self.node.take().expect("the table node is created above");
+
       let rows_rect = {
          let TableUi {
             ui,
@@ -696,6 +785,7 @@ impl<T> TableUi<'_, '_, T> {
             gap: *gap,
             row_divider: *row_divider,
             row_frame: *row_frame,
+            name: id,
          };
          ui.scope_builder(
             UiBuilder::new().max_rect(rect).layout(Layout::top_down(Align::Min)),
@@ -710,13 +800,21 @@ impl<T> TableUi<'_, '_, T> {
                         vec2(ui.available_width(), content_height),
                         Sense::hover(),
                      );
-                     placer.place(ui, band.min.y, band.min.x, band.width(), add);
+                     placer.place(
+                        ui,
+                        &mut node,
+                        band.min.y,
+                        band.min.x,
+                        band.width(),
+                        add,
+                     );
                   })
                   .inner_rect
             },
          )
          .inner
       };
+      self.node = Some(node);
       self.rows_rect = Some(rows_rect);
    }
 
@@ -854,13 +952,18 @@ struct RowPlacer<'a, 'x, T> {
    gap: f32,
    row_divider: bool,
    row_frame: Option<Frame>,
+   /// The table's id: every row's node id hangs off it, so a row keeps its node from frame to
+   /// frame.
+   name: Id,
 }
 
 impl<T> RowPlacer<'_, '_, T> {
-   /// Stamp every row into a band that starts at `top` / `left`.
+   /// Stamp every row into a band that starts at `top` / `left`, one node per row under `node` (the
+   /// table's own node).
    fn place(
       &mut self,
       ui: &mut Ui,
+      node: &mut Ui,
       top: f32,
       left: f32,
       width: f32,
@@ -885,10 +988,21 @@ impl<T> RowPlacer<'_, '_, T> {
          y += pitch + self.row_gap;
 
          // The band already reserved this row's space, so a row the viewport does not show is
-         // skipped rather than placed: no cell is built and no closure runs for it.
+         // skipped rather than placed: no cell is built, no closure runs for it and it gets no
+         // accessibility node.
          if !clip.intersects(row_band) {
             continue;
          }
+
+         // The row's own node: a child of the table's node over the row's band, so the cells below
+         // hang under their row instead of directly under the table.
+         let row_node = node_ui(
+            node,
+            self.name.with(("row", i)),
+            row_band,
+            Role::Row,
+         );
+         let row_node_id = row_node.unique_id();
 
          let mut cells = std::mem::take(self.scratch);
 
@@ -920,6 +1034,7 @@ impl<T> RowPlacer<'_, '_, T> {
                      next: 0,
                      rect: row_band,
                      index: i,
+                     node: row_node_id,
                   };
                   add(&mut row, item);
                });
@@ -940,6 +1055,7 @@ impl<T> RowPlacer<'_, '_, T> {
                   next: 0,
                   rect: row_band,
                   index: i,
+                  node: row_node_id,
                };
                add(&mut row, item);
             }
@@ -963,11 +1079,34 @@ pub struct TableHeader<'a> {
    cells: &'a [Rect],
    measure: Option<Measure<'a>>,
    next: usize,
+   /// The header row's node in the accessibility tree; its cells hang under it. [`Id::NULL`] on the
+   /// measuring pass, which builds no nodes.
+   node: Id,
 }
 
 impl TableHeader<'_> {
    /// Add one header cell. The cell layout is left-to-right, vertically centred, and not clipped.
    pub fn cell<R>(&mut self, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+      self.cell_impl(None, add)
+   }
+
+   /// Add one header cell whose node carries `name` as its accessible label.
+   ///
+   /// Same cell as [`Self::cell`], built from the same content; only the node's name differs. A
+   /// reader's table navigation reads it as the column's header.
+   pub fn cell_named<R>(
+      &mut self,
+      name: impl Into<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
+      self.cell_impl(Some(name.into()), add)
+   }
+
+   fn cell_impl<R>(
+      &mut self,
+      name: Option<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
       let i = self.next;
       self.next += 1;
 
@@ -996,7 +1135,16 @@ impl TableHeader<'_> {
          Some(column) => self.cells[column],
          None => self.ui.available_rect_before_wrap(),
       };
-      let mut child = self.ui.new_child(UiBuilder::new().max_rect(rect).layout(cell_layout()));
+      let mut child = self.ui.new_child(
+         UiBuilder::new()
+            .max_rect(rect)
+            .layout(cell_layout())
+            .accessibility_parent(self.node),
+      );
+      report_role(&child, Role::ColumnHeader);
+      if let Some(name) = name {
+         name_cell(&child, name);
+      }
       let inner = add(&mut child);
       InnerResponse {
          response: child.response(),
@@ -1013,6 +1161,9 @@ pub struct TableRow<'a> {
    next: usize,
    rect: Rect,
    index: usize,
+   /// The row's node in the accessibility tree; its cells hang under it. [`Id::NULL`] on the
+   /// measuring pass, which builds no nodes.
+   node: Id,
 }
 
 impl TableRow<'_> {
@@ -1034,6 +1185,27 @@ impl TableRow<'_> {
 
    /// Add one cell. The cell layout is left-to-right, vertically centred, and not clipped.
    pub fn cell<R>(&mut self, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+      self.cell_impl(None, add)
+   }
+
+   /// Add one cell whose node carries `name` as its accessible label.
+   ///
+   /// Same cell as [`Self::cell`], built from the same content; only the node's name differs. An
+   /// unnamed cell is a bare "cell" to a reader's table navigation, because ARIA's name-from-
+   /// contents needs the widgets a `Ui` added, which egui does not expose.
+   pub fn cell_named<R>(
+      &mut self,
+      name: impl Into<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
+      self.cell_impl(Some(name.into()), add)
+   }
+
+   fn cell_impl<R>(
+      &mut self,
+      name: Option<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
       let i = self.next;
       self.next += 1;
 
@@ -1062,7 +1234,16 @@ impl TableRow<'_> {
          Some(column) => self.cells[column],
          None => self.ui.available_rect_before_wrap(),
       };
-      let mut child = self.ui.new_child(UiBuilder::new().max_rect(rect).layout(cell_layout()));
+      let mut child = self.ui.new_child(
+         UiBuilder::new()
+            .max_rect(rect)
+            .layout(cell_layout())
+            .accessibility_parent(self.node),
+      );
+      report_role(&child, Role::Cell);
+      if let Some(name) = name {
+         name_cell(&child, name);
+      }
       let inner = add(&mut child);
       InnerResponse {
          response: child.response(),
@@ -1075,6 +1256,7 @@ impl TableRow<'_> {
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeKind};
+   use egui::accesskit::NodeId;
    use egui::{Pos2, Shape, epaint::RectShape, vec2};
 
    fn themed_ctx() -> egui::Context {
@@ -2107,6 +2289,182 @@ mod tests {
       assert!(
          (cards[1].rect.min.y - cards[0].rect.min.y - pitch).abs() < 0.5,
          "cards stack by the pitch, not by the viewport"
+      );
+   }
+
+   /// The accessibility tree a themed table of [`ROWS`] and two columns produces, built over two
+   /// frames so it is taken from a placing pass — the measuring pass builds no nodes.
+   fn table_update(ctx: &egui::Context) -> egui::accesskit::TreeUpdate {
+      let mut update = None;
+      for _ in 0..2 {
+         let mut out = frame(ctx, vec2(500.0, 400.0), |ui| {
+            scope(ui, |ui| {
+               Table::new("a11y", &ROWS).columns([Column::Auto, Column::Fr(1.0)]).show(
+                  ui,
+                  |table| {
+                     table.header(|header| {
+                        for name in ["Deployer", "Action"] {
+                           header.cell(|ui| {
+                              ui.label(name);
+                           });
+                        }
+                     });
+                     table.rows(|row, item| {
+                        row.cell(|ui| {
+                           ui.label(item.0);
+                        });
+                        row.cell(|ui| {
+                           ui.label(item.1);
+                        });
+                     });
+                  },
+               );
+            });
+         });
+         update = out.platform_output.accesskit_update.take();
+      }
+      update.expect("an AccessKit-enabled frame must produce a tree update")
+   }
+
+   /// The table is a table in the accessibility tree, not a flat run of labels: one `Table` node
+   /// carrying the row and column counts a screen reader announces with it.
+   #[test]
+   fn the_table_reports_a_table_node_with_its_counts() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let update = table_update(&ctx);
+
+      let (_, table) = update
+         .nodes
+         .iter()
+         .find(|(_, node)| node.role() == Role::Table)
+         .expect("the table must report a table node");
+      assert_eq!(
+         table.row_count(),
+         Some(ROWS.len()),
+         "the table must count its rows"
+      );
+      assert_eq!(
+         table.column_count(),
+         Some(2),
+         "one column per spec"
+      );
+   }
+
+   /// Every row is a `Row` node under the table, and the label a cell draws hangs under that cell,
+   /// which hangs under the row — the grouping a screen reader needs to walk a table row by row.
+   #[test]
+   fn every_row_is_a_row_node_holding_its_cells() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let update = table_update(&ctx);
+
+      let node =
+         |id: &NodeId| update.nodes.iter().find(|(node_id, _)| node_id == id).map(|(_, node)| node);
+
+      let (_, table) = update
+         .nodes
+         .iter()
+         .find(|(_, node)| node.role() == Role::Table)
+         .expect("the table must report a table node");
+      let rows: Vec<_> = update.nodes.iter().filter(|(_, node)| node.role() == Role::Row).collect();
+      assert_eq!(
+         rows.len(),
+         ROWS.len() + 1,
+         "a header row plus one row per item"
+      );
+      for (id, _) in &rows {
+         assert!(
+            table.children().contains(id),
+            "every row must hang under the table"
+         );
+      }
+
+      let body: Vec<_> = rows
+         .iter()
+         .filter(|(_, row)| {
+            row.children()
+               .iter()
+               .filter_map(|id| node(id))
+               .any(|cell| cell.role() == Role::Cell)
+         })
+         .collect();
+      assert_eq!(body.len(), ROWS.len(), "one row node per item");
+      for (_, row) in body {
+         let cells: Vec<_> = row.children().iter().filter_map(|id| node(id)).collect();
+         assert_eq!(cells.len(), 2, "a row holds one cell per column");
+         for cell in cells {
+            assert_eq!(cell.role(), Role::Cell);
+            assert!(
+               cell
+                  .children()
+                  .iter()
+                  .filter_map(|id| node(id))
+                  .any(|child| child.role() == Role::Label),
+               "the label the cell draws must hang under the cell"
+            );
+         }
+      }
+   }
+
+   /// A named cell carries the host's name on the cell node, and a cell the host leaves unnamed stays
+   /// bare: a reader's table navigation would otherwise say only "cell".
+   #[test]
+   fn a_named_cell_carries_its_name() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let mut update = None;
+      for _ in 0..2 {
+         let mut out = frame(&ctx, vec2(500.0, 400.0), |ui| {
+            scope(ui, |ui| {
+               Table::new("named", &ROWS).columns([Column::Auto, Column::Fr(1.0)]).show(
+                  ui,
+                  |table| {
+                     table.header(|header| {
+                        header.cell_named("Wallet", |ui| {
+                           ui.label("Wallet");
+                        });
+                        header.cell(|ui| {
+                           ui.label("Action");
+                        });
+                     });
+                     table.rows(|row, item| {
+                        row.cell_named(item.0, |ui| {
+                           ui.label(item.0);
+                        });
+                        row.cell(|ui| {
+                           ui.label(item.1);
+                        });
+                     });
+                  },
+               );
+            });
+         });
+         update = out.platform_output.accesskit_update.take();
+      }
+      let update = update.expect("an AccessKit-enabled frame must produce a tree update");
+
+      // Node order is the tree's, not the table's, so compare the sets.
+      let names = |role: Role| -> Vec<Option<&str>> {
+         let mut names: Vec<_> = update
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == role)
+            .map(|(_, node)| node.label())
+            .collect();
+         names.sort();
+         names
+      };
+
+      assert_eq!(
+         names(Role::ColumnHeader),
+         [None, Some("Wallet")],
+         "the named header keeps its name, the unnamed one stays bare"
+      );
+      assert_eq!(
+         names(Role::Cell),
+         [None, None, Some("Deployer"), Some("Router")],
+         "each row's named cell keeps its name, the unnamed one stays bare"
       );
    }
 }
