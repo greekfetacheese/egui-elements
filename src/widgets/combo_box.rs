@@ -5,8 +5,9 @@ use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use egui::{
    Align, Align2, Frame, Id, InnerResponse, Layout, NumExt, Painter, Popup, PopupCloseBehavior,
-   PopupKind, Pos2, Rect, Response, ScrollArea, Sense, Shadow, Stroke, TextWrapMode, Ui, UiBuilder,
-   Vec2, WidgetText, emath::Rot2, epaint::Shape, style::WidgetVisuals,
+   PopupKind, Pos2, Rect, Response, Role, ScrollArea, Sense, Shadow, Stroke, TextWrapMode, Ui,
+   UiBuilder, Vec2, WidgetInfo, WidgetText, accesskit, emath::Rot2, epaint::Shape,
+   style::WidgetVisuals,
 };
 
 use std::{fmt::Debug, hash::Hash, ops::Range};
@@ -224,6 +225,11 @@ impl ComboBox {
       }
 
       popup.show(|ui| {
+         // The rows are a list, not a loose handful of buttons in a floating card.
+         ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_role(accesskit::Role::ListBox);
+         });
+
          let scroll = ScrollArea::vertical()
             .max_height(popup_max_h)
             .max_width(popup_max_w)
@@ -284,7 +290,7 @@ fn combo_box_with_image_button(
       item_for_measurement = item_for_measurement.wrap_mode(wrap_mode);
    }
 
-   let (_, content_size) = item_for_measurement.galley_and_size(ui, width_for_layout);
+   let (measured, content_size) = item_for_measurement.galley_and_size(ui, width_for_layout);
 
    // Calculate the total inner size needed (content + icon)
    let inner_width = content_size.x + icon_spacing + icon_width;
@@ -304,6 +310,14 @@ fn combo_box_with_image_button(
 
    // Allocation & Interaction
    let (rect, response) = ui.allocate_exact_size(button_size, Sense::click());
+
+   // The closed face's text is the name, and a combo box has to say whether its list is
+   // showing: a keyboard or AT user opens it with the same click the pointer sends, but has
+   // no chevron to look at for the state.
+   response.widget_info(|| WidgetInfo::labeled(Role::Button, ui.is_enabled(), measured.text()));
+   ui.ctx().accesskit_node_builder(response.id, |node| {
+      node.set_expanded(is_popup_open)
+   });
 
    // The open flag is a state, not a transition: only the chevron eases, so it lands facing
    // up while the chrome has already switched.
@@ -468,6 +482,16 @@ mod tests {
       output
    }
 
+   fn accesskit_nodes(output: &mut FullOutput) -> Vec<egui::accesskit::Node> {
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+
+      update.nodes.into_iter().map(|(_, node)| node).collect()
+   }
+
    fn press(pos: Pos2, pressed: bool) -> Event {
       Event::PointerButton {
          pos,
@@ -529,6 +553,51 @@ mod tests {
          }
       }
       output.shapes.iter().find_map(|clipped| find(&clipped.shape, fill, above))
+   }
+
+   #[test]
+   fn the_trigger_reports_its_selection_and_state() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+
+      let mut output = run_frame(&ctx, Vec::new(), 10.0, |ui| {
+         ComboBox::new("speech", Label::new("Tokyo Night", None))
+            .width(160.0)
+            .show_ui(ui, |_ui| {});
+      });
+
+      let nodes = accesskit_nodes(&mut output);
+      let button = nodes
+         .iter()
+         .find(|node| node.role() == Role::Button)
+         .expect("no button node in the tree");
+
+      assert_eq!(button.label(), Some("Tokyo Night"));
+      assert_eq!(button.is_expanded(), Some(false));
+   }
+
+   #[test]
+   fn an_open_combo_box_says_it_is_expanded() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+
+      let (mut output, _button) = open_popup(&ctx, |ui| {
+         ComboBox::new("speech", Label::new("Tokyo Night", None))
+            .width(160.0)
+            .show_ui(ui, |_ui| {});
+      });
+
+      let nodes = accesskit_nodes(&mut output);
+      let button = nodes
+         .iter()
+         .find(|node| node.role() == Role::Button)
+         .expect("no button node in the tree");
+
+      assert_eq!(button.is_expanded(), Some(true));
+      assert!(
+         nodes.iter().any(|node| node.role() == Role::ListBox),
+         "the open popup is a list, not a floating card"
+      );
    }
 
    #[test]
