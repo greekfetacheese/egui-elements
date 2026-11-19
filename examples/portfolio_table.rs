@@ -167,8 +167,17 @@ impl eframe::App for PortfolioApp {
                      }
 
                      row.cell(|ui| {
-                        let button = Button::new(RichText::new("X").size(theme.typography.normal));
-                        if ui.add(button).clicked() {
+                        let glyph = RichText::new("X").size(theme.typography.normal);
+                        let button = ui.add(Button::new(glyph));
+
+                        // "X" says nothing on its own, and the row it removes is painted outside
+                        // the button: the name has to carry the row, or sixty identical buttons
+                        // read as the same word in the tab order.
+                        ui.ctx().accesskit_node_builder(button.id, |node| {
+                           node.set_label(format!("Remove {}", token.symbol));
+                        });
+
+                        if button.clicked() {
                            remove = Some(index);
                         }
                      });

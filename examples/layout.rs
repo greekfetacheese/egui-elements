@@ -401,7 +401,14 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
             r.cell(|ui| body(ui, tx.action));
             r.cell(|ui| body(ui, tx.age));
             r.cell(|ui| {
-               if ui.add(Button::new("Details")).clicked() {
+               let button = ui.add(Button::new("Details"));
+
+               // Every row carries the same button: the name has to say which row it opens.
+               ui.ctx().accesskit_node_builder(button.id, |node| {
+                  node.set_label(format!("Details for {}", tx.wallet));
+               });
+
+               if button.clicked() {
                   // No-op: the example proves the layout, not the action.
                }
             });
@@ -457,7 +464,14 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
             r.cell(|ui| body(ui, tx.action));
             r.cell(|ui| body(ui, tx.age));
             r.cell(|ui| {
-               if ui.add(Button::new("Details")).clicked() {
+               let button = ui.add(Button::new("Details"));
+
+               // Every row carries the same button: the name has to say which row it opens.
+               ui.ctx().accesskit_node_builder(button.id, |node| {
+                  node.set_label(format!("Details for {}", tx.wallet));
+               });
+
+               if button.clicked() {
                   // No-op: the example proves the layout, not the action.
                }
             });

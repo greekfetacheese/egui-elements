@@ -2217,7 +2217,12 @@ impl MailApp {
                         );
                      });
                      row.cell(|ui| {
-                        ui.add(Button::new("Save").small().min_size(vec2(38.0, 24.0)));
+                        let button = ui.add(Button::new("Save").small().min_size(vec2(38.0, 24.0)));
+
+                        // One per file, all reading "Save": the name has to say which file.
+                        ui.ctx().accesskit_node_builder(button.id, |node| {
+                           node.set_label(format!("Save {}", file.name));
+                        });
                      });
                   });
                });
