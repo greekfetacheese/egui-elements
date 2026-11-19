@@ -40,7 +40,9 @@ impl Announcer {
    /// Put `text` in the live status node.
    ///
    /// A screen reader speaks `text` when it differs from the previous frame. The node is
-   /// not drawn; it exists only in the accessibility tree.
+   /// not drawn; it exists only in the accessibility tree. An empty `text` keeps the node
+   /// in the tree and says nothing, so a host can go quiet without losing the node the
+   /// next announcement needs.
    pub fn announce(&self, ui: &Ui, text: impl Into<String>) {
       let text = text.into();
 
