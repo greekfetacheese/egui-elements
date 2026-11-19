@@ -175,6 +175,14 @@ fn report_role(ui: &Ui, role: Role) {
    ui.ctx().accesskit_node_builder(ui.unique_id(), |node| node.set_role(role));
 }
 
+/// Name `ui`'s own node.
+///
+/// A cell has no name of its own otherwise: ARIA derives a cell's name from its contents, and egui
+/// offers no public way to read the widgets a `Ui` added, so the host supplies the text it can see.
+fn name_cell(ui: &Ui, name: String) {
+   ui.ctx().accesskit_node_builder(ui.unique_id(), |node| node.set_label(name));
+}
+
 /// Add a child `Ui` over `rect` as a node of its own with `role`, nested under `parent`.
 ///
 /// The `Ui` claims no space in `parent` — a child `Ui` allocates nothing — and holds no cells, so it
@@ -1079,6 +1087,26 @@ pub struct TableHeader<'a> {
 impl TableHeader<'_> {
    /// Add one header cell. The cell layout is left-to-right, vertically centred, and not clipped.
    pub fn cell<R>(&mut self, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+      self.cell_impl(None, add)
+   }
+
+   /// Add one header cell whose node carries `name` as its accessible label.
+   ///
+   /// Same cell as [`Self::cell`], built from the same content; only the node's name differs. A
+   /// reader's table navigation reads it as the column's header.
+   pub fn cell_named<R>(
+      &mut self,
+      name: impl Into<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
+      self.cell_impl(Some(name.into()), add)
+   }
+
+   fn cell_impl<R>(
+      &mut self,
+      name: Option<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
       let i = self.next;
       self.next += 1;
 
@@ -1114,6 +1142,9 @@ impl TableHeader<'_> {
             .accessibility_parent(self.node),
       );
       report_role(&child, Role::ColumnHeader);
+      if let Some(name) = name {
+         name_cell(&child, name);
+      }
       let inner = add(&mut child);
       InnerResponse {
          response: child.response(),
@@ -1154,6 +1185,27 @@ impl TableRow<'_> {
 
    /// Add one cell. The cell layout is left-to-right, vertically centred, and not clipped.
    pub fn cell<R>(&mut self, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+      self.cell_impl(None, add)
+   }
+
+   /// Add one cell whose node carries `name` as its accessible label.
+   ///
+   /// Same cell as [`Self::cell`], built from the same content; only the node's name differs. An
+   /// unnamed cell is a bare "cell" to a reader's table navigation, because ARIA's name-from-
+   /// contents needs the widgets a `Ui` added, which egui does not expose.
+   pub fn cell_named<R>(
+      &mut self,
+      name: impl Into<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
+      self.cell_impl(Some(name.into()), add)
+   }
+
+   fn cell_impl<R>(
+      &mut self,
+      name: Option<String>,
+      add: impl FnOnce(&mut Ui) -> R,
+   ) -> InnerResponse<R> {
       let i = self.next;
       self.next += 1;
 
@@ -1189,6 +1241,9 @@ impl TableRow<'_> {
             .accessibility_parent(self.node),
       );
       report_role(&child, Role::Cell);
+      if let Some(name) = name {
+         name_cell(&child, name);
+      }
       let inner = add(&mut child);
       InnerResponse {
          response: child.response(),
@@ -2350,5 +2405,66 @@ mod tests {
             );
          }
       }
+   }
+
+   /// A named cell carries the host's name on the cell node, and a cell the host leaves unnamed stays
+   /// bare: a reader's table navigation would otherwise say only "cell".
+   #[test]
+   fn a_named_cell_carries_its_name() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let mut update = None;
+      for _ in 0..2 {
+         let mut out = frame(&ctx, vec2(500.0, 400.0), |ui| {
+            scope(ui, |ui| {
+               Table::new("named", &ROWS).columns([Column::Auto, Column::Fr(1.0)]).show(
+                  ui,
+                  |table| {
+                     table.header(|header| {
+                        header.cell_named("Wallet", |ui| {
+                           ui.label("Wallet");
+                        });
+                        header.cell(|ui| {
+                           ui.label("Action");
+                        });
+                     });
+                     table.rows(|row, item| {
+                        row.cell_named(item.0, |ui| {
+                           ui.label(item.0);
+                        });
+                        row.cell(|ui| {
+                           ui.label(item.1);
+                        });
+                     });
+                  },
+               );
+            });
+         });
+         update = out.platform_output.accesskit_update.take();
+      }
+      let update = update.expect("an AccessKit-enabled frame must produce a tree update");
+
+      // Node order is the tree's, not the table's, so compare the sets.
+      let names = |role: Role| -> Vec<Option<&str>> {
+         let mut names: Vec<_> = update
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == role)
+            .map(|(_, node)| node.label())
+            .collect();
+         names.sort();
+         names
+      };
+
+      assert_eq!(
+         names(Role::ColumnHeader),
+         [None, Some("Wallet")],
+         "the named header keeps its name, the unnamed one stays bare"
+      );
+      assert_eq!(
+         names(Role::Cell),
+         [None, None, Some("Deployer"), Some("Router")],
+         "each row's named cell keeps its name, the unnamed one stays bare"
+      );
    }
 }

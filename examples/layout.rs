@@ -381,7 +381,7 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
       .show(ui, |t| {
          t.header(|h| {
             for text in ["Wallet", "Chain", "Action", "Age", ""] {
-               h.cell(|ui| {
+               h.cell_named(text, |ui| {
                   ui.add(Label::new(
                      RichText::new(text)
                         .size(theme.typography.normal)
@@ -396,16 +396,16 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
             if r.index() % 2 == 1 {
                r.fill(theme.colors.widget_bg);
             }
-            r.cell(|ui| body(ui, tx.wallet));
-            r.cell(|ui| body(ui, tx.chain));
-            r.cell(|ui| body(ui, tx.action));
-            r.cell(|ui| body(ui, tx.age));
+            r.cell_named(tx.wallet, |ui| body(ui, tx.wallet));
+            r.cell_named(tx.chain, |ui| body(ui, tx.chain));
+            r.cell_named(tx.action, |ui| body(ui, tx.action));
+            r.cell_named(tx.age, |ui| body(ui, tx.age));
             r.cell(|ui| {
                let button = ui.add(Button::new("Details"));
 
-               // Every row carries the same button: the name has to say which row it opens.
+               // Every row carries the same button: the name leads with the row it opens.
                ui.ctx().accesskit_node_builder(button.id, |node| {
-                  node.set_label(format!("Details for {}", tx.wallet));
+                  node.set_label(format!("{}, details", tx.wallet));
                });
 
                if button.clicked() {
@@ -447,7 +447,7 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
       .show(ui, |t| {
          t.header(|h| {
             for text in ["Wallet", "Chain", "Action", "Age", ""] {
-               h.cell(|ui| {
+               h.cell_named(text, |ui| {
                   ui.add(Label::new(
                      RichText::new(text)
                         .size(theme.typography.normal)
@@ -459,16 +459,16 @@ fn section_table(ui: &mut Ui, theme: &Theme, page: &mut usize) {
             }
          });
          t.rows(|r, tx| {
-            r.cell(|ui| body(ui, tx.wallet));
-            r.cell(|ui| body(ui, tx.chain));
-            r.cell(|ui| body(ui, tx.action));
-            r.cell(|ui| body(ui, tx.age));
+            r.cell_named(tx.wallet, |ui| body(ui, tx.wallet));
+            r.cell_named(tx.chain, |ui| body(ui, tx.chain));
+            r.cell_named(tx.action, |ui| body(ui, tx.action));
+            r.cell_named(tx.age, |ui| body(ui, tx.age));
             r.cell(|ui| {
                let button = ui.add(Button::new("Details"));
 
-               // Every row carries the same button: the name has to say which row it opens.
+               // Every row carries the same button: the name leads with the row it opens.
                ui.ctx().accesskit_node_builder(button.id, |node| {
-                  node.set_label(format!("Details for {}", tx.wallet));
+                  node.set_label(format!("{}, details", tx.wallet));
                });
 
                if button.clicked() {
