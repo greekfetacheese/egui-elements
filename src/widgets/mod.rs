@@ -48,7 +48,7 @@ pub use modal::{IntoModalId, Modal};
 pub use multi_label::MultiLabel;
 pub use popover::{Popover, PopoverSide};
 pub use row::Row;
-pub use secure_text_edit::SecureTextEdit;
+pub use secure_text_edit::{SecureSpeech, SecureTextEdit};
 pub use slider::{Slider, SliderVisuals};
 pub use tabs::{Tabs, TabsStyle, TabsVisuals};
 pub use text_edit::{TextEdit, TextEditOutput};

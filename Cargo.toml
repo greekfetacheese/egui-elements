@@ -44,12 +44,16 @@ elegance = ["dep:egui-elegance"]
 full = ["serde", "qr-scanner", "secure-types", "qr-image", "elegance", "lucide"]
 
 [dev-dependencies]
+# `accesskit` is what puts a window on the accessibility bus at all: without it eframe
+# builds no adapter, screen readers see nothing, and Orca falls back to its own key echo
+# (which speaks the typed character even inside a password field).
 eframe = { version = "0.37", default-features = false, features = [
     "glow",
     "default_fonts",
     "wayland",
     "x11",
     "clipboard",
+    "accesskit",
 ] }
 rfd = "0.17"
 egui_extras = { version = "0.37", features = ["image", "svg"] }
@@ -145,6 +149,10 @@ name = "tabs"
 
 [[example]]
 name = "text_edit"
+
+[[example]]
+name = "secure_credentials"
+required-features = ["secure-types"]
 
 [[example]]
 name = "gradient"

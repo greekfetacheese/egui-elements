@@ -86,6 +86,7 @@
 
 mod glow;
 
+pub mod announce;
 pub mod components;
 pub mod editor;
 pub mod gradient;
@@ -98,6 +99,7 @@ pub mod utils;
 pub mod visuals;
 pub mod widgets;
 
+pub use announce::Announcer;
 pub use gradient::{Fill, Gradient, GradientDir};
 pub use layout::{Column, Flex, Item, Table, TableScroll};
 pub use motion::{
@@ -123,7 +125,7 @@ pub use widgets::{
 };
 
 #[cfg(feature = "secure-types")]
-pub use widgets::SecureTextEdit;
+pub use widgets::{SecureSpeech, SecureTextEdit};
 
 #[cfg(any(feature = "secure-types", feature = "lucide"))]
 pub use egui_lucide;
@@ -135,7 +137,9 @@ pub use egui_lucide;
 pub use components::QRScanner;
 
 #[cfg(feature = "secure-types")]
-pub use components::{CredentialsForm, InputField, SecureInputField, VirtualKeyboard};
+pub use components::{
+   AnnouncedField, Announcement, CredentialsForm, InputField, SecureInputField, VirtualKeyboard,
+};
 
 #[cfg(feature = "qr-image")]
 pub use components::QrImage;

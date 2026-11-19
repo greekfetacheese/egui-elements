@@ -53,4 +53,4 @@ pub use virtual_keyboard::VirtualKeyboard;
 pub use qr_image::{QrEcc, QrEncoding, QrImage};
 
 #[cfg(feature = "secure-types")]
-pub use credentials_form::CredentialsForm;
+pub use credentials_form::{AnnouncedField, Announcement, CredentialsForm};
