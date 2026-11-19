@@ -4,9 +4,10 @@ use crate::motion::{InteractT, Motion, animate_with};
 use crate::theme::Theme;
 use crate::visuals::ComboBoxVisuals;
 use egui::{
-   Align, Align2, Frame, Id, InnerResponse, Layout, NumExt, Painter, Popup, PopupCloseBehavior,
-   PopupKind, Pos2, Rect, Response, ScrollArea, Sense, Shadow, Stroke, TextWrapMode, Ui, UiBuilder,
-   Vec2, WidgetText, emath::Rot2, epaint::Shape, style::WidgetVisuals,
+   Align, Align2, Frame, Id, InnerResponse, Key, Layout, NumExt, Painter, Popup,
+   PopupCloseBehavior, PopupKind, Pos2, Rect, Response, Role, ScrollArea, Sense, Shadow, Stroke,
+   TextWrapMode, Ui, UiBuilder, Vec2, WidgetInfo, WidgetText, accesskit, emath::Rot2,
+   epaint::Shape, style::WidgetVisuals,
 };
 
 use std::{fmt::Debug, hash::Hash, ops::Range};
@@ -204,6 +205,19 @@ impl ComboBox {
          self.width,
       );
 
+      // The list hands the focus back to the trigger a frame after it closes: on the closing
+      // frame the trigger still shows the value from before the choice, and a reader speaks the
+      // name the focus event arrives with.
+      let focus_trigger = popup_id.with("focus_trigger");
+      let hands_back: bool = ui.ctx().data(|data| data.get_temp(focus_trigger)).unwrap_or(false);
+      if hands_back {
+         ui.ctx().data_mut(|data| data.remove::<bool>(focus_trigger));
+
+         if !is_popup_open {
+            button_response.request_focus();
+         }
+      }
+
       // Popup Handling
       let popup_max_h = self.popup_max_height.unwrap_or_else(|| ui.spacing().combo_height);
       let popup_max_w = self.width.unwrap_or(ui.available_width());
@@ -223,7 +237,12 @@ impl ComboBox {
          popup = popup.frame(popup_frame(ui, &vis));
       }
 
-      popup.show(|ui| {
+      let shown = popup.show(|ui| {
+         // The rows are a list, not a loose handful of buttons in a floating card.
+         ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
+            node.set_role(accesskit::Role::ListBox);
+         });
+
          let scroll = ScrollArea::vertical()
             .max_height(popup_max_h)
             .max_width(popup_max_w)
@@ -250,7 +269,28 @@ impl ComboBox {
                   .inner
             }
          }
-      })
+      });
+
+      // `PopupCloseBehavior::CloseOnClick` only watches the pointer: Enter, Space or an AT
+      // `Click` change the value and leave the list open, with the focus on a row that is about
+      // to be redrawn as the chosen one. Treat it as the click it stands in for -- close the
+      // list and take the focus back, so the reader hears the value that was just chosen.
+      let ctx = ui.ctx();
+      let activated = ctx
+         .memory(|memory| memory.focused())
+         .and_then(|id| ctx.read_response(id))
+         .is_some_and(|response| response.clicked());
+      let closes_on_click = close_behavior == PopupCloseBehavior::CloseOnClick;
+      let dismissed = ctx.input(|input| input.key_pressed(Key::Escape));
+
+      if is_popup_open && activated && closes_on_click {
+         Popup::close_id(ctx, popup_id);
+      }
+      if is_popup_open && ((activated && closes_on_click) || dismissed) {
+         ctx.data_mut(|data| data.insert_temp(focus_trigger, true));
+      }
+
+      shown
    }
 }
 
@@ -284,7 +324,7 @@ fn combo_box_with_image_button(
       item_for_measurement = item_for_measurement.wrap_mode(wrap_mode);
    }
 
-   let (_, content_size) = item_for_measurement.galley_and_size(ui, width_for_layout);
+   let (measured, content_size) = item_for_measurement.galley_and_size(ui, width_for_layout);
 
    // Calculate the total inner size needed (content + icon)
    let inner_width = content_size.x + icon_spacing + icon_width;
@@ -304,6 +344,14 @@ fn combo_box_with_image_button(
 
    // Allocation & Interaction
    let (rect, response) = ui.allocate_exact_size(button_size, Sense::click());
+
+   // The closed face's text is the name, and a combo box has to say whether its list is
+   // showing: a keyboard or AT user opens it with the same click the pointer sends, but has
+   // no chevron to look at for the state.
+   response.widget_info(|| WidgetInfo::labeled(Role::Button, ui.is_enabled(), measured.text()));
+   ui.ctx().accesskit_node_builder(response.id, |node| {
+      node.set_expanded(is_popup_open)
+   });
 
    // The open flag is a state, not a transition: only the chevron eases, so it lands facing
    // up while the chrome has already switched.
@@ -434,7 +482,7 @@ fn paint_default_icon(
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeKind};
-   use egui::{Context, Event, FullOutput, Modifiers, PointerButton, Pos2, RawInput};
+   use egui::{Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput};
    use std::cell::Cell;
 
    fn themed_ctx() -> Context {
@@ -468,11 +516,33 @@ mod tests {
       output
    }
 
+   fn accesskit_nodes(output: &mut FullOutput) -> Vec<egui::accesskit::Node> {
+      accesskit_update(output).nodes.into_iter().map(|(_, node)| node).collect()
+   }
+
+   fn accesskit_update(output: &mut FullOutput) -> egui::accesskit::TreeUpdate {
+      output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update")
+   }
+
    fn press(pos: Pos2, pressed: bool) -> Event {
       Event::PointerButton {
          pos,
          button: PointerButton::Primary,
          pressed,
+         modifiers: Modifiers::NONE,
+      }
+   }
+
+   fn key(key: Key) -> Event {
+      Event::Key {
+         key,
+         physical_key: None,
+         pressed: true,
+         repeat: false,
          modifiers: Modifiers::NONE,
       }
    }
@@ -529,6 +599,108 @@ mod tests {
          }
       }
       output.shapes.iter().find_map(|clipped| find(&clipped.shape, fill, above))
+   }
+
+   #[test]
+   fn the_trigger_reports_its_selection_and_state() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+
+      let mut output = run_frame(&ctx, Vec::new(), 10.0, |ui| {
+         ComboBox::new("speech", Label::new("Tokyo Night", None))
+            .width(160.0)
+            .show_ui(ui, |_ui| {});
+      });
+
+      let nodes = accesskit_nodes(&mut output);
+      let button = nodes
+         .iter()
+         .find(|node| node.role() == Role::Button)
+         .expect("no button node in the tree");
+
+      assert_eq!(button.label(), Some("Tokyo Night"));
+      assert_eq!(button.is_expanded(), Some(false));
+   }
+
+   #[test]
+   fn an_open_combo_box_says_it_is_expanded() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+
+      let (mut output, _button) = open_popup(&ctx, |ui| {
+         ComboBox::new("speech", Label::new("Tokyo Night", None))
+            .width(160.0)
+            .show_ui(ui, |_ui| {});
+      });
+
+      let nodes = accesskit_nodes(&mut output);
+      let button = nodes
+         .iter()
+         .find(|node| node.role() == Role::Button)
+         .expect("no button node in the tree");
+
+      assert_eq!(button.is_expanded(), Some(true));
+      assert!(
+         nodes.iter().any(|node| node.role() == Role::ListBox),
+         "the open popup is a list, not a floating card"
+      );
+   }
+
+   #[test]
+   fn a_keyboard_choice_hands_the_focus_back_to_the_trigger() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let choices = ["Apple", "Banana", "Cherry"];
+      let chosen = Cell::new(0usize);
+      let mut build = |ui: &mut Ui| {
+         ComboBox::new("fruit", Label::new(choices[chosen.get()], None))
+            .width(160.0)
+            .show_ui(ui, |ui| {
+               for (index, name) in choices.iter().enumerate() {
+                  if ComboBox::option(ui, *name, index == chosen.get()).clicked() {
+                     chosen.set(index);
+                  }
+               }
+            });
+      };
+
+      open_popup(&ctx, &mut build);
+      // Tab reaches the trigger, then the rows; Enter takes the second one.
+      for step in 0..3 {
+         run_frame(
+            &ctx,
+            vec![key(Key::Tab)],
+            12.0 + f64::from(step) * 0.1,
+            &mut build,
+         );
+      }
+      let mut enter = run_frame(&ctx, vec![key(Key::Enter)], 12.4, &mut build);
+      accesskit_update(&mut enter);
+      assert_eq!(chosen.get(), 1, "Enter must take the focused row");
+
+      let mut output = run_frame(&ctx, Vec::new(), 12.5, &mut build);
+      let update = accesskit_update(&mut output);
+      let (_, focused) = update
+         .nodes
+         .iter()
+         .find(|(id, _)| *id == update.focus)
+         .expect("the frame focuses a node");
+
+      assert_eq!(focused.role(), Role::Button);
+      assert_eq!(
+         focused.label(),
+         Some("Banana"),
+         "the reader hears the value that was just chosen"
+      );
+      assert_eq!(
+         focused.is_expanded(),
+         Some(false),
+         "the list is closed"
+      );
+      assert!(
+         !update.nodes.iter().any(|(_, node)| node.role() == Role::ListBox),
+         "choosing a row closes the list"
+      );
    }
 
    #[test]
