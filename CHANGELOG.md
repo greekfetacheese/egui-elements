@@ -101,6 +101,8 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - Scroll-bar geometry moved onto the theme and `Theme::install` pins it, so every `egui::ScrollArea`
   draws the same bar.
 - Documentation was rewritten as a landing-page README plus one reference page per area under `docs/`.
+- `CredentialsForm`'s announcement hook is `Send + Sync`, so a host can keep the form inside a
+  `static`. The crate's other host-IO hooks already carried the bound.
 
 ### Breaking
 

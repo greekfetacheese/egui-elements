@@ -84,7 +84,7 @@ impl fmt::Display for Announcement {
 }
 
 /// The wording of every announcement the form makes.
-type AnnounceFormatter = Arc<dyn Fn(&Announcement) -> String>;
+type AnnounceFormatter = Arc<dyn Fn(&Announcement) -> String + Send + Sync>;
 
 /// A credentials form that can be used to edit username, password, and optionally confirm password.
 ///
@@ -178,13 +178,19 @@ impl CredentialsForm {
    /// return value replaces the built-in wording. Use it to add context the form does not
    /// know (remaining attempts, a different language) -- never to speak the secret itself:
    /// the text enters the accessibility tree and the screen reader's speech history.
-   pub fn with_announce_text(mut self, text: impl Fn(&Announcement) -> String + 'static) -> Self {
+   pub fn with_announce_text(
+      mut self,
+      text: impl Fn(&Announcement) -> String + Send + Sync + 'static,
+   ) -> Self {
       self.set_announce_text(text);
       self
    }
 
    /// Build the announcement yourself; see [`Self::with_announce_text`].
-   pub fn set_announce_text(&mut self, text: impl Fn(&Announcement) -> String + 'static) {
+   pub fn set_announce_text(
+      &mut self,
+      text: impl Fn(&Announcement) -> String + Send + Sync + 'static,
+   ) {
       self.announcement_text = Some(Arc::new(text));
    }
 
