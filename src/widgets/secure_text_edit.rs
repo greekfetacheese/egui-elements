@@ -137,8 +137,10 @@ pub struct SecureTextEditOutput {
 /// [`password`](SecureTextEdit::password) is on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SecureSpeech {
-   /// Expose the mask (one bullet per character), so a screen reader says
-   /// "bullet" per keystroke: the user hears that keys registered, never the secret.
+   /// Expose the mask (one bullet per character) in place of the secret: keys register
+   /// without the text ever being read. A reader that withholds its voice from a password
+   /// field (Orca does) says nothing here, which is why a host announces a count through
+   /// [`crate::Announcer`] instead.
    #[default]
    Masked,
    /// Expose the plaintext. Opt-in and warned: the secret enters the accessibility

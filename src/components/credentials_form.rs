@@ -22,11 +22,14 @@ pub enum AnnouncedField {
 
 impl AnnouncedField {
    /// The field's name as it is spoken.
+   ///
+   /// Matches the visible row label, so focus and an announcement name the field the
+   /// same way.
    pub fn label(self) -> &'static str {
       match self {
          Self::Username => "Username",
          Self::Password => "Password",
-         Self::ConfirmPassword => "Confirm password",
+         Self::ConfirmPassword => "Confirm Password",
       }
    }
 }
@@ -58,10 +61,17 @@ impl Announcement {
       self.speech
    }
 
-   /// The built-in wording: the field's name and the length of the secret.
+   /// The built-in wording.
+   ///
+   /// A masked field says how much it holds; a plain one says nothing while it has text
+   /// (the reader key-echoes those characters already) and speaks only its empty state,
+   /// which nothing else reports.
    pub fn default_text(&self) -> String {
       match self.field {
-         AnnouncedField::Username => "Username field".to_owned(),
+         AnnouncedField::Username if self.characters == 0 => {
+            format!("{}, empty", self.field.label())
+         }
+         AnnouncedField::Username => String::new(),
          field => count_text(field.label(), self.characters),
       }
    }
@@ -77,6 +87,9 @@ impl fmt::Display for Announcement {
 type AnnounceFormatter = Arc<dyn Fn(&Announcement) -> String>;
 
 /// A credentials form that can be used to edit username, password, and optionally confirm password.
+///
+/// The form owns the live announcement a screen reader hears -- the focused masked field's
+/// length, a plain field's empty state. A [`SecureInputField`] shown on its own has none.
 pub struct CredentialsForm {
    open: bool,
    confrim_password: bool,
@@ -85,7 +98,7 @@ pub struct CredentialsForm {
    confirm_password: SecureInputField,
    y_spacing: f32,
    x_spacing: f32,
-   last_focused: &'static str,
+   last_focused: Option<&'static str>,
    virtual_keyboard: VirtualKeyboard,
    speech: SecureSpeech,
    announcer: Announcer,
@@ -110,7 +123,7 @@ impl CredentialsForm {
          confirm_password,
          y_spacing: 15.0,
          x_spacing: 10.0,
-         last_focused: "Username",
+         last_focused: None,
          virtual_keyboard: VirtualKeyboard::new(false),
          speech: SecureSpeech::Masked,
          announcer: Announcer::new("credentials_form"),
@@ -368,19 +381,21 @@ impl CredentialsForm {
    /// What the live status node says about the field in focus.
    ///
    /// Only the masked fields are counted: the username is not hidden, so a screen reader
-   /// already echoes its keystrokes. The count is the whole point -- the text never leaves
-   /// the process.
+   /// already echoes its keystrokes and a count would only double the speech. The count is
+   /// the whole point -- the text never leaves the process.
    fn announce_text(&self) -> String {
-      let announcement = self.announcement();
-      match &self.announcement_text {
-         Some(text) => text(&announcement),
-         None => announcement.default_text(),
+      match self.announcement() {
+         Some(announcement) => match &self.announcement_text {
+            Some(text) => text(&announcement),
+            None => announcement.default_text(),
+         },
+         None => String::new(),
       }
    }
 
-   /// The field in focus, as an announcement sees it.
-   fn announcement(&self) -> Announcement {
-      let (field, characters) = match self.last_focused {
+   /// The field in focus, as an announcement sees it; none until one has had focus.
+   fn announcement(&self) -> Option<Announcement> {
+      let (field, characters) = match self.last_focused? {
          "Password" => (
             AnnouncedField::Password,
             self.password.text.char_len(),
@@ -395,11 +410,11 @@ impl CredentialsForm {
          ),
       };
 
-      Announcement {
+      Some(Announcement {
          field,
          characters,
          speech: self.speech,
-      }
+      })
    }
 
    /// Paint the form (and the virtual keyboard, if enabled).
@@ -412,37 +427,38 @@ impl CredentialsForm {
          ui.spacing_mut().item_spacing.y = self.y_spacing;
          ui.spacing_mut().item_spacing.x = self.x_spacing;
 
-         let user_res = self.username.show(ui);
-         let pass_res = self.password.show(ui);
+         let username_shown = self.username.show(ui);
+         let password_shown = self.password.show(ui);
 
-         let confirm_password_focused = if self.confrim_password {
-            let res = self.confirm_password.show(ui);
-            res.map(|res| res.response.gained_focus()).unwrap_or(false)
+         let confirm_shown = if self.confrim_password {
+            self.confirm_password.show(ui)
          } else {
             self.copy_passwd_to_confirm();
-            false
+            None
          };
 
-         let username_focused = user_res.map(|res| res.response.gained_focus()).unwrap_or(false);
-
-         let password_focused = pass_res.map(|res| res.response.gained_focus()).unwrap_or(false);
+         let username_focused =
+            username_shown.as_ref().is_some_and(|output| output.response.gained_focus());
+         let password_focused =
+            password_shown.as_ref().is_some_and(|output| output.response.gained_focus());
+         let confirm_password_focused =
+            confirm_shown.as_ref().is_some_and(|output| output.response.gained_focus());
 
          if username_focused {
-            self.last_focused = "Username";
+            self.last_focused = Some("Username");
          }
 
          if password_focused {
-            self.last_focused = "Password";
+            self.last_focused = Some("Password");
          }
 
          if confirm_password_focused {
-            self.last_focused = "Confirm Password";
+            self.last_focused = Some("Confirm Password");
          }
 
          let target_text = match self.last_focused {
-            "Username" => &mut self.username.text,
-            "Password" => &mut self.password.text,
-            "Confirm Password" => &mut self.confirm_password.text,
+            Some("Password") => &mut self.password.text,
+            Some("Confirm Password") => &mut self.confirm_password.text,
             _ => &mut self.username.text,
          };
 
@@ -491,20 +507,34 @@ mod tests {
    fn announce_text_counts_the_focused_password() {
       let mut form = CredentialsForm::new();
 
-      assert_eq!(form.announce_text(), "Username field");
+      assert_eq!(form.announce_text(), "");
 
-      form.last_focused = "Password";
+      form.last_focused = Some("Password");
       assert_eq!(form.announce_text(), "Password, empty");
 
       form.set_password_text(SecureString::from("abc"));
       assert_eq!(form.announce_text(), "Password, 3 characters");
 
-      form.last_focused = "Confirm Password";
+      form.last_focused = Some("Confirm Password");
       form.set_confirm_password_text(SecureString::from("x"));
       assert_eq!(
          form.announce_text(),
-         "Confirm password, 1 character"
+         "Confirm Password, 1 character"
       );
+   }
+
+   #[test]
+   fn the_username_speaks_only_its_empty_state() {
+      let mut form = CredentialsForm::new();
+      form.last_focused = Some("Username");
+
+      assert_eq!(form.announce_text(), "Username, empty");
+
+      form.set_username_text(SecureString::from("alice"));
+      assert_eq!(form.announce_text(), "");
+
+      form.set_username_text(SecureString::from(""));
+      assert_eq!(form.announce_text(), "Username, empty");
    }
 
    #[test]
@@ -517,7 +547,7 @@ mod tests {
          )
       });
 
-      form.last_focused = "Password";
+      form.last_focused = Some("Password");
       form.set_password_text(SecureString::from("abc"));
 
       assert_eq!(form.announce_text(), "Password holds 3");
@@ -537,7 +567,8 @@ mod tests {
          .expect("no live status node in the tree");
 
       assert_eq!(node.live(), Some(Live::Polite));
-      assert_eq!(node.label(), Some("Username field"));
+      // No field has had focus yet, so the form stays quiet instead of naming one.
+      assert_eq!(node.label().unwrap_or_default(), "");
    }
 
    #[test]
@@ -548,6 +579,7 @@ mod tests {
       let mut form = CredentialsForm::new()
          .with_open(true)
          .with_announce_text(|announcement| format!("{}, last try", announcement.field().label()));
+      form.last_focused = Some("Username");
 
       let nodes = frame(&ctx, |ui| form.show(ui));
       let node = nodes
@@ -556,5 +588,23 @@ mod tests {
          .expect("no live status node in the tree");
 
       assert_eq!(node.label(), Some("Username, last try"));
+   }
+
+   #[test]
+   fn show_speaks_the_focused_field() {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut form = CredentialsForm::new().with_open(true);
+      form.last_focused = Some("Password");
+      form.set_password_text(SecureString::from("abc"));
+
+      let nodes = frame(&ctx, |ui| form.show(ui));
+      let node = nodes
+         .iter()
+         .find(|node| node.role() == Role::Status)
+         .expect("no live status node in the tree");
+
+      assert_eq!(node.label(), Some("Password, 3 characters"));
    }
 }
