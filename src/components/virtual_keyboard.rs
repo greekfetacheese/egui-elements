@@ -239,7 +239,11 @@ impl VirtualKeyboard {
             let space_scale = self.key_size.x / DEFAULT_KEY_SIZE.x;
             let space_width = DEFAULT_SPACE_WIDTH * space_scale;
             let button = Button::new(" ").min_size(vec2(space_width, self.key_size.y));
-            if ui.add(button).clicked() {
+            let response = ui.add(button);
+            // The key is blank by design, so its name has to be supplied: an unnamed button
+            // is a button a reader cannot use.
+            response.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Space"));
+            if response.clicked() {
                target_str.push_str(" ");
             }
          });
@@ -274,5 +278,39 @@ impl VirtualKeyboard {
             }
          }
       }
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use egui::accesskit::{Node, Role};
+   use egui::{Context, RawInput};
+
+   #[test]
+   fn the_blank_space_key_is_named() {
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+
+      let mut keyboard = VirtualKeyboard::new(true);
+      let mut text = SecureString::new_with_capacity(8).unwrap();
+
+      let mut output = ctx.run_ui(RawInput::default(), |ui| {
+         keyboard.show(&mut text, ui);
+      });
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes: Vec<Node> = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      assert!(
+         nodes
+            .iter()
+            .any(|node| node.role() == Role::Button && node.label() == Some("Space")),
+         "the blank space key needs a name a reader can say"
+      );
    }
 }
