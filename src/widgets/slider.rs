@@ -34,9 +34,9 @@ use std::sync::Arc;
 
 use egui::text::Galley;
 use egui::{
-   Align, Color32, CornerRadius, CursorIcon, DragValue, EventFilter, Key, Layout, Pos2, Rect,
+   Align, Color32, CornerRadius, CursorIcon, DragValue, EventFilter, Id, Key, Layout, Pos2, Rect,
    Response, Sense, SliderOrientation, Stroke, StrokeKind, TextStyle, TextWrapMode, Ui, UiBuilder,
-   Widget, WidgetInfo, WidgetText, emath, pos2, vec2,
+   Widget, WidgetInfo, WidgetText, accesskit, emath, pos2, vec2,
 };
 
 use crate::layout::{CrossAlign, Flex, Item};
@@ -587,6 +587,15 @@ impl Widget for Slider<'_> {
                value.set(next);
             }
          }
+
+         // A screen reader's `SetValue` is a change like a click or an arrow key: snap it into
+         // range and let the code below report it and mark the response changed.
+         if let Some(requested) = accesskit_value_request(ui, response.id) {
+            let snapped = snap_to_step(requested.clamp(lo, hi), lo, step, step_decimals);
+            if snapped != value.get() {
+               value.set(snapped);
+            }
+         }
       }
 
       let current = value.get();
@@ -703,6 +712,9 @@ impl Widget for Slider<'_> {
 
       let info_label = label_text.clone();
       response.widget_info(|| WidgetInfo::slider(enabled, current, &info_label));
+      // A value without its scale is a value a reader cannot set: declare the range, the step
+      // and the action that lets AT move it.
+      declare_accesskit_slider(ui, response.id, current, lo, hi, step);
       response = response.on_hover_cursor(if enabled {
          match orientation {
             SliderOrientation::Horizontal => CursorIcon::ResizeHorizontal,
@@ -804,6 +816,33 @@ fn paint_references(ui: &Ui, refs: &[Arc<Galley>], row: RefRow, color: Color32) 
       );
       x += galley.size().x + spacing;
    }
+}
+
+/// The value a screen reader asked this slider to take, if any.
+fn accesskit_value_request(ui: &Ui, id: Id) -> Option<f64> {
+   ui.input(|input| {
+      input
+         .accesskit_action_requests(id, accesskit::Action::SetValue)
+         .filter_map(|request| match request.data {
+            Some(accesskit::ActionData::NumericValue(value)) => Some(value),
+            _ => None,
+         })
+         .last()
+   })
+}
+
+/// Tell assistive technology what this slider is worth and how far it may go, and declare the
+/// action that lets a reader move it.
+fn declare_accesskit_slider(ui: &Ui, id: Id, value: f64, lo: f64, hi: f64, step: Option<f64>) {
+   ui.ctx().accesskit_node_builder(id, |node| {
+      node.set_min_numeric_value(lo);
+      node.set_max_numeric_value(hi);
+      if let Some(step) = step {
+         node.set_numeric_value_step(step);
+      }
+      node.set_numeric_value(value);
+      node.add_action(accesskit::Action::SetValue);
+   });
 }
 
 /// Ascending bounds of a range that may run high-to-low.
@@ -999,6 +1038,75 @@ mod tests {
       let mut out = ctx.run_ui(input, |ui| body(ui));
       out.textures_delta.clear();
       out
+   }
+
+   /// The slider's live node and its id.
+   fn accesskit_slider(
+      output: &mut FullOutput,
+   ) -> (egui::accesskit::NodeId, egui::accesskit::Node) {
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+
+      update
+         .nodes
+         .into_iter()
+         .find(|(_, node)| node.role() == egui::accesskit::Role::Slider)
+         .expect("the slider has no node")
+   }
+
+   #[test]
+   fn the_slider_declares_its_bounds_step_and_set_action() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let mut value = 40.0_f64;
+
+      let mut output = frame(&ctx, 0.1, Vec::new(), |ui| {
+         ui.add(Slider::new(&mut value, 0.0..=100.0).width(200.0).step_by(5.0));
+      });
+      let (_, node) = accesskit_slider(&mut output);
+
+      assert_eq!(node.min_numeric_value(), Some(0.0));
+      assert_eq!(node.max_numeric_value(), Some(100.0));
+      assert_eq!(node.numeric_value_step(), Some(5.0));
+      assert!(
+         node.supports_action(egui::accesskit::Action::SetValue),
+         "AT can only set a value whose SetValue action is declared"
+      );
+   }
+
+   #[test]
+   fn a_screen_reader_set_value_snaps_into_range() {
+      use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
+
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let mut value = 0.0_f64;
+      let mut render = |ui: &mut Ui| {
+         ui.add(Slider::new(&mut value, 0.0..=100.0).width(200.0).step_by(5.0));
+      };
+
+      let mut first = frame(&ctx, 0.1, Vec::new(), &mut render);
+      let (id, _) = accesskit_slider(&mut first);
+
+      frame(
+         &ctx,
+         0.2,
+         vec![Event::AccessKitActionRequest(ActionRequest {
+            action: Action::SetValue,
+            target_tree: TreeId::ROOT,
+            target_node: id,
+            data: Some(ActionData::NumericValue(42.0)),
+         })],
+         &mut render,
+      );
+
+      assert_eq!(
+         value, 40.0,
+         "a SetValue request snaps to the nearest step"
+      );
    }
 
    fn press(pos: Pos2) -> Event {
