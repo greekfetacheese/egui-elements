@@ -119,6 +119,71 @@ mod tests {
    }
 
    #[test]
+   fn an_open_menu_is_a_menu_node() {
+      use egui::accesskit::Role;
+
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+
+      let mut rect = Rect::NOTHING;
+      frame(&ctx, 0.0, vec![], |ui| {
+         rect = trigger(ui).rect;
+      });
+      let at = rect.center();
+
+      frame(&ctx, 0.1, vec![press(at)], |ui| {
+         let trigger = trigger(ui);
+         let _ = Menu::new("a11y").show_below(&trigger, |_ui| {});
+      });
+      frame(&ctx, 0.2, vec![release(at)], |ui| {
+         let trigger = trigger(ui);
+         let _ = Menu::new("a11y").show_below(&trigger, |_ui| {});
+      });
+
+      let mut out = frame(&ctx, 0.3, vec![], |ui| {
+         let trigger = trigger(ui);
+         let _ = Menu::new("a11y").show_below(&trigger, |ui| {
+            ui.add(MenuItem::new("Edit"));
+         });
+      });
+
+      let update = out
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+
+      // A popup defaults to `Role::Dialog`, which announces a dialog where a menu is showing.
+      let (menu_id, _) = update
+         .nodes
+         .iter()
+         .find(|(_, node)| node.role() == Role::Menu)
+         .expect("the popup must be a menu, not a dialog");
+
+      let (item_id, _) = update
+         .nodes
+         .iter()
+         .find(|(_, node)| node.label() == Some("Edit"))
+         .expect("the item must have a node");
+
+      // The popup's content `Ui` sits between the menu and its items, so an item is a
+      // descendant rather than a direct child: walk the tree down from the menu node.
+      let mut pending = vec![menu_id];
+      let mut found = false;
+      while let Some(id) = pending.pop() {
+         if id == item_id {
+            found = true;
+            break;
+         }
+         if let Some((_, node)) = update.nodes.iter().find(|(candidate, _)| candidate == id) {
+            pending.extend(node.children().iter());
+         }
+      }
+
+      assert!(found, "menu items must hang under the menu");
+   }
+
+   #[test]
    fn a_trigger_click_opens_the_menu() {
       let ctx = themed_ctx();
       let mut rect = Rect::NOTHING;
