@@ -3,8 +3,8 @@ use crate::motion::{InteractT, Lerp, Motion};
 use crate::theme::Theme;
 use crate::visuals::LabelVisuals;
 use egui::{
-   Align, FontSelection, Image, Pos2, Rect, Response, RichText, Sense, Shadow, Stroke,
-   TextWrapMode, Ui, Vec2, Widget, WidgetText, epaint::TextShape, style::WidgetVisuals,
+   Align, FontSelection, Image, Pos2, Rect, Response, RichText, Role, Sense, Shadow, Stroke,
+   TextWrapMode, Ui, Vec2, Widget, WidgetInfo, WidgetText, epaint::TextShape, style::WidgetVisuals,
    text::LayoutJob,
 };
 use std::sync::Arc;
@@ -491,6 +491,75 @@ impl Widget for Label {
             }
          }
       }
+
+      // The galley already carries the joined text of every span, so the accessible name
+      // costs no allocation. A label that senses clicks is an option, not static text: AT
+      // has to hear the selected state along with the words.
+      let text = galley.text();
+      response.widget_info(|| {
+         if sense.senses_click() {
+            WidgetInfo::selected(Role::Button, ui.is_enabled(), self.selected, text)
+         } else {
+            WidgetInfo::labeled(Role::Label, ui.is_enabled(), text)
+         }
+      });
+
       response
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use egui::accesskit::{Node, Role, Toggled};
+   use egui::{Context, RawInput};
+
+   fn accesskit_nodes(ctx: &Context, add: impl FnMut(&mut Ui)) -> Vec<Node> {
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), add);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      nodes
+   }
+
+   fn node_with_role(nodes: &[Node], role: Role) -> &Node {
+      nodes
+         .iter()
+         .find(|node| node.role() == role)
+         .expect("no node with the expected role")
+   }
+
+   #[test]
+   fn plain_label_names_its_text_for_accesskit() {
+      let ctx = Context::default();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(Label::new("Download icons", None));
+      });
+
+      let node = node_with_role(&nodes, Role::Label);
+
+      // A label's text rides the value: that is where the platform reads the name from,
+      // and it leaves the label property free for a labelled_by target.
+      assert_eq!(node.value(), Some("Download icons"));
+   }
+
+   #[test]
+   fn clickable_label_is_an_option_and_reports_selection() {
+      let ctx = Context::default();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(Label::new("Tokyo Night", None).selected(true).sense(Sense::click()));
+      });
+
+      let node = node_with_role(&nodes, Role::Button);
+
+      assert_eq!(node.label(), Some("Tokyo Night"));
+      assert_eq!(node.toggled(), Some(Toggled::True));
    }
 }
