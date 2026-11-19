@@ -102,6 +102,8 @@ impl Toasts {
          state.queue.pop_front();
       }
 
+      announce(ctx, state.queue.back());
+
       if state.queue.is_empty() {
          ctx.data_mut(|d| d.insert_temp(storage_id(), state));
          return;
@@ -324,6 +326,41 @@ fn measure_height(ctx: &Context, theme: &Theme, entry: &ToastEntry, width: f32) 
    height.max(44.0)
 }
 
+/// Keep the stack's live region current.
+///
+/// Danger/Warning toasts are `Alert` (assertive — interrupts the user); the rest are
+/// `Status` (polite — announced after current speech). The politeness is what actually
+/// carries the speech: AccessKit turns a live node's name change into an
+/// `object:announcement` only while the node is not `Live::Off`.
+///
+/// The node belongs to the stack, not to the toast, and stays in the tree between toasts
+/// (empty when the queue is empty): a node created together with its message has no previous
+/// name to differ from, so it would never announce anything.
+fn announce(ctx: &Context, newest: Option<&ToastEntry>) {
+   let (role, live) = match newest.map(|entry| entry.tone) {
+      Some(ChipRole::Error | ChipRole::Warning) => {
+         (accesskit::Role::Alert, accesskit::Live::Assertive)
+      }
+      _ => (accesskit::Role::Status, accesskit::Live::Polite),
+   };
+   let (label, description) = match newest {
+      Some(entry) => (entry.title.clone(), entry.description.clone()),
+      None => (String::new(), None),
+   };
+
+   ctx.accesskit_node_builder(
+      Id::unique(("egui_elements::toast_live",)),
+      |node| {
+         node.set_role(role);
+         node.set_live(live);
+         node.set_label(label);
+         if let Some(description) = description {
+            node.set_description(description);
+         }
+      },
+   );
+}
+
 /// Paint a single toast inside its area.
 fn paint_toast(
    ui: &mut Ui,
@@ -336,23 +373,6 @@ fn paint_toast(
 
    let colors = &theme.colors;
    let typography = &theme.typography;
-
-   // Upgrade the Area's Ui role from `GenericContainer` to an ARIA live
-   // region. Danger/Warning toasts are `Alert` (assertive — interrupts the
-   // user); the rest are `Status` (polite — announced after current speech).
-   let role = match entry.tone {
-      ChipRole::Error | ChipRole::Warning => accesskit::Role::Alert,
-      _ => accesskit::Role::Status,
-   };
-   let label = entry.title.clone();
-   let description = entry.description.clone();
-   ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
-      node.set_role(role);
-      node.set_label(label);
-      if let Some(description) = description {
-         node.set_description(description);
-      }
-   });
 
    // Apply the fade as a painter-level opacity multiplier instead of baking
    // alpha into every colour, so the text-layout cache key stays stable across
