@@ -86,6 +86,10 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   since a password role lets the platform withhold the value). The masked field keeps that role on
   purpose: it is what keeps a reader's key echo — which otherwise reads every typed character of an
   ordinary text input — out of the field.
+- `SecureTextEdit::accessible_name` / `accessible_hint` — the accessible name a reader announces for the field,
+  and a spoken placeholder that can differ from the drawn `hint_text`. Without a name a field is
+  announced as "text, empty"; the name stays opt-in, so a field with a visible label beside it keeps
+  using `labelled_by`.
 - `Button::alt(text)` — the text alternative for an **icon-only** button. A button built from an image
   and no text reaches the accessibility tree as a role with no name, so a reader says only "button";
   the alternative names the action (`.alt("Refresh")`) and the button's own text always wins over it.
