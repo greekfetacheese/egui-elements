@@ -228,7 +228,7 @@ struct FrameMargin {
 
 impl FrameMargin {
    /// All zeros for a table with no row frame.
-   fn of(row_frame: Option<Frame>) -> Self {
+   fn of(row_frame: Option<&Frame>) -> Self {
       let Some(frame) = row_frame else {
          return Self::default();
       };
@@ -410,7 +410,7 @@ impl<'a, T> Table<'a, T> {
       };
       // A row frame insets its cells, so the columns resolve against the card's content width. The
       // margins ride in `avail`, which is also the cache's space key: changing the frame re-measures.
-      let row_margin = FrameMargin::of(self.row_frame);
+      let row_margin = FrameMargin::of(self.row_frame.as_ref());
       let avail = vec2((avail.x - row_margin.x).max(0.0), avail.y);
 
       let gap = self.gap.unwrap_or(ui.spacing().item_spacing.x);
@@ -527,7 +527,7 @@ impl<T> TableUi<'_, '_, T> {
 
    /// The height one body row occupies: its cells plus a row frame's vertical margins.
    fn row_pitch(&self) -> f32 {
-      self.row_height + FrameMargin::of(self.row_frame).y
+      self.row_height + FrameMargin::of(self.row_frame.as_ref()).y
    }
 
    /// Resolve the cached widths and header height into this pass's extents. Returns the table's
@@ -552,7 +552,7 @@ impl<T> TableUi<'_, '_, T> {
          return;
       }
       let total = self.resolve();
-      let margin = FrameMargin::of(self.row_frame);
+      let margin = FrameMargin::of(self.row_frame.as_ref());
       let height = if self.scroll.is_some() {
          self.header_height + self.header_pad
       } else {
@@ -606,7 +606,7 @@ impl<T> TableUi<'_, '_, T> {
             self.ensure_band();
             let band = self.band.as_ref().expect("the band is allocated above").0;
             let header_height = self.header_height;
-            let margin = FrameMargin::of(self.row_frame);
+            let margin = FrameMargin::of(self.row_frame.as_ref());
             let mut cells = std::mem::take(&mut self.scratch);
             cells.clear();
             let mut x = band.min.x + self.content_margin.left as f32 + margin.left;
@@ -698,7 +698,7 @@ impl<T> TableUi<'_, '_, T> {
                   row_gap: self.row_gap,
                   gap: self.gap,
                   row_divider: self.row_divider,
-                  row_frame: self.row_frame,
+                  row_frame: self.row_frame.clone(),
                   name: self.id,
                };
                placer.place(
@@ -784,7 +784,7 @@ impl<T> TableUi<'_, '_, T> {
             row_gap: *row_gap,
             gap: *gap,
             row_divider: *row_divider,
-            row_frame: *row_frame,
+            row_frame: row_frame.clone(),
             name: id,
          };
          ui.scope_builder(
@@ -843,7 +843,7 @@ impl<T> TableUi<'_, '_, T> {
    /// host that is much too short, which then visibly grows a frame later. So this mirrors
    /// [`TableUi::rows_scrolling`] and [`TableUi::ensure_band`] exactly.
    fn placed_height(&self, top: f32, bottom: f32, row_height: f32) -> f32 {
-      let pitch = row_height + FrameMargin::of(self.row_frame).y;
+      let pitch = row_height + FrameMargin::of(self.row_frame.as_ref()).y;
 
       let Some(scroll) = self.scroll else {
          return band_height(
@@ -889,7 +889,7 @@ impl<T> TableUi<'_, '_, T> {
             // that paints anchors to.
             let measured = self.heights.iter().copied().fold(0.0, f32::max);
             let available = self.ui.available_rect_before_wrap();
-            let margin = FrameMargin::of(self.row_frame);
+            let margin = FrameMargin::of(self.row_frame.as_ref());
 
             let height = match self.rows_added {
                true => self.placed_height(available.min.y, available.bottom(), measured),
@@ -970,7 +970,7 @@ impl<T> RowPlacer<'_, '_, T> {
       add: &mut impl FnMut(&mut TableRow<'_>, &T),
    ) {
       let data = self.data;
-      let margin = FrameMargin::of(self.row_frame);
+      let margin = FrameMargin::of(self.row_frame.as_ref());
       let pitch = self.row_height + margin.y;
       // The cells' own extent, gaps included: a card hugs it, where the band a scroll area hands over
       // is the viewport width and would stretch the card past the columns.
@@ -1006,7 +1006,7 @@ impl<T> RowPlacer<'_, '_, T> {
 
          let mut cells = std::mem::take(self.scratch);
 
-         match self.row_frame {
+         match self.row_frame.clone() {
             Some(frame) => {
                // The frame owns the row's Ui: it shrinks the band by its own margins and paints
                // behind what it holds, which is exactly the geometry a card needs.
@@ -2211,7 +2211,7 @@ mod tests {
                Table::new("row_frame", &ROWS)
                   .columns([Column::Fixed(100.0), Column::Fr(1.0)])
                   .row_gap(0.0)
-                  .row_frame(card_frame)
+                  .row_frame(card_frame.clone())
                   .show(ui, |table| {
                      table.header(|header| {
                         for _ in 0..2 {

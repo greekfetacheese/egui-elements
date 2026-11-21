@@ -53,6 +53,10 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
 - `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
   egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
+- `Frame`'s accessibility surface — `.a11y_label(..)`, `.a11y_description(..)`, `.a11y_role(..)` and
+  `.a11y_hide_child(..)` put one AccessKit node on the plate: an interactive frame is a `Button`
+  (with `.selected(true)` reported as toggled), a labelled static frame is a `Label` readout, and a
+  frame with nothing to say stays out of the tree.
 - `CredentialsForm` announces the focused password field's length through its own `Announcer`, and a
   plain field's empty state (a reader key-echoes its characters already; its emptiness nothing else
   reports), so a host gets the feedback without wiring anything: `with_speech` / `set_speech` (also on
@@ -106,6 +110,8 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 
 ### Breaking
 
+- `Frame` is no longer `Copy`: it owns its accessibility label, so a value used twice needs
+  `.clone()` (or a second builder chain).
 - `widgets::spinner` is now `widgets::loaders`; the `Spinner` type keeps its name and crate-root export.
 - Themed visual structs carry `Fill` instead of a bare `Color32` in their fill fields; construct them with
   `Fill::solid(..)` / `.into()`, or set the palette colour and let `Theme` grade it.

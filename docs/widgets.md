@@ -761,6 +761,12 @@ let row = Frame::new()
   selection with `.fill()`.
 - `show(ui, |ui| …)` returns an `InnerResponse`. `.begin(ui)` hands back the content `Ui` plus a
   `Prepared` when a widget has to paint its own corner chrome (badges, custom rows).
+- Accessibility: `.a11y_label(text)` names the plate, `.a11y_description(text)` adds the sentence read
+  after the name, `.a11y_role(role)` overrides the announced role, and `.a11y_hide_child(id)` hides a
+  child node whose text repeats the plate's. `.interactive(true)` is announced as a `Button` (with
+  `.selected(true)` reported as toggled), so an interactive plate needs a label; a plain plate that
+  carries one is a `Label`, which is how a readout card gets read out. A frame with none of these is
+  not in the tree at all.
 - `Frame::to_egui()` hands the static chrome to an `egui::Frame`: margins, radius, shadow, border
   and one fill egui can paint. A gradient lands on `Fill::to_solid` (the ramp's midpoint) and
   `.selected(true)` hands over `bg_selected`; hover / click visuals, `.sense()` and `.fill_width()`
