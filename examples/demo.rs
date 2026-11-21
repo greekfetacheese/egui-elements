@@ -762,8 +762,13 @@ impl DemoApp {
             .min_size(button_size);
          ui.add(btn);
 
-         // Icon buttons keep the image's own size and pad symmetrically.
-         ui.add(Button::icon(Lucide::Bell.image()).min_size(vec2(36.0, 36.0)));
+         // Icon buttons keep the image's own size and pad symmetrically. An icon-only
+         // button has no text, so `.alt(..)` is what names it for a screen reader.
+         ui.add(
+            Button::icon(Lucide::Bell.image())
+               .alt("Notifications")
+               .min_size(vec2(36.0, 36.0)),
+         );
       });
 
       ui.add_space(8.0);

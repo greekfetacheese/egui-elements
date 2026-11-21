@@ -1,4 +1,4 @@
-use egui::{Context, Image, ImageSource, Vec2, load::Bytes};
+use egui::{Context, Image, ImageSource, Response, Ui, Vec2, load::Bytes};
 use image::{ImageBuffer, ImageFormat, Luma};
 use qrcodegen_no_heap::*;
 use std::sync::Arc;
@@ -203,6 +203,10 @@ pub struct QrImage {
    module_px: u32,
    /// Stores a failure from encoding/rendering instead of ever erroring out.
    error: Option<QrError>,
+   /// Text alternative: the accessible name of the image node.
+   alt: Option<String>,
+   /// Keep the image out of the accessibility tree entirely.
+   hidden: bool,
 }
 
 impl QrImage {
@@ -255,6 +259,8 @@ impl QrImage {
          quiet_zone: encoding.quiet_zone,
          module_px,
          error,
+         alt: None,
+         hidden: false,
       }
    }
 
@@ -267,6 +273,8 @@ impl QrImage {
          quiet_zone: 0,
          module_px: 0,
          error: Some(QrError::Other(error)),
+         alt: None,
+         hidden: false,
       }
    }
 
@@ -285,16 +293,93 @@ impl QrImage {
       self.image_data.is_empty()
    }
 
+   /// Set the text alternative of the image.
+   ///
+   /// This is what a screen reader announces in place of the picture, and on a QR
+   /// symbol it is the only usable name: the module grid says nothing, and a symbol
+   /// that encodes a secret must never be announced by its texture URI.
+   ///
+   /// The name is put on the node by [`Self::show`]; [`Self::image`] passes it to
+   /// [`egui::Image::alt_text`], which is also the text egui paints in place of an
+   /// image that failed to load.
+   ///
+   /// Name **what the symbol is for**, not the payload: `.alt("Receive address QR")`.
+   pub fn alt(mut self, alt: impl Into<String>) -> Self {
+      self.alt = Some(alt.into());
+      self
+   }
+
+   /// Keep this image out of the accessibility tree.
+   ///
+   /// The symbol stays on screen and stays scannable — this only stops assistive
+   /// technology from reaching it, which is what a host wants when it already draws
+   /// its own labelled control for the same thing, or when the picture is decorative.
+   ///
+   /// Applied by [`Self::show`]; an `.alt(..)` set on the same image is still placed
+   /// on the node, but a hidden node is not announced.
+   pub fn hidden(mut self) -> Self {
+      self.hidden = true;
+      self
+   }
+
    /// Returns an [Image] that can be used in egui.
    ///
    /// It uses [Bytes::Shared] as the source so only one allocation exists.
+   ///
+   /// This is the drawing method for a host that needs its own size
+   /// (`.fit_to_exact_size(..)`); it names the node through
+   /// [`egui::Image::alt_text`] once [`.alt(..)`](Self::alt) is set, but an unnamed
+   /// pending image still reaches the tree with egui's own "Loading bytes://…"
+   /// tooltip text as its description. Use [`Self::show`] when the node has to be
+   /// right — it clears that text.
    pub fn image(&self) -> Image<'static> {
       let data = self.image_data.clone();
       let image = Image::new(ImageSource::Bytes {
          uri: self.uri.clone().into(),
          bytes: Bytes::Shared(data),
       });
-      image
+      match &self.alt {
+         Some(alt) => image.alt_text(alt.clone()),
+         None => image,
+      }
+   }
+
+   /// Draw this QR image at its natural size and name its node.
+   ///
+   /// The image is drawn at [`Self::image_size_pt`] for the current display, the size
+   /// that keeps every module on a whole pixel, and its accessibility node is then
+   /// repaired:
+   ///
+   /// - the label and the description egui derived from the texture are **cleared**,
+   ///   which removes the "Loading bytes://…" text egui turns into the description
+   ///   (and, on an unnamed image, into the label) while the texture is pending — a
+   ///   QR that encodes a secret can never be announced by its texture URI;
+   /// - [`.alt(..)`](Self::alt) becomes the label;
+   /// - [`.hidden()`](Self::hidden) marks the node hidden.
+   ///
+   /// So the node is always either named by the caller or unnamed, never named after
+   /// a texture.
+   ///
+   /// A host that needs a custom size draws [`Self::image`] itself and keeps egui's
+   /// own node, which is the unnamed-and-loading case described there.
+   pub fn show(&self, ui: &mut Ui) -> Response {
+      let size = self.image_size_pt(ui.ctx().pixels_per_point());
+      let response = ui.add(self.image().fit_to_exact_size(size));
+
+      let alt = self.alt.as_deref();
+      let hidden = self.hidden;
+      ui.ctx().accesskit_node_builder(response.id, |node| {
+         node.clear_label();
+         node.clear_description();
+         if let Some(alt) = alt {
+            node.set_label(alt);
+         }
+         if hidden {
+            node.set_hidden();
+         }
+      });
+
+      response
    }
 
    /// Size of the raster in pixels, or zero without an image.
@@ -468,6 +553,7 @@ pub(crate) fn data_to_qr(data: &str, encoding: QrEncoding) -> Result<(Vec<u8>, u
 #[cfg(test)]
 mod tests {
    use super::*;
+   use egui::{RawInput, Ui};
 
    /// A SHA-512 digest the way swiss-knife serialises it for a QR symbol: 64 bytes
    /// as 128 hex characters.
@@ -477,6 +563,102 @@ mod tests {
       "0123456789abcdef0123456789abcdef",
       "0123456789abcdef0123456789abcdef",
    );
+
+   /// The nodes of one AccessKit-enabled frame drawing `add`.
+   fn frame_nodes(add: impl FnMut(&mut Ui)) -> Vec<egui::accesskit::Node> {
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), add);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      nodes
+   }
+
+   /// Every string the node can be announced by.
+   fn spoken(node: &egui::accesskit::Node) -> String {
+      format!("{:?} {:?}", node.label(), node.description())
+   }
+
+   /// `show()` is the method that owns the node: while the texture is pending egui
+   /// labels the image after its URI, and a QR can encode a secret.
+   #[test]
+   fn show_leaves_no_texture_uri_on_the_node() {
+      let qr = QrImage::new("secret payload", "bytes://pending".to_string());
+      let nodes = frame_nodes(|ui| {
+         qr.show(ui);
+      });
+
+      assert!(
+         nodes.iter().all(|node| !spoken(node).contains("bytes://")),
+         "no node may speak a texture URI: {:?}",
+         nodes.iter().map(spoken).collect::<Vec<_>>()
+      );
+   }
+
+   #[test]
+   fn alt_names_the_node() {
+      let qr =
+         QrImage::new("secret payload", "bytes://named".to_string()).alt("Receive address QR");
+      let nodes = frame_nodes(|ui| {
+         qr.show(ui);
+      });
+
+      let image = nodes
+         .iter()
+         .find(|node| node.role() == egui::accesskit::Role::Image)
+         .expect("the QR image has no node");
+      assert_eq!(image.label(), Some("Receive address QR"));
+      assert!(
+         image.description().is_none(),
+         "the texture description must stay cleared"
+      );
+   }
+
+   /// `image()` stays the drawing method for a custom size, and it still names the
+   /// node through egui's own alt text.
+   #[test]
+   fn image_with_alt_still_names_the_node() {
+      let qr =
+         QrImage::new("secret payload", "bytes://via-image".to_string()).alt("Receive address QR");
+      let nodes = frame_nodes(|ui| {
+         let size = qr.image_size_pt(ui.ctx().pixels_per_point());
+         ui.add(qr.image().fit_to_exact_size(size));
+      });
+
+      let image = nodes
+         .iter()
+         .find(|node| node.role() == egui::accesskit::Role::Image)
+         .expect("the QR image has no node");
+      assert_eq!(image.label(), Some("Receive address QR"));
+   }
+
+   #[test]
+   fn hidden_marks_the_node_hidden() {
+      let qr = QrImage::new("secret payload", "bytes://hidden".to_string()).hidden();
+      let nodes = frame_nodes(|ui| {
+         qr.show(ui);
+      });
+
+      let image = nodes
+         .iter()
+         .find(|node| node.role() == egui::accesskit::Role::Image)
+         .expect("the QR image has no node");
+      assert!(
+         image.is_hidden(),
+         "a hidden QR must not be reachable"
+      );
+      assert!(
+         image.label().is_none(),
+         "and it carries no name either"
+      );
+   }
 
    fn raster(png: &[u8]) -> image::GrayImage {
       image::load_from_memory_with_format(png, ImageFormat::Png).unwrap().to_luma8()
