@@ -761,8 +761,8 @@ let row = Frame::new()
   selection with `.fill()`.
 - `show(ui, |ui| …)` returns an `InnerResponse`. `.begin(ui)` hands back the content `Ui` plus a
   `Prepared` when a widget has to paint its own corner chrome (badges, custom rows).
-- Accessibility: `.a11y_label(text)` names the plate, `.a11y_description(text)` adds the sentence read
-  after the name, `.a11y_role(role)` overrides the announced role, and `.a11y_hide_child(id)` hides a
+- Accessibility: `.accessible_name(text)` names the plate, `.accessible_description(text)` adds the sentence read
+  after the name, `.accessible_role(role)` overrides the announced role, and `.hide_from_accessibility(id)` hides a
   child node whose text repeats the plate's. `.interactive(true)` is announced as a `Button` (with
   `.selected(true)` reported as toggled), so an interactive plate needs a label; a plain plate that
   carries one is a `Label`, which is how a readout card gets read out. A frame with none of these is

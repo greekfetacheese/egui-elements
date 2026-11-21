@@ -32,16 +32,16 @@ use crate::visuals::FrameVisuals;
 /// A frame says nothing to assistive technology unless it is told what to say, and what it says
 /// depends on what it is on screen:
 ///
-/// - An interactive plate is a [`Role::Button`] named by [`Self::a11y_label`] — a nav entry, a list
+/// - An interactive plate is a [`Role::Button`] named by [`Self::accessible_name`] — a nav entry, a list
 ///   row, a picker. It needs that label: a button with no name is a control a reader can focus and
 ///   cannot describe. `.selected(true)` also reports `Toggled::True`, so the selected fill crosses
 ///   over to the reader instead of staying visual.
 /// - A non-interactive frame with a label is a [`Role::Label`] whose value is that text: the readout
 ///   card a host shows a balance or a status in.
-/// - [`Self::a11y_description`] adds the sentence read after the name — the address behind a
+/// - [`Self::accessible_description`] adds the sentence read after the name — the address behind a
 ///   contact, or what activating the row does.
-/// - [`Self::a11y_role`] overrides the role either case picked.
-/// - [`Self::a11y_hide_child`] hides a child node the host draws inside the frame. A plate labelled
+/// - [`Self::accessible_role`] overrides the role either case picked.
+/// - [`Self::hide_from_accessibility`] hides a child node the host draws inside the frame. A plate labelled
 ///   "Home" whose child `Label` also says "Home" is two nodes with the same words, and a reader
 ///   browsing the tree hears the name twice; hiding the child leaves the frame's own name.
 ///
@@ -62,7 +62,7 @@ pub struct Frame {
    /// Stretch the frame to the available width (useful for sidebar rows).
    pub fill_width: bool,
    /// The node this plate puts in the accessibility tree, when it has anything to say.
-   pub a11y: FrameA11y,
+   pub accessibility: FrameAccessibility,
    /// Set by [`Self::corner_radius`]. Wins over a
    /// later [`Self::visuals`], which would otherwise restore the theme radius.
    corner_radius_override: Option<CornerRadius>,
@@ -70,17 +70,17 @@ pub struct Frame {
 
 /// What a [`Frame`] says to assistive technology.
 ///
-/// Set it through the frame's `.a11y_*` builders rather than by hand: [`Self::NONE`] says nothing,
+/// Set it through the frame's `.accessible_*` builders rather than by hand: [`Self::NONE`] says nothing,
 /// and is what every frame starts with.
 #[derive(Clone, Debug, PartialEq)]
-pub struct FrameA11y {
+pub struct FrameAccessibility {
    role: Option<Role>,
    label: Option<String>,
    description: Option<String>,
    hide_child: Option<Id>,
 }
 
-impl FrameA11y {
+impl FrameAccessibility {
    /// Nothing to announce: a frame with no other accessibility field and `interactive(false)`
    /// stays out of the tree.
    pub const NONE: Self = Self {
@@ -99,7 +99,7 @@ impl FrameA11y {
    }
 }
 
-impl Default for FrameA11y {
+impl Default for FrameAccessibility {
    fn default() -> Self {
       Self::NONE
    }
@@ -130,7 +130,7 @@ impl Frame {
       interactive: false,
       selected: false,
       fill_width: false,
-      a11y: FrameA11y::NONE,
+      accessibility: FrameAccessibility::NONE,
       corner_radius_override: None,
    };
 
@@ -162,7 +162,7 @@ impl Frame {
          interactive: false,
          selected: false,
          fill_width: false,
-         a11y: FrameA11y::NONE,
+         accessibility: FrameAccessibility::NONE,
          corner_radius_override: None,
       }
    }
@@ -352,16 +352,16 @@ impl Frame {
    /// a control a reader can focus and cannot describe. On a non-interactive frame the label is what
    /// makes the plate a readout ([`Role::Label`]) instead of silent chrome.
    #[inline]
-   pub fn a11y_label(mut self, label: impl Into<String>) -> Self {
-      self.a11y.label = Some(label.into());
+   pub fn accessible_name(mut self, label: impl Into<String>) -> Self {
+      self.accessibility.label = Some(label.into());
       self
    }
 
    /// The detail a reader hears after the name: the address behind a contact, or what activating the
    /// row does.
    #[inline]
-   pub fn a11y_description(mut self, description: impl Into<String>) -> Self {
-      self.a11y.description = Some(description.into());
+   pub fn accessible_description(mut self, description: impl Into<String>) -> Self {
+      self.accessibility.description = Some(description.into());
       self
    }
 
@@ -370,8 +370,8 @@ impl Frame {
    /// The default is [`Role::Button`] when [`Self::interactive`], [`Role::Label`] when a
    /// non-interactive frame carries a label, and [`Role::GenericContainer`] otherwise.
    #[inline]
-   pub fn a11y_role(mut self, role: Role) -> Self {
-      self.a11y.role = Some(role);
+   pub fn accessible_role(mut self, role: Role) -> Self {
+      self.accessibility.role = Some(role);
       self
    }
 
@@ -382,17 +382,20 @@ impl Frame {
    /// Hiding the child leaves only the frame's own name. The child is still drawn and still takes
    /// its clicks — only its node disappears.
    #[inline]
-   pub fn a11y_hide_child(mut self, id: Id) -> Self {
-      self.a11y.hide_child = Some(id);
+   pub fn hide_from_accessibility(mut self, id: Id) -> Self {
+      self.accessibility.hide_child = Some(id);
       self
    }
 
    /// The role a reader hears for the plate, unless a builder overrode it.
    fn announced_role(&self) -> Role {
-      if let Some(role) = self.a11y.role {
+      if let Some(role) = self.accessibility.role {
          return role;
       }
-      match (self.interactive, self.a11y.label.is_some()) {
+      match (
+         self.interactive,
+         self.accessibility.label.is_some(),
+      ) {
          (true, _) => Role::Button,
          (false, true) => Role::Label,
          (false, false) => Role::GenericContainer,
@@ -402,16 +405,16 @@ impl Frame {
    /// Put the plate's own node in the tree, after `interact` filled in its rect.
    ///
    /// `WidgetInfo` carries the role, the name and the toggled state but has no description field, so
-   /// the description goes on the same node afterwards. `a11y_hide_child` runs last, once the
+   /// the description goes on the same node afterwards. `hide_from_accessibility` runs last, once the
    /// contents have added the child node it hides.
    fn declare_accessibility(&self, ui: &Ui, response: &Response) {
-      if !self.interactive && !self.a11y.announces() {
+      if !self.interactive && !self.accessibility.announces() {
          return;
       }
 
       let role = self.announced_role();
       let enabled = ui.is_enabled();
-      let label = self.a11y.label.as_deref().unwrap_or_default();
+      let label = self.accessibility.label.as_deref().unwrap_or_default();
 
       response.widget_info(|| {
          if role == Role::Button && self.selected {
@@ -421,13 +424,13 @@ impl Frame {
          }
       });
 
-      if let Some(description) = &self.a11y.description {
+      if let Some(description) = &self.accessibility.description {
          ui.ctx().accesskit_node_builder(response.id, |node| {
             node.set_description(description.clone());
          });
       }
 
-      if let Some(child) = self.a11y.hide_child {
+      if let Some(child) = self.accessibility.hide_child {
          ui.ctx().accesskit_node_builder(child, |node| node.set_hidden());
       }
    }
@@ -563,7 +566,7 @@ impl Prepared {
       ui.advance_cursor_after_rect(outer_rect);
 
       let response = ui.interact(outer_rect, self.id, self.frame.sense);
-      // After the contents, so their nodes are already in the tree for `a11y_hide_child` to reach.
+      // After the contents, so their nodes are already in the tree for `hide_from_accessibility` to reach.
       self.frame.declare_accessibility(ui, &response);
       response
    }
@@ -818,10 +821,10 @@ mod tests {
    fn an_interactive_frame_is_a_named_button_that_reports_selection() {
       let ctx = Context::default();
       let nodes = accesskit_nodes(&ctx, |ui| {
-         Frame::new().interactive(true).a11y_label("Home").show(ui, |_ui| {});
+         Frame::new().interactive(true).accessible_name("Home").show(ui, |_ui| {});
          Frame::new()
             .interactive(true)
-            .a11y_label("History")
+            .accessible_name("History")
             .selected(true)
             .show(ui, |_ui| {});
       });
@@ -840,7 +843,7 @@ mod tests {
    fn a_labelled_static_frame_is_a_readout_label() {
       let ctx = Context::default();
       let nodes = accesskit_nodes(&ctx, |ui| {
-         Frame::new().a11y_label("Available balance 1.20 ETH").show(ui, |_ui| {});
+         Frame::new().accessible_name("Available balance 1.20 ETH").show(ui, |_ui| {});
       });
 
       let node = nodes
@@ -871,7 +874,7 @@ mod tests {
       assert_eq!(
          framed.len(),
          bare.len() + 1,
-         "a Frame with no a11y fields and interactive(false) must add no node"
+         "a Frame with no accessibility fields and interactive(false) must add no node"
       );
       assert!(
          !framed.iter().any(|node| node.role() == Role::Button),
@@ -880,13 +883,13 @@ mod tests {
    }
 
    #[test]
-   fn an_a11y_description_lands_on_the_node() {
+   fn an_accessible_description_lands_on_the_node() {
       let ctx = Context::default();
       let nodes = accesskit_nodes(&ctx, |ui| {
          Frame::new()
             .interactive(true)
-            .a11y_label("Recipient")
-            .a11y_description("0x1234...cdef, copied from history")
+            .accessible_name("Recipient")
+            .accessible_description("0x1234...cdef, copied from history")
             .show(ui, |_ui| {});
       });
 
@@ -898,7 +901,7 @@ mod tests {
    }
 
    #[test]
-   fn a11y_hide_child_hides_the_child_label_node() {
+   fn hide_from_accessibility_hides_the_child_label_node() {
       let ctx = Context::default();
       let mut child = None;
 
@@ -915,8 +918,8 @@ mod tests {
       let nodes = accesskit_nodes(&ctx, |ui| {
          Frame::new()
             .interactive(true)
-            .a11y_label("Home")
-            .a11y_hide_child(child)
+            .accessible_name("Home")
+            .hide_from_accessibility(child)
             .show(ui, |ui| {
                ui.add(egui::Label::new("Home"));
             });

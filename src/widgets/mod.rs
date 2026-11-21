@@ -39,7 +39,7 @@ pub use chip::{Chip, ChipRole};
 pub use combo_box::ComboBox;
 pub use divider::Divider;
 pub use fps_meter::{FpsMeter, FpsStats, Spread};
-pub use frame::{Frame, FrameA11y};
+pub use frame::{Frame, FrameAccessibility};
 pub use indicator::{Indicator, IndicatorState};
 pub use label::Label;
 pub use loaders::{Orb, Ripple, Spinner, SpinnerShadow};

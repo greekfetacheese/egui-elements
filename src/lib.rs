@@ -117,11 +117,11 @@ pub use utils::{CONTRAST_AA_TEXT, CONTRAST_AA_UI, contrast_ratio, mix};
 pub use widgets::{
    Avatar, AvatarGroup, AvatarVisuals, Badge, BadgeAnchor, BadgeBounce, BadgeBounceTrigger,
    BadgeCorner, BadgePulse, Button, Checkbox, CheckboxShadow, CheckboxVisuals, Chip, ChipRole,
-   ComboBox, Divider, FpsMeter, FpsStats, Frame, FrameA11y, HoldBurst, HoldSettings, Indicator,
-   IndicatorState, IntoModalId, Label, Menu, MenuItem, MenuSection, Modal, MultiLabel, Orb,
-   Popover, PopoverSide, Radio, Ripple, Row, Slider, SliderVisuals, Spinner, SpinnerShadow, Spread,
-   SubMenuItem, Switch, Tabs, TabsStyle, TabsVisuals, TextEdit, TextEditOutput, Toast, Toasts,
-   ToggleShadow, ToggleVisuals, Window,
+   ComboBox, Divider, FpsMeter, FpsStats, Frame, FrameAccessibility, HoldBurst, HoldSettings,
+   Indicator, IndicatorState, IntoModalId, Label, Menu, MenuItem, MenuSection, Modal, MultiLabel,
+   Orb, Popover, PopoverSide, Radio, Ripple, Row, Slider, SliderVisuals, Spinner, SpinnerShadow,
+   Spread, SubMenuItem, Switch, Tabs, TabsStyle, TabsVisuals, TextEdit, TextEditOutput, Toast,
+   Toasts, ToggleShadow, ToggleVisuals, Window,
 };
 
 #[cfg(feature = "secure-types")]

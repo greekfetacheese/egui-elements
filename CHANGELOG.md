@@ -53,8 +53,8 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
 - `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
   egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
-- `Frame`'s accessibility surface — `.a11y_label(..)`, `.a11y_description(..)`, `.a11y_role(..)` and
-  `.a11y_hide_child(..)` put one AccessKit node on the plate: an interactive frame is a `Button`
+- `Frame`'s accessibility surface — `.accessible_name(..)`, `.accessible_description(..)`, `.accessible_role(..)` and
+  `.hide_from_accessibility(..)` put one AccessKit node on the plate: an interactive frame is a `Button`
   (with `.selected(true)` reported as toggled), a labelled static frame is a `Label` readout, and a
   frame with nothing to say stays out of the tree.
 - `CredentialsForm` announces the focused password field's length through its own `Announcer`, and a
