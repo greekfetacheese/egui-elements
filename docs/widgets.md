@@ -379,6 +379,9 @@ ui.add(SecureTextEdit::singleline(&mut password).password(true));
 - Leaving `.visuals(..)` unset falls back to the theme's text-edit chrome read from the context, so the
   field follows the installed theme without help.
 - `.hint_text(..)` is the placeholder drawn while the buffer is empty.
+- `.a11y_label("Wallet name")` names the field for a reader, and `.a11y_hint(..)` is the spoken
+  placeholder when the drawn hint is empty or should read differently; both stay unset by default, so a
+  field with a visible label should use `labelled_by` rather than name itself twice.
 - Proof: `examples/text_edit.rs` — `cargo run --example text_edit`.
 
 ## Tabs

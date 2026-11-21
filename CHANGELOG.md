@@ -72,6 +72,10 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   since a password role lets the platform withhold the value). The masked field keeps that role on
   purpose: it is what keeps a reader's key echo — which otherwise reads every typed character of an
   ordinary text input — out of the field.
+- `SecureTextEdit::a11y_label` / `a11y_hint` — the accessible name a reader announces for the field,
+  and a spoken placeholder that can differ from the drawn `hint_text`. Without a name a field is
+  announced as "text, empty"; the name stays opt-in, so a field with a visible label beside it keeps
+  using `labelled_by`.
 
 **Theme**
 
