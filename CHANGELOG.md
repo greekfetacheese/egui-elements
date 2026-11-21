@@ -57,6 +57,13 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   "×" it falls back to.
 - `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
   egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
+- `Frame`'s accessibility surface — `.accessible_name(``'static str``)`, `.labelled_by(Id)`,
+  `.accessible_description(``'static str``)`, `.described_by(Id)`, `.accessible_role(..)` and
+  `.hide_from_accessibility(..)` put one AccessKit node on the plate: an interactive frame is a
+  `Button` (with `.selected(true)` reported as toggled), a named static frame is a `Label` readout,
+  and a frame with nothing to say stays out of the tree. Names and descriptions are either static
+  strings or references to a node the host already draws, so naming allocates nothing and `Frame`
+  stays `Copy`.
 - `Row`'s accessibility surface — a row is named "Title — Subtitle", so a readout row whose meaning
   rides the second line ("Load now" over "0.4, rising") is announced whole instead of as a bare title;
   `.read_only(true)` turns the row into a `Label` readout with a hover sense instead of a clickable
