@@ -117,6 +117,10 @@ which clears AA on every built-in palette, and hover/press mix the fill toward `
 Hold-to-confirm is a button mode, not a separate widget — see
 [Hold-to-confirm buttons](#hold-to-confirm-buttons).
 
+An icon-only button draws no text, so its node has no name and a screen reader says only
+"button": `.alt("Refresh")` names the action it performs, and the button's own text always
+wins over it. A debug build asserts on an image-only button that has neither.
+
 `Button` shadows `egui::Button`: import it after `use egui::*` or alias one of the two.
 
 ## Hold-to-confirm buttons
@@ -1143,3 +1147,12 @@ label's 1.5 x body default, and `.size()` pins the square — without it the bal
 so the label keeps 60 % of the diameter, which is the reference's 108 pt of text in
 180 pt. An empty `.text("")` is the same as no label. `paint_at(&Ui, Rect)` draws it
 inside a widget you already own.
+
+## QR images
+
+`QrImage::alt("Receive address QR")` names the symbol for assistive technology and
+`QrImage::hidden()` keeps it out of that tree; `QrImage::show(ui)` draws it at its
+natural size and is the method that guarantees the node never speaks egui's pending
+"Loading bytes://…" texture text (a QR that encodes a secret must not be announced by
+its texture URI). `image()` stays the drawing method for a host that needs a custom
+size, and it only names the node through egui's own `alt_text`.

@@ -76,6 +76,18 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   since a password role lets the platform withhold the value). The masked field keeps that role on
   purpose: it is what keeps a reader's key echo — which otherwise reads every typed character of an
   ordinary text input — out of the field.
+- `Button::alt(text)` — the text alternative for an **icon-only** button. A button built from an image
+  and no text reaches the accessibility tree as a role with no name, so a reader says only "button";
+  the alternative names the action (`.alt("Refresh")`) and the button's own text always wins over it.
+  In a debug build an image-only button with neither now trips a `debug_assert!` in `atom_ui`.
+- `QrImage::alt(text)` / `QrImage::hidden()` / `QrImage::show(ui)` — the text alternative, the switch
+  that keeps the symbol out of the accessibility tree, and the drawing call that owns the node: it
+  clears the label and description egui derives from the texture, so a pending QR is never announced
+  as "Loading bytes://…" (a symbol encoding a secret would otherwise be spoken by its texture URI).
+  `image()` stays the drawing method for a custom size and names the node through egui's `alt_text`.
+- The crate's own chrome is named: the secure field's eye toggle is "Show credentials" / "Hide
+  credentials" by masking state, its QR button is "Scan a QR code", and the demo's bell is
+  "Notifications".
 
 **Theme**
 

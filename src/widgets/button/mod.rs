@@ -134,6 +134,8 @@ pub struct Button<'a> {
    limit_image_size: bool,
    symmetric_padding: bool,
    hold: Option<HoldSettings>,
+   /// Text alternative, used as the accessible name when the button has no text.
+   alt: Option<WidgetText>,
 }
 
 impl<'a> Button<'a> {
@@ -155,6 +157,7 @@ impl<'a> Button<'a> {
          limit_image_size: false,
          symmetric_padding: false,
          hold: None,
+         alt: None,
       }
    }
 
@@ -345,6 +348,38 @@ impl<'a> Button<'a> {
       self
    }
 
+   /// Set the text alternative spoken for a button that has no visible text.
+   ///
+   /// This is the **icon-only** case: a button built from an [`Image`] and nothing
+   /// else has no text atom, so without this it reaches the accessibility tree as a
+   /// `Button` with no name and a screen reader announces only "button". Name the
+   /// action, not the picture — `.alt("Refresh")`, not `.alt("arrows in a circle")`.
+   ///
+   /// A button that draws text always wins: this names the button only while it
+   /// carries no visible text, so it does nothing on an ordinary labelled button. An
+   /// image that carries its own [`Image::alt_text`] is the one case it outranks —
+   /// an `egui_lucide` icon sets that to the icon's name ("eye-off"), which says what
+   /// the picture is rather than what the button does, so `.alt("Hide credentials")`
+   /// replaces it. A selected (toggled) button keeps its `Toggled` state either way.
+   ///
+   /// In debug builds an image-only button with neither text nor `alt` trips a
+   /// `debug_assert!` in [`Button::atom_ui`]: it is a control with no name.
+   ///
+   /// ```
+   /// # use egui::__run_test_ui;
+   /// # use egui::{Image, TextureId, load::SizedTexture, vec2};
+   /// # use egui_elements::widgets::Button;
+   /// # __run_test_ui(|ui| {
+   /// let icon = Image::from_texture(SizedTexture::new(TextureId::Managed(0), vec2(16.0, 16.0)));
+   /// ui.add(Button::image(icon).alt("Refresh"));
+   /// # });
+   /// ```
+   #[inline]
+   pub fn alt(mut self, alt: impl Into<WidgetText>) -> Self {
+      self.alt = Some(alt.into());
+      self
+   }
+
    /// Set the visuals of the button
    #[inline]
    pub fn visuals(mut self, visuals: ButtonVisuals) -> Self {
@@ -479,6 +514,7 @@ impl<'a> Button<'a> {
          limit_image_size,
          symmetric_padding,
          hold,
+         alt,
       } = self;
 
       let hold_settings = hold.filter(|settings| settings.seconds > 0.0);
@@ -498,7 +534,24 @@ impl<'a> Button<'a> {
          });
       }
 
+      // The visible text names the button. An image-only button has no text atom at all,
+      // and `WidgetAtom::text` then falls back to an image's own `alt_text` — which a
+      // Lucide image sets to its icon name ("eye-off"), not to the action the button
+      // performs. So the caller's text alternative outranks that fallback, and nothing
+      // else: a visible text atom always wins over it.
+      let has_text_atom = layout.atoms.iter().any(|atom| matches!(&atom.kind, AtomKind::Text(_)));
       let text = layout.text().map(String::from);
+      let alt = alt.map(|alt| String::from(alt.text()));
+      let text = if has_text_atom { text } else { alt.or(text) };
+
+      debug_assert!(
+         // Without a name the node reaches a reader as a bare button; only an image
+         // atom can leave `text` empty, so `Button::new(())` stays out of this.
+         text.is_some()
+            || !layout.atoms.iter().any(|atom| matches!(&atom.kind, AtomKind::Image(_))),
+         "an image-only button has no accessible name: add .alt(\"…\") naming the action, \
+          e.g. Button::icon(icon).alt(\"Refresh\")"
+      );
 
       // Only the horizontal component is overridden: `Align::Min` keeps the
       // surrounding layout's own alignment, so the default emits the same shapes
@@ -789,7 +842,8 @@ impl<'a> Button<'a> {
       };
 
       // A selected button is a toggle, and the fill it paints for that is invisible to a
-      // screen reader: the state has to ride the node.
+      // screen reader: the state has to ride the node. `text` already falls back to the
+      // text alternative, so an icon-only button with `.alt(..)` is named here.
       response.response.widget_info(|| match (&text, selected) {
          (Some(text), true) => WidgetInfo::selected(Role::Button, ui.is_enabled(), true, text),
          (Some(text), false) => WidgetInfo::labeled(Role::Button, ui.is_enabled(), text),
@@ -857,6 +911,83 @@ mod tests {
          .find(|node| node.label() == Some("Normal"))
          .expect("the plain button has no node");
       assert_eq!(normal.toggled(), None);
+   }
+
+   /// An image atom with no text: the icon-only case.
+   fn icon() -> egui::Image<'static> {
+      egui::Image::from_texture(egui::load::SizedTexture::new(
+         egui::TextureId::Managed(0),
+         vec2(16.0, 16.0),
+      ))
+   }
+
+   /// The nodes of one AccessKit-enabled frame.
+   fn frame_nodes(add: impl FnMut(&mut egui::Ui)) -> Vec<egui::accesskit::Node> {
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), add);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      nodes
+   }
+
+   #[test]
+   fn an_icon_button_is_named_by_its_alt() {
+      use egui::accesskit::Role;
+
+      let nodes = frame_nodes(|ui| {
+         ui.add(Button::image(icon()).alt("Refresh"));
+      });
+
+      let button = nodes
+         .iter()
+         .find(|node| node.role() == Role::Button)
+         .expect("the icon button has no node");
+      assert_eq!(button.label(), Some("Refresh"));
+   }
+
+   /// Without a text alternative an image-only button is a nameless control; in a
+   /// debug build that is the assertion in `atom_ui`, so the case has to panic.
+   #[cfg(debug_assertions)]
+   #[test]
+   #[should_panic(expected = "an image-only button has no accessible name")]
+   fn an_icon_button_without_alt_trips_the_debug_assertion() {
+      frame_nodes(|ui| {
+         ui.add(Button::image(icon()));
+      });
+   }
+
+   /// The text alternative never overrides real text, and a toggled button keeps its
+   /// state whichever names it.
+   #[test]
+   fn text_wins_over_alt_and_a_toggle_keeps_its_state() {
+      use egui::accesskit::{Role, Toggled};
+
+      let nodes = frame_nodes(|ui| {
+         ui.add(Button::new("Send").alt("Ignored"));
+         ui.add(Button::image(icon()).alt("Mute").selected(true));
+      });
+
+      let labelled: Vec<&str> = nodes
+         .iter()
+         .filter(|node| node.role() == Role::Button)
+         .filter_map(|node| node.label())
+         .collect();
+      assert!(labelled.contains(&"Send"), "got {labelled:?}");
+      assert!(!labelled.contains(&"Ignored"), "got {labelled:?}");
+
+      let mute = nodes
+         .iter()
+         .find(|node| node.label() == Some("Mute"))
+         .expect("the toggled icon button has no node");
+      assert_eq!(mute.toggled(), Some(Toggled::True));
    }
 
    fn press(pos: Pos2) -> Event {
