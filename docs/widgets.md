@@ -219,6 +219,9 @@ style's `animation_time`; `.motion(..)` overrides it and `Motion::instant()` sna
 `Response::changed`, Space/Enter work while the box is focused, and
 `ui.add_enabled(false, Checkbox::new(..))` mutes the whole row.
 
+`.name("Use API")` names the box-only form for assistive technology — a `without_text` checkbox is
+otherwise unnamed, and a visible text always wins.
+
 ## Radios
 
 `Radio` shares the checkbox's plate — the same row, colours, shadow and clock — with
@@ -322,6 +325,9 @@ drives both the number and the tooltip, and the step decides the written precisi
 arrow keys (Home and End jump to the ends) and `Response::changed` fires on the frame that
 moves the value. `.visuals(SliderVisuals { .. })` replaces the colours for one slider — start
 from `SliderVisuals::from_theme(theme.colors)` to keep the rest.
+
+The slider's AccessKit node carries the formatted value, so a reader speaks what the screen shows
+(`"0.75 s"`, `"$42"`) instead of the bare number; the numeric value and the step stay on the node.
 
 Proof: `cargo run --example slider`.
 
@@ -649,6 +655,9 @@ ui.add(Indicator::new(IndicatorState::Connecting).pulse(BadgePulse::new().period
 presence cut-out, or a border tone for an outlined status light. The ring extends the widget's visible
 reach, so an edge-of-row dot keeps painting.
 
+`.label("RPC: connected")` names what the light reports; without it a reader hears only the state's
+own words ("status: on"), which say nothing about *which* light it is.
+
 The phase is derived from each light's id, so siblings in one row are staggered
 instead of beating in lockstep. The glow and the pulse paint outside the allocated
 square, exactly like the badge halo — leave a gap in a tight layout. A pulsing light
@@ -725,6 +734,9 @@ ui.add(
   (for example `Lucide::Bell.image()` with the `lucide` feature).
 - `.height(points)` overrides the default. `.sense(Sense)` defaults to `Sense::click()`; pass
   `Sense::hover()` when a trailing control owns the click.
+- `.read_only(true)` announces the row as a `Label` readout — the same text, hovered instead of
+  clicked and out of the tab order — and every row's name is "Title — Subtitle", so a readout row's
+  second line is spoken.
 - The trailing closure runs in a right-aligned child `Ui` whose width the row measures, so the title
   truncates before it. `.id_salt(..)` salts that child when the same row repeats on several surfaces.
 - Proof: `examples/row.rs` — `cargo run --example row --features lucide`.

@@ -414,6 +414,8 @@ impl Drop for PinOpenWeakFill {
 #[cfg(test)]
 mod tests {
    use super::*;
+   use egui::RawInput;
+   use egui::accesskit::{Node, Role};
 
    #[test]
    fn title_frame_fill_is_pinned_during_show_then_restored() {
@@ -436,5 +438,55 @@ mod tests {
             original
          );
       });
+   }
+
+   #[test]
+   fn the_window_node_carries_the_title() {
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+
+      let frame = |time: f64| {
+         let input = RawInput {
+            time: Some(time),
+            ..Default::default()
+         };
+         ctx.run_ui(input, |ui| {
+            Window::new("Settings").show(ui.ctx(), |ui| {
+               ui.label("hello");
+            });
+         })
+      };
+
+      // The first pass only creates the window's area; the node reaches the tree on the next one.
+      frame(0.0).drop_without_applying_deltas();
+      let mut output = frame(1.0);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes: Vec<Node> = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      // Stock egui emits the node from its own Window (`containers/window.rs`), so this wrapper adds
+      // none of its own: a second node would make a reader hear the title twice.
+      let window = match nodes
+         .iter()
+         .find(|node| node.role() == Role::Window && node.label() == Some("Settings"))
+      {
+         Some(window) => window,
+         None => {
+            let dump: Vec<_> = nodes
+               .iter()
+               .map(|node| (node.role(), node.label().map(str::to_string)))
+               .collect();
+            panic!("no Window node carrying the title: {dump:?}");
+         }
+      };
+
+      assert!(
+         !window.children().is_empty(),
+         "the body's nodes must hang under the window"
+      );
    }
 }

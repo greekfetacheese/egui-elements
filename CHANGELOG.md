@@ -57,6 +57,16 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   "×" it falls back to.
 - `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
   egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
+- `Row`'s accessibility surface — a row is named "Title — Subtitle", so a readout row whose meaning
+  rides the second line ("Load now" over "0.4, rising") is announced whole instead of as a bare title;
+  `.read_only(true)` turns the row into a `Label` readout with a hover sense instead of a clickable
+  `Button`, and a read-only row is not in the tab order.
+- `Indicator::label(..)` — names what a light reports ("RPC: connected", "Delegation: delegated"),
+  instead of leaving every light on a row saying "status: on".
+- `Checkbox::name(..)` — the accessible name of the `without_text` form; a visible text always wins.
+- The slider's AccessKit node carries the formatted value ("0.75 s"), so a reader speaks what the
+  screen shows instead of the bare number, while the numeric value, the step and the `SetValue`
+  action stay as they were.
 - `CredentialsForm` announces the focused password field's length through its own `Announcer`, and a
   plain field's empty state (a reader key-echoes its characters already; its emptiness nothing else
   reports), so a host gets the feedback without wiring anything: `with_speech` / `set_speech` (also on
@@ -130,6 +140,8 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 
 ### Breaking
 
+- `Indicator` is no longer `Copy`: it owns its accessibility label, so a value used twice needs
+  `.clone()` (or a second builder chain).
 - `widgets::spinner` is now `widgets::loaders`; the `Spinner` type keeps its name and crate-root export.
 - Themed visual structs carry `Fill` instead of a bare `Color32` in their fill fields; construct them with
   `Fill::solid(..)` / `.into()`, or set the palette colour and let `Theme` grade it.

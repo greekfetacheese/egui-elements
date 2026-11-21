@@ -677,16 +677,19 @@ impl Widget for Slider<'_> {
          );
       }
 
+      // The tooltip and the AccessKit node share one string: what a reader speaks must be what the
+      // screen shows, whether that is the style's number or a `.custom_formatter`'s wording.
+      let value_text = format_value(
+         ui,
+         formatter.as_ref(),
+         current,
+         min_decimals,
+         max_decimals,
+      );
+
       if show_tooltip && (response.hovered() || response.dragged() || response.has_focus()) {
-         let text = format_value(
-            ui,
-            formatter.as_ref(),
-            current,
-            min_decimals,
-            max_decimals,
-         );
          let font = TextStyle::Small.resolve(ui.style());
-         let galley = ui.painter().layout_no_wrap(text, font, shade(visuals.text));
+         let galley = ui.painter().layout_no_wrap(value_text.clone(), font, shade(visuals.text));
          let padding = vec2(7.0, 3.0);
          let size = galley.size() + padding * 2.0;
          let at = match orientation {
@@ -712,9 +715,17 @@ impl Widget for Slider<'_> {
 
       let info_label = label_text.clone();
       response.widget_info(|| WidgetInfo::slider(enabled, current, &info_label));
-      // A value without its scale is a value a reader cannot set: declare the range, the step
-      // and the action that lets AT move it.
-      declare_accesskit_slider(ui, response.id, current, lo, hi, step);
+      // A value without its scale is a value a reader cannot set: declare the range, the step and
+      // the action that lets AT move it, and hand it the text it should speak.
+      declare_accesskit_slider(
+         ui,
+         response.id,
+         current,
+         &value_text,
+         lo,
+         hi,
+         step,
+      );
       response = response.on_hover_cursor(if enabled {
          match orientation {
             SliderOrientation::Horizontal => CursorIcon::ResizeHorizontal,
@@ -831,9 +842,17 @@ fn accesskit_value_request(ui: &Ui, id: Id) -> Option<f64> {
    })
 }
 
-/// Tell assistive technology what this slider is worth and how far it may go, and declare the
-/// action that lets a reader move it.
-fn declare_accesskit_slider(ui: &Ui, id: Id, value: f64, lo: f64, hi: f64, step: Option<f64>) {
+/// Tell assistive technology what this slider is worth and how far it may go, declare the action
+/// that lets a reader move it, and hand it the value as it is written on screen.
+fn declare_accesskit_slider(
+   ui: &Ui,
+   id: Id,
+   value: f64,
+   value_text: &str,
+   lo: f64,
+   hi: f64,
+   step: Option<f64>,
+) {
    ui.ctx().accesskit_node_builder(id, |node| {
       node.set_min_numeric_value(lo);
       node.set_max_numeric_value(hi);
@@ -841,6 +860,8 @@ fn declare_accesskit_slider(ui: &Ui, id: Id, value: f64, lo: f64, hi: f64, step:
          node.set_numeric_value_step(step);
       }
       node.set_numeric_value(value);
+      // The number alone loses the unit a `.custom_formatter` puts on it ("0.75 s").
+      node.set_value(value_text);
       node.add_action(accesskit::Action::SetValue);
    });
 }
@@ -1106,6 +1127,33 @@ mod tests {
       assert_eq!(
          value, 40.0,
          "a SetValue request snaps to the nearest step"
+      );
+   }
+
+   #[test]
+   fn the_node_speaks_the_formatted_value() {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+      let mut value = 0.5_f64;
+
+      let mut output = frame(&ctx, 0.1, Vec::new(), |ui| {
+         ui.add(
+            Slider::new(&mut value, 0.0..=1.0)
+               .width(200.0)
+               .custom_formatter(|value, _| format!("{value:.1} s")),
+         );
+      });
+      let (_, node) = accesskit_slider(&mut output);
+
+      assert_eq!(
+         node.value(),
+         Some("0.5 s"),
+         "a reader must hear what the screen shows"
+      );
+      assert_eq!(
+         node.numeric_value(),
+         Some(0.5),
+         "the spoken text must not replace the number"
       );
    }
 
