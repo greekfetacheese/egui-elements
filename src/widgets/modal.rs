@@ -452,7 +452,11 @@ impl<'a> Modal<'a> {
             CornerRadius::ZERO,
             Color32::from_rgba_premultiplied(0, 0, 0, 150),
          );
-         ui.allocate_rect(screen, Sense::click())
+         // `Sense::CLICK`, not `Sense::click()`: the latter adds FOCUSABLE, which
+         // would make the full-screen backdrop a tab stop inside the modal layer -
+         // an unnamed, full-screen focus target with nothing to activate. It still
+         // senses the click that dismisses the dialog.
+         ui.allocate_rect(screen, Sense::CLICK)
       });
       if closable && self.close_on_backdrop && backdrop.inner.clicked() {
          should_close = true;
