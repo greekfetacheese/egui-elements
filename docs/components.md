@@ -41,12 +41,27 @@ let username = form.username();
 let password = form.password();
 form.erase(); // wipe the SecureString fields
 ```
+
+Row controls: `.with_mask_toggle(bool)` / `.set_mask_toggle(bool)` drop the show/hide (`Eye` /
+`EyeOff`) button on all three rows, and `.with_qr_enabled(bool)` / `.set_qr_enabled(bool)` drop the
+QR-scan button. Both default to `true`, and both remove a control only: the password and confirm rows
+keep the mask they were built with. A screen-reader user gains nothing from either button and pays a
+focus stop for each, so a host that runs the GUI for one switches both off in one call:
+
+```rust
+let mut form = CredentialsForm::new()
+    .with_open(true)
+    .with_mask_toggle(false)
+    .with_qr_enabled(false);
+```
 ## InputField / SecureInputField
 
 A single-line field with optional trailing icon buttons (show/hide for secrets, a QR scanner). The
 secure variant owns a `SecureString` and can mask; `InputField` owns a plain `String` and never masks.
 
-**Signature** `InputField::new(id, open)` · `SecureInputField::new(id, masked, open)`
+**Signature** `InputField::new(id, open)` · `SecureInputField::new(id, masked, open)` +
+`.mask_toggle(bool)` · `.qr_enabled(bool)` · `.with_min_size(Vec2)` · `.inner_margin(Margin)` ·
+`.icon_size(Vec2)`
 
 ```rust
 use egui_elements::{InputField, SecureInputField};
@@ -80,6 +95,11 @@ app.password.show(ui);
   reserves the icons itself.
 - Masking, the `Eye` / `EyeOff` toggle and `is_text_hidden` / `set_text_hidden` exist only on
   `SecureInputField`. Needs `secure-types`; the QR button also needs `qr-scanner`.
+- The two visual-only buttons can be left out: `.mask_toggle(bool)` / `.set_mask_toggle(bool)` (default
+  `true`) drop the show/hide button, and `.qr_enabled(bool)` / `.enable_qr_scanner()` /
+  `.disable_qr_scanner()` drive the QR one. The flags are controls, not state — a field built masked
+  stays masked, and `set_text_hidden` still decides the masking. `close_qr_scanner()` stops a QR
+  overlay the host no longer draws, and `disable_qr_scanner()` stops an open one itself.
 ## VirtualKeyboard
 
 An on-screen keyboard that writes into a `SecureString` — the "type a password on a touch kiosk" case.

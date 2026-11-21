@@ -26,6 +26,9 @@ pub struct SecureInputField {
    open: bool,
    pub(crate) text: SecureString,
    text_hidden: bool,
+   /// Draw the show/hide (`Eye` / `EyeOff`) button. A control flag only: it never touches
+   /// `text_hidden`, so a masked field with the toggle off stays masked.
+   mask_toggle: bool,
    speech: SecureSpeech,
    id: &'static str,
    icon_size: Vec2,
@@ -56,6 +59,7 @@ impl SecureInputField {
          open,
          text: SecureString::new_with_capacity(32).unwrap(),
          text_hidden,
+         mask_toggle: true,
          speech: SecureSpeech::Masked,
          id,
          icon_size: vec2(20.0, 20.0),
@@ -83,6 +87,20 @@ impl SecureInputField {
    /// Hide the field. Does not erase the text.
    pub fn close(&mut self) {
       self.open = false;
+   }
+
+   /// Stop an open QR overlay, if any.
+   ///
+   /// A disabled or replaced field stops advancing its scanner (the shared driver no-ops once
+   /// `qr_enabled` is off), and a scanner that is still open keeps a capture worker running, so
+   /// a host that stops drawing this field must call this. Same contract as
+   /// [`InputField::close_qr_scanner`].
+   pub fn close_qr_scanner(&mut self) {
+      #[cfg(all(
+         feature = "qr-scanner",
+         any(target_os = "linux", target_os = "windows")
+      ))]
+      self.qr_scanner.close();
    }
 
    /// Erase the text from memory
@@ -119,6 +137,23 @@ impl SecureInputField {
    pub fn qr_enabled(mut self, enabled: bool) -> Self {
       self.qr_enabled = enabled;
       self
+   }
+
+   /// Builder: draw the show/hide (`Eye` / `EyeOff`) button. Default `true`.
+   ///
+   /// `false` removes the control only: the field keeps the `text_hidden` state it was built
+   /// with, so a masked field stays masked and only
+   /// [`set_text_hidden`](Self::set_text_hidden) changes the state. Turn it off for a host whose
+   /// users cannot use a visual-only control -- the button is a focus stop that can never help
+   /// them.
+   pub fn mask_toggle(mut self, enabled: bool) -> Self {
+      self.mask_toggle = enabled;
+      self
+   }
+
+   /// Draw or drop the show/hide button; see [`mask_toggle`](Self::mask_toggle).
+   pub fn set_mask_toggle(&mut self, enabled: bool) {
+      self.mask_toggle = enabled;
    }
 
    /// Whether the text is currently masked.
@@ -179,9 +214,10 @@ impl SecureInputField {
       self.qr_enabled = true;
    }
 
-   /// Disable the QR scanner
+   /// Disable the QR scanner, stopping an overlay that is already open.
    pub fn disable_qr_scanner(&mut self) {
       self.qr_enabled = false;
+      self.close_qr_scanner();
    }
 
    /// Show this input field
@@ -200,6 +236,7 @@ impl SecureInputField {
          self.id,
          &mut self.text,
          Some(&mut hidden),
+         self.mask_toggle,
          self.min_size,
          self.inner_margin,
          WidgetText::default(),
@@ -431,6 +468,8 @@ impl InputField {
          self.id,
          &mut self.text,
          None,
+         // `InputField` never masks: `hidden: None` is already "no toggle".
+         true,
          self.min_size,
          self.inner_margin,
          self.hint_text.clone(),
@@ -498,14 +537,18 @@ fn drive_qr_scanner(
 
 /// Shared chrome for [`SecureInputField`] and [`InputField`]: the field name
 /// above the row, a single-line [`SecureTextEdit`], the Lucide `Eye` / `EyeOff`
-/// show/hide toggle when `hidden` is `Some` — plus the QR button when
-/// `qr_enabled` and the `qr-scanner` feature is active on Linux/Windows.
+/// show/hide toggle when `hidden` is `Some` and `mask_toggle` is set — plus the
+/// QR button when `qr_enabled` and the `qr-scanner` feature is active on Linux/Windows.
 ///
 /// An empty `id` skips the field-name label: the host already labels the field.
 ///
 /// `hidden` is the masking state and the flag behind the toggle; `None` means
 /// the field is never masked and no toggle is drawn. It is toggled in place, and
 /// the caller stores it back on its field.
+///
+/// `mask_toggle` draws that toggle or leaves it out. It is a control flag, not a
+/// state: the masking itself still follows `hidden`, so a host can keep the mask
+/// and drop the button.
 ///
 /// Returns the edit output and whether the QR button was clicked. The caller
 /// owns the scanner lifecycle, so the scanner stays out of this helper.
@@ -515,6 +558,7 @@ fn show_field_chrome(
    id: &'static str,
    text: &mut dyn TextBuffer,
    mut hidden: Option<&mut bool>,
+   mask_toggle: bool,
    min_size: Vec2,
    inner_margin: Option<Margin>,
    hint_text: WidgetText,
@@ -564,18 +608,20 @@ fn show_field_chrome(
          }
 
          let text_color = theme.colors.text;
-         if let Some(state) = hidden.as_deref_mut() {
-            let icon = if *state { Lucide::EyeOff } else { Lucide::Eye };
-            let img = icon.size(icon_size.x).color(text_color).image();
-            // An icon-only button has no text, so it needs the text alternative: name
-            // the action the click performs, not the icon that draws it.
-            let alt = if *state {
-               "Show credentials"
-            } else {
-               "Hide credentials"
-            };
-            if ui.add(Button::image(img).alt(alt)).clicked() {
-               *state = !*state;
+         if mask_toggle {
+            if let Some(state) = hidden.as_deref_mut() {
+               let icon = if *state { Lucide::EyeOff } else { Lucide::Eye };
+               let img = icon.size(icon_size.x).color(text_color).image();
+               // An icon-only button has no text, so it needs the text alternative: name
+               // the action the click performs, not the icon that draws it.
+               let alt = if *state {
+                  "Show credentials"
+               } else {
+                  "Hide credentials"
+               };
+               if ui.add(Button::image(img).alt(alt)).clicked() {
+                  *state = !*state;
+               }
             }
          }
 
@@ -694,6 +740,117 @@ mod tests {
       assert!(
          !names.iter().any(|name| name == "<unnamed>"),
          "every chrome button must be named: {names:?}"
+      );
+   }
+
+   /// The toggle is a control the host can leave out, and the setter drives the same flag.
+   #[test]
+   fn the_mask_toggle_can_be_left_out() {
+      let mut default = SecureInputField::new("Password", true, true);
+      let default = button_names(&field_nodes(&mut default));
+      assert!(
+         default.iter().any(|name| name == "Show credentials"),
+         "a masked field draws the toggle by default: {default:?}"
+      );
+
+      let mut bare = SecureInputField::new("Password", true, true).mask_toggle(false);
+      let nodes = field_nodes(&mut bare);
+      let names = button_names(&nodes);
+      assert!(
+         !names
+            .iter()
+            .any(|name| name == "Show credentials" || name == "Hide credentials"),
+         "the toggle must not be drawn: {names:?}"
+      );
+      assert!(
+         nodes.iter().any(|node| node.role() == Role::PasswordInput),
+         "the field itself must still be drawn: {names:?}"
+      );
+
+      bare.set_mask_toggle(true);
+      let back = button_names(&field_nodes(&mut bare));
+      assert!(
+         back.iter().any(|name| name == "Show credentials"),
+         "the setter must draw the toggle again: {back:?}"
+      );
+   }
+
+   /// Dropping the control keeps the mask: a reader still receives one mask character per
+   /// character of the secret.
+   #[test]
+   fn a_field_without_its_toggle_still_masks_its_value_for_accesskit() {
+      let mut field = SecureInputField::new("Password", true, true).mask_toggle(false);
+      field.set_text(SecureString::from("hunter2"));
+
+      let nodes = field_nodes(&mut field);
+      let node = nodes
+         .iter()
+         .find(|node| node.role() == Role::PasswordInput)
+         .expect("a masked field must stay a password input");
+      let mask = std::iter::repeat(egui::epaint::text::PASSWORD_REPLACEMENT_CHAR)
+         .take(7)
+         .collect::<String>();
+
+      assert_eq!(node.value(), Some(mask.as_str()));
+      assert!(!node.value().unwrap_or_default().contains("hunter2"));
+   }
+
+   /// `mask_toggle` is a control flag, not a mask: a field built visible with the toggle off
+   /// stays visible, which its plaintext value proves.
+   #[test]
+   fn the_mask_toggle_never_changes_the_masking_state() {
+      let mut field = SecureInputField::new("Password", false, true).mask_toggle(false);
+      field.set_text(SecureString::from("hunter2"));
+
+      let nodes = field_nodes(&mut field);
+      let names = button_names(&nodes);
+      assert!(
+         !names
+            .iter()
+            .any(|name| name == "Show credentials" || name == "Hide credentials"),
+         "no toggle is drawn: {names:?}"
+      );
+
+      let node = nodes
+         .iter()
+         .find(|node| node.role() == Role::TextInput)
+         .expect("a visible field must stay a plain text input");
+      assert_eq!(node.value(), Some("hunter2"));
+   }
+
+   /// The QR button follows `qr_enabled`, on the platform that draws it.
+   #[cfg(all(
+      feature = "qr-scanner",
+      any(target_os = "linux", target_os = "windows")
+   ))]
+   #[test]
+   fn the_qr_button_is_not_drawn_when_disabled() {
+      let mut enabled = InputField::new("Address", true);
+      let enabled = button_names(&field_nodes(&mut enabled));
+      assert!(
+         enabled.iter().any(|name| name == "Scan a QR code"),
+         "the QR button is drawn by default: {enabled:?}"
+      );
+
+      let mut disabled = InputField::new("Address", true).qr_enabled(false);
+      let disabled = button_names(&field_nodes(&mut disabled));
+      assert!(
+         !disabled.iter().any(|name| name == "Scan a QR code"),
+         "qr_enabled(false) must leave the button out: {disabled:?}"
+      );
+
+      // The mutable setter a host flips at runtime: the QR button goes, the rest of the
+      // chrome stays. (It also stops an open overlay; that has no test without a display.)
+      let mut secure = SecureInputField::new("Password", true, true);
+      secure.disable_qr_scanner();
+      let names = button_names(&field_nodes(&mut secure));
+      assert!(
+         !names.iter().any(|name| name == "Scan a QR code"),
+         "disable_qr_scanner must leave the button out: {names:?}"
+      );
+      assert!(
+         names.iter().any(|name| name == "Show credentials"),
+         "the rest of the chrome must still draw: {names:?}"
       );
    }
 }

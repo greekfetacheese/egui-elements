@@ -245,6 +245,46 @@ impl CredentialsForm {
       self
    }
 
+   /// Builder: draw the show/hide (`Eye` / `EyeOff`) button on every row. Default `true`.
+   ///
+   /// `false` drops the control from all three fields and changes nothing else: each row keeps
+   /// the masking state it was built with, so the password and confirm rows stay masked. Use it
+   /// when the people using the form cannot act on a visual-only control -- it is a focus stop
+   /// that never helps them.
+   pub fn with_mask_toggle(mut self, enabled: bool) -> Self {
+      self.set_mask_toggle(enabled);
+      self
+   }
+
+   /// Draw or drop the show/hide button on every row; see [`Self::with_mask_toggle`].
+   pub fn set_mask_toggle(&mut self, enabled: bool) {
+      self.username.set_mask_toggle(enabled);
+      self.password.set_mask_toggle(enabled);
+      self.confirm_password.set_mask_toggle(enabled);
+   }
+
+   /// Builder: draw the QR-scan button on every row (Linux/Windows + `qr-scanner` only).
+   ///
+   /// Default `true`. `false` drops the control on all three rows and leaves their scanners
+   /// undriven.
+   pub fn with_qr_enabled(mut self, enabled: bool) -> Self {
+      self.set_qr_enabled(enabled);
+      self
+   }
+
+   /// Draw or drop the QR-scan button on every row; see [`Self::with_qr_enabled`].
+   pub fn set_qr_enabled(&mut self, enabled: bool) {
+      if enabled {
+         self.username.enable_qr_scanner();
+         self.password.enable_qr_scanner();
+         self.confirm_password.enable_qr_scanner();
+      } else {
+         self.username.disable_qr_scanner();
+         self.password.disable_qr_scanner();
+         self.confirm_password.disable_qr_scanner();
+      }
+   }
+
    /// Enable the virtual keyboard.
    pub fn enable_virtual_keyboard(&mut self) {
       self.virtual_keyboard.open();
@@ -509,6 +549,37 @@ mod tests {
       nodes
    }
 
+   /// The accessible names of every button in the frame.
+   fn button_names(nodes: &[Node]) -> Vec<String> {
+      nodes
+         .iter()
+         .filter(|node| node.role() == Role::Button)
+         .map(|node| node.label().unwrap_or("<unnamed>").to_owned())
+         .collect()
+   }
+
+   /// The live status node's (`live`, label) pair -- what a reader hears from the form.
+   fn status(nodes: &[Node]) -> (Option<Live>, Option<String>) {
+      let node = nodes
+         .iter()
+         .find(|node| node.role() == Role::Status)
+         .expect("no live status node in the tree");
+      (node.live(), node.label().map(str::to_owned))
+   }
+
+   /// A form with the confirm row drawn, the row controls switched on or off, and a typed
+   /// password, so the announcement is the one a reader would hear.
+   fn form_with_row_controls(mask_toggle: bool, qr_enabled: bool) -> CredentialsForm {
+      let mut form = CredentialsForm::new()
+         .with_open(true)
+         .with_confirm_password(true)
+         .with_mask_toggle(mask_toggle)
+         .with_qr_enabled(qr_enabled);
+      form.last_focused = Some("Password");
+      form.set_password_text(SecureString::from("abc"));
+      form
+   }
+
    #[test]
    fn announce_text_counts_the_focused_password() {
       let mut form = CredentialsForm::new();
@@ -612,5 +683,79 @@ mod tests {
          .expect("no live status node in the tree");
 
       assert_eq!(node.label(), Some("Password, 3 characters"));
+   }
+
+   /// The visual-only controls go for every row in one call, and the rows stay.
+   #[test]
+   fn the_row_controls_can_be_switched_off() {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut form = form_with_row_controls(true, true);
+      let default = button_names(&frame(&ctx, |ui| form.show(ui)));
+      assert!(
+         default
+            .iter()
+            .any(|name| name == "Show credentials" || name == "Hide credentials"),
+         "the default form draws its toggles: {default:?}"
+      );
+
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut form = form_with_row_controls(false, false);
+      let nodes = frame(&ctx, |ui| form.show(ui));
+      let names = button_names(&nodes);
+      assert!(
+         !names
+            .iter()
+            .any(|name| name == "Show credentials" || name == "Hide credentials"),
+         "no row may keep its toggle: {names:?}"
+      );
+      #[cfg(all(
+         feature = "qr-scanner",
+         any(target_os = "linux", target_os = "windows")
+      ))]
+      assert!(
+         !names.iter().any(|name| name == "Scan a QR code"),
+         "no row may keep its QR button: {names:?}"
+      );
+
+      // The rows themselves are still drawn: the username as a plain field, the two masked
+      // ones as password inputs.
+      assert_eq!(
+         nodes.iter().filter(|node| node.role() == Role::PasswordInput).count(),
+         2,
+         "the two masked rows must still be drawn: {names:?}"
+      );
+      assert!(
+         nodes.iter().any(|node| node.role() == Role::TextInput),
+         "the username row must still be drawn: {names:?}"
+      );
+   }
+
+   /// Dropping the controls leaves the live status node and its wording alone.
+   #[test]
+   fn the_row_controls_do_not_change_the_announcement() {
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut form = form_with_row_controls(true, true);
+      let default = status(&frame(&ctx, |ui| form.show(ui)));
+
+      let ctx = Context::default();
+      let mut theme = Theme::new(ThemeKind::TokyoNight);
+      theme.install(&ctx);
+      let mut form = form_with_row_controls(false, false);
+      let bare = status(&frame(&ctx, |ui| form.show(ui)));
+
+      assert_eq!(bare, default);
+      assert_eq!(
+         default,
+         (
+            Some(Live::Polite),
+            Some("Password, 3 characters".to_owned())
+         )
+      );
    }
 }

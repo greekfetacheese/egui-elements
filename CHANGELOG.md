@@ -109,6 +109,12 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - The crate's own chrome is named: the secure field's eye toggle is "Show credentials" / "Hide
   credentials" by masking state, its QR button is "Scan a QR code", and the demo's bell is
   "Notifications".
+- `SecureInputField::mask_toggle` / `set_mask_toggle` / `close_qr_scanner` and
+  `CredentialsForm::with_mask_toggle` / `set_mask_toggle` / `with_qr_enabled` / `set_qr_enabled` —
+  a host can drop the visual-only show/hide and QR controls it cannot use (each costs a screen-reader
+  user a focus stop and can never help them), per field or for all three credential rows in one call.
+  Both flags default to `true`, so nothing changes unless a host opts in; disabling the QR flag also
+  stops an overlay that was already open.
 
 **Theme**
 
