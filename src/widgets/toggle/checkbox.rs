@@ -58,6 +58,7 @@ const RADIUS_RATIO: f32 = 0.17;
 pub struct Checkbox<'a> {
    checked: &'a mut bool,
    text: Option<WidgetText>,
+   name: Option<String>,
    size: Option<f32>,
    visuals: Option<CheckboxVisuals>,
    shadow: Option<CheckboxShadow>,
@@ -70,6 +71,7 @@ impl<'a> Checkbox<'a> {
       Self {
          checked,
          text: Some(text.into()),
+         name: None,
          size: None,
          visuals: None,
          shadow: None,
@@ -78,11 +80,22 @@ impl<'a> Checkbox<'a> {
    }
 
    /// A checkbox without a label, for a table cell or a toolbar.
+   ///
+   /// The box reaches assistive technology unnamed; [`name`](Self::name) supplies the words.
    pub fn without_text(checked: &'a mut bool) -> Self {
       Self {
          text: None,
          ..Self::new(checked, "")
       }
+   }
+
+   /// The accessible name of a checkbox drawn without text. Default: none.
+   ///
+   /// A visible text always wins: this names the box-only form, which would otherwise reach
+   /// assistive technology unnamed. A checkbox with neither a text nor a name stays unnamed.
+   pub fn name(mut self, name: impl Into<String>) -> Self {
+      self.name = Some(name.into());
+      self
    }
 
    /// Side of the box in points. Default `18.0`; every other measurement is a ratio of it.
@@ -116,6 +129,7 @@ impl Widget for Checkbox<'_> {
       let Checkbox {
          checked,
          text,
+         name,
          size,
          visuals,
          shadow,
@@ -127,7 +141,8 @@ impl Widget for Checkbox<'_> {
       let visuals = visuals.unwrap_or_else(|| ToggleVisuals::from_theme(colors));
       let shadow = shadow.unwrap_or(visuals.shadow);
       let enabled = ui.is_enabled();
-      let label = text.as_ref().map(|text| text.text().to_owned()).unwrap_or_default();
+      // A visible text wins: the name is only there for the box-only form, which has none.
+      let label = text.as_ref().map(|text| text.text().to_owned()).or(name).unwrap_or_default();
 
       let mut row = Row::new(ui, text, Vec2::splat(size));
       if row.response.clicked() {
@@ -154,6 +169,7 @@ impl Widget for Checkbox<'_> {
 mod tests {
    use super::*;
    use crate::theme::{Theme, ThemeKind};
+   use egui::accesskit::Node;
    use egui::{
       Context, Event, FullOutput, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2,
    };
@@ -295,5 +311,51 @@ mod tests {
          ui.add_enabled(false, Checkbox::without_text(&mut flag));
       });
       assert!(!flag, "a disabled checkbox must not toggle");
+   }
+
+   /// The checkbox node one frame leaves in the AccessKit tree.
+   fn accesskit_checkbox(mut add: impl FnMut(&mut Ui)) -> Node {
+      let ctx = themed_ctx();
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), |ui| add(ui));
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let node = update
+         .nodes
+         .into_iter()
+         .find(|(_, node)| node.role() == Role::CheckBox)
+         .map(|(_, node)| node)
+         .expect("the checkbox has no node");
+      output.drop_without_applying_deltas();
+
+      node
+   }
+
+   #[test]
+   fn without_text_takes_its_name_from_the_builder() {
+      let mut flag = false;
+      let node = accesskit_checkbox(|ui| {
+         ui.add(Checkbox::without_text(&mut flag).name("Use API"));
+      });
+
+      assert_eq!(node.label(), Some("Use API"));
+   }
+
+   #[test]
+   fn a_box_with_neither_text_nor_name_stays_unnamed() {
+      let mut flag = false;
+      let node = accesskit_checkbox(|ui| {
+         ui.add(Checkbox::without_text(&mut flag));
+      });
+
+      assert_eq!(
+         node.label(),
+         None,
+         "an empty label would take precedence over a labelled_by target"
+      );
    }
 }

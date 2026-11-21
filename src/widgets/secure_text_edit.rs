@@ -171,11 +171,26 @@ pub enum SecureSpeech {
 ///   secure buffer ignores both.
 ///
 /// Otherwise egui will make copies of that text and some of the copied allocations will stay in memory.
+///
+/// ## Accessibility
+///
+/// Assistive technology receives the field's value under a name: the mask for a password field (see
+/// [`SecureSpeech`]), the plaintext otherwise.
+///
+/// The name is required — without [`Self::accessible_name`] nothing names the field, and a reader
+/// announces it as "text, empty" with no sign of which field it is. [`Self::accessible_hint`] is the
+/// spoken placeholder when the drawn [`Self::hint_text`] is empty or is not what should be read.
+///
+/// A field with a visible label next to it should associate that label with
+/// [`egui::Response::labelled_by`] instead of naming the field twice: the association clears the
+/// node label, so a name set alongside it is dropped.
 #[must_use = "You should put this widget in a ui with `ui.add(widget);`"]
 pub struct SecureTextEdit<'a> {
    text: &'a mut dyn TextBuffer,
    visuals: Option<TextEditVisuals>,
    hint_text: WidgetText,
+   accessible_name: Option<String>,
+   accessible_hint: Option<String>,
    id: Option<Id>,
    id_salt: Option<Id>,
    font_selection: FontSelection,
@@ -205,6 +220,8 @@ impl<'a> SecureTextEdit<'a> {
          text,
          visuals: None,
          hint_text: Default::default(),
+         accessible_name: None,
+         accessible_hint: None,
          id: None,
          id_salt: None,
          font_selection: FontSelection::default(),
@@ -239,6 +256,8 @@ impl<'a> SecureTextEdit<'a> {
          text,
          visuals: None,
          hint_text: Default::default(),
+         accessible_name: None,
+         accessible_hint: None,
          id: None,
          id_salt: None,
          font_selection: FontSelection::default(),
@@ -293,6 +312,26 @@ impl<'a> SecureTextEdit<'a> {
    /// Placeholder shown when the buffer is empty.
    pub fn hint_text(mut self, hint_text: impl Into<WidgetText>) -> Self {
       self.hint_text = hint_text.into();
+      self
+   }
+
+   /// Name the field for assistive technology: what a reader announces before the value.
+   ///
+   /// Required for a field whose visible label is not wired with
+   /// [`egui::Response::labelled_by`] — without it the field is announced as "text, empty", with
+   /// no sign of which field took focus. Prefer `labelled_by` when a visible label sits next to the
+   /// field: the association clears the node label, so naming the field as well adds nothing.
+   pub fn accessible_name(mut self, label: impl Into<String>) -> Self {
+      self.accessible_name = Some(label.into());
+      self
+   }
+
+   /// Spoken placeholder, for when the drawn [`Self::hint_text`] is empty or is not what should be
+   /// read.
+   ///
+   /// Defaults to the drawn hint.
+   pub fn accessible_hint(mut self, hint: impl Into<String>) -> Self {
+      self.accessible_hint = Some(hint.into());
       self
    }
 
@@ -766,9 +805,15 @@ impl<'a> SecureTextEdit<'a> {
             ui.is_enabled(),
             String::new(),
             &*spoken_text,
-            self.hint_text.text(),
+            self.accessible_hint.as_deref().unwrap_or_else(|| self.hint_text.text()),
          )
       });
+
+      // `widget_info` registered the node above, so the name lands on the node this widget owns. It
+      // is opt-in: a host that wires a visible label with `labelled_by` already names the field.
+      if let Some(label) = self.accessible_name.as_deref() {
+         response = response.accessible_name(label);
+      }
 
       if self.password && self.speech == SecureSpeech::Masked {
          // `WidgetInfo` only reports the generic role, so refine it the way egui's own
@@ -1536,5 +1581,63 @@ mod tests {
 
       assert_eq!(node.role(), Role::TextInput);
       assert_eq!(node.value(), Some("alice"));
+   }
+
+   #[test]
+   fn named_field_exposes_its_name() {
+      let ctx = Context::default();
+      let mut text = String::new();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(SecureTextEdit::singleline(&mut text).accessible_name("Wallet name"));
+      });
+
+      let node = node_with_role(&nodes, Role::TextInput);
+
+      assert_eq!(node.label(), Some("Wallet name"));
+   }
+
+   #[test]
+   fn unnamed_field_has_no_name() {
+      let ctx = Context::default();
+      let mut text = String::new();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(SecureTextEdit::singleline(&mut text));
+      });
+
+      let node = node_with_role(&nodes, Role::TextInput);
+
+      // Naming is opt-in: a host that wires a visible label with `labelled_by` must not get a
+      // second, competing name from the field itself.
+      assert!(node.label().is_none());
+   }
+
+   #[test]
+   fn accessible_hint_replaces_the_drawn_hint() {
+      let ctx = Context::default();
+      let mut text = String::new();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(
+            SecureTextEdit::singleline(&mut text)
+               .hint_text("0x…")
+               .accessible_hint("Contract address, hex"),
+         );
+      });
+
+      let node = node_with_role(&nodes, Role::TextInput);
+
+      assert_eq!(node.placeholder(), Some("Contract address, hex"));
+   }
+
+   #[test]
+   fn drawn_hint_is_the_placeholder_without_an_override() {
+      let ctx = Context::default();
+      let mut text = String::new();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(SecureTextEdit::singleline(&mut text).hint_text("Search"));
+      });
+
+      let node = node_with_role(&nodes, Role::TextInput);
+
+      assert_eq!(node.placeholder(), Some("Search"));
    }
 }

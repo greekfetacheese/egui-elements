@@ -51,12 +51,26 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   option row.
 - `MenuItem::image` — a Lucide (or any) image in the leading gutter, beside `.icon()`.
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
+- `Modal::accessible_name` — the dialog's accessible name, for the body-only dialogs that had none: it is used
+  when there is no visible heading, and overrides the heading when there is one.
+- `Modal::initial_focus` — the widget that takes keyboard focus when the dialog opens, ahead of the close
+  "×" it falls back to.
 - `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
   egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
 - `Frame`'s accessibility surface — `.accessible_name(..)`, `.accessible_description(..)`, `.accessible_role(..)` and
   `.hide_from_accessibility(..)` put one AccessKit node on the plate: an interactive frame is a `Button`
   (with `.selected(true)` reported as toggled), a labelled static frame is a `Label` readout, and a
   frame with nothing to say stays out of the tree.
+- `Row`'s accessibility surface — a row is named "Title — Subtitle", so a readout row whose meaning
+  rides the second line ("Load now" over "0.4, rising") is announced whole instead of as a bare title;
+  `.read_only(true)` turns the row into a `Label` readout with a hover sense instead of a clickable
+  `Button`, and a read-only row is not in the tab order.
+- `Indicator::label(..)` — names what a light reports ("RPC: connected", "Delegation: delegated"),
+  instead of leaving every light on a row saying "status: on".
+- `Checkbox::name(..)` — the accessible name of the `without_text` form; a visible text always wins.
+- The slider's AccessKit node carries the formatted value ("0.75 s"), so a reader speaks what the
+  screen shows instead of the bare number, while the numeric value, the step and the `SetValue`
+  action stay as they were.
 - `CredentialsForm` announces the focused password field's length through its own `Announcer`, and a
   plain field's empty state (a reader key-echoes its characters already; its emptiness nothing else
   reports), so a host gets the feedback without wiring anything: `with_speech` / `set_speech` (also on
@@ -76,6 +90,22 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   since a password role lets the platform withhold the value). The masked field keeps that role on
   purpose: it is what keeps a reader's key echo — which otherwise reads every typed character of an
   ordinary text input — out of the field.
+- `SecureTextEdit::accessible_name` / `accessible_hint` — the accessible name a reader announces for the field,
+  and a spoken placeholder that can differ from the drawn `hint_text`. Without a name a field is
+  announced as "text, empty"; the name stays opt-in, so a field with a visible label beside it keeps
+  using `labelled_by`.
+- `Button::alt(text)` — the text alternative for an **icon-only** button. A button built from an image
+  and no text reaches the accessibility tree as a role with no name, so a reader says only "button";
+  the alternative names the action (`.alt("Refresh")`) and the button's own text always wins over it.
+  In a debug build an image-only button with neither now trips a `debug_assert!` in `atom_ui`.
+- `QrImage::alt(text)` / `QrImage::hidden()` / `QrImage::show(ui)` — the text alternative, the switch
+  that keeps the symbol out of the accessibility tree, and the drawing call that owns the node: it
+  clears the label and description egui derives from the texture, so a pending QR is never announced
+  as "Loading bytes://…" (a symbol encoding a secret would otherwise be spoken by its texture URI).
+  `image()` stays the drawing method for a custom size and names the node through egui's `alt_text`.
+- The crate's own chrome is named: the secure field's eye toggle is "Show credentials" / "Hide
+  credentials" by masking state, its QR button is "Scan a QR code", and the demo's bell is
+  "Notifications".
 
 **Theme**
 
@@ -107,10 +137,20 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - Documentation was rewritten as a landing-page README plus one reference page per area under `docs/`.
 - `CredentialsForm`'s announcement hook is `Send + Sync`, so a host can keep the form inside a
   `static`. The crate's other host-IO hooks already carried the bound.
+- `Modal` sets egui's modal layer while it is open, so keyboard focus cannot leave the dialog for the page
+  behind it. The layer sits on the backdrop — the lower of the two areas — so a backdrop click still closes.
+- `Modal`'s `Esc` no longer depends on `.closable(..)`: a dialog that hides the "×" and ignores backdrop
+  clicks still closes on `Esc`, because a keyboard user needs a way out. Use
+  `.closable(false).close_on_escape(false)` for a dialog no key dismisses.
+- `Modal`'s opening focus grab runs on the first painted pass rather than the first pass, so the invisible
+  sizing pass of a shrink-wrapping dialog no longer withdraws it; it targets `.initial_focus(..)` when
+  given and the close "×" otherwise.
 
 ### Breaking
 
 - `Frame` is no longer `Copy`: it owns its accessibility label, so a value used twice needs
+  `.clone()` (or a second builder chain).
+- `Indicator` is no longer `Copy`: it owns its accessibility label, so a value used twice needs
   `.clone()` (or a second builder chain).
 - `widgets::spinner` is now `widgets::loaders`; the `Spinner` type keeps its name and crate-root export.
 - Themed visual structs carry `Fill` instead of a bare `Color32` in their fill fields; construct them with

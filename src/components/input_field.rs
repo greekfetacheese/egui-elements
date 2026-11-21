@@ -567,7 +567,14 @@ fn show_field_chrome(
          if let Some(state) = hidden.as_deref_mut() {
             let icon = if *state { Lucide::EyeOff } else { Lucide::Eye };
             let img = icon.size(icon_size.x).color(text_color).image();
-            if ui.add(Button::image(img)).clicked() {
+            // An icon-only button has no text, so it needs the text alternative: name
+            // the action the click performs, not the icon that draws it.
+            let alt = if *state {
+               "Show credentials"
+            } else {
+               "Hide credentials"
+            };
+            if ui.add(Button::image(img).alt(alt)).clicked() {
                *state = !*state;
             }
          }
@@ -580,7 +587,7 @@ fn show_field_chrome(
             if qr_enabled {
                let icon = Lucide::ScanQrCode;
                let img = icon.size(icon_size.x).color(text_color).image();
-               if ui.add(Button::image(img)).clicked() {
+               if ui.add(Button::image(img).alt("Scan a QR code")).clicked() {
                   qr_clicked = true;
                }
             }
@@ -597,4 +604,96 @@ fn show_field_chrome(
    let _ = qr_enabled;
 
    (output.inner, qr_clicked)
+}
+
+#[cfg(test)]
+mod tests {
+   use super::*;
+   use crate::theme::ThemeKind;
+   use egui::accesskit::{Node, Role};
+   use egui::{Context, RawInput, Ui};
+
+   /// The two fields differ only in their buffer type; the chrome under test is shared.
+   trait FieldUnderTest {
+      fn show_here(&mut self, ui: &mut Ui);
+   }
+
+   impl FieldUnderTest for SecureInputField {
+      fn show_here(&mut self, ui: &mut Ui) {
+         self.show(ui);
+      }
+   }
+
+   impl FieldUnderTest for InputField {
+      fn show_here(&mut self, ui: &mut Ui) {
+         self.show(ui);
+      }
+   }
+
+   /// The nodes of one AccessKit-enabled frame of `field`.
+   fn field_nodes(field: &mut impl FieldUnderTest) -> Vec<Node> {
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+      Theme::new(ThemeKind::TokyoNight).install(&ctx);
+
+      let mut output = ctx.run_ui(RawInput::default(), |ui| field.show_here(ui));
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      nodes
+   }
+
+   /// The accessible names of every button in the frame.
+   fn button_names(nodes: &[Node]) -> Vec<String> {
+      nodes
+         .iter()
+         .filter(|node| node.role() == Role::Button)
+         .map(|node| node.label().unwrap_or("<unnamed>").to_owned())
+         .collect()
+   }
+
+   /// The eye toggle is named for the action the click performs, so its name flips
+   /// with the masking state.
+   #[test]
+   fn the_eye_button_names_the_visibility_action() {
+      let mut masked = SecureInputField::new("Password", true, true);
+      let masked = button_names(&field_nodes(&mut masked));
+      assert!(
+         masked.iter().any(|name| name == "Show credentials"),
+         "a masked field must offer to show: {masked:?}"
+      );
+
+      let mut visible = SecureInputField::new("Password", false, true);
+      let visible = button_names(&field_nodes(&mut visible));
+      assert!(
+         visible.iter().any(|name| name == "Hide credentials"),
+         "a visible field must offer to hide: {visible:?}"
+      );
+   }
+
+   /// The QR button is an icon too, so it needs the same text alternative. It is drawn
+   /// only on the platforms the scanner supports.
+   #[cfg(all(
+      feature = "qr-scanner",
+      any(target_os = "linux", target_os = "windows")
+   ))]
+   #[test]
+   fn the_qr_button_is_named_and_every_chrome_button_has_a_name() {
+      let mut field = InputField::new("Address", true);
+      let names = button_names(&field_nodes(&mut field));
+
+      assert!(
+         names.iter().any(|name| name == "Scan a QR code"),
+         "the QR button is unnamed: {names:?}"
+      );
+      assert!(
+         !names.iter().any(|name| name == "<unnamed>"),
+         "every chrome button must be named: {names:?}"
+      );
+   }
 }
