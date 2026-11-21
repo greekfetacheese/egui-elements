@@ -51,6 +51,10 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   option row.
 - `MenuItem::image` — a Lucide (or any) image in the leading gutter, beside `.icon()`.
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
+- `Modal::accessible_name` — the dialog's accessible name, for the body-only dialogs that had none: it is used
+  when there is no visible heading, and overrides the heading when there is one.
+- `Modal::initial_focus` — the widget that takes keyboard focus when the dialog opens, ahead of the close
+  "×" it falls back to.
 - `Frame::to_egui()` and `From` conversions between `Frame` and `egui::Frame` — the static chrome
   egui can paint (a gradient collapses to its midpoint; hover / click state does not cross over).
 - `CredentialsForm` announces the focused password field's length through its own `Announcer`, and a
@@ -103,6 +107,14 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
 - Documentation was rewritten as a landing-page README plus one reference page per area under `docs/`.
 - `CredentialsForm`'s announcement hook is `Send + Sync`, so a host can keep the form inside a
   `static`. The crate's other host-IO hooks already carried the bound.
+- `Modal` sets egui's modal layer while it is open, so keyboard focus cannot leave the dialog for the page
+  behind it. The layer sits on the backdrop — the lower of the two areas — so a backdrop click still closes.
+- `Modal`'s `Esc` no longer depends on `.closable(..)`: a dialog that hides the "×" and ignores backdrop
+  clicks still closes on `Esc`, because a keyboard user needs a way out. Use
+  `.closable(false).close_on_escape(false)` for a dialog no key dismisses.
+- `Modal`'s opening focus grab runs on the first painted pass rather than the first pass, so the invisible
+  sizing pass of a shrink-wrapping dialog no longer withdraws it; it targets `.initial_focus(..)` when
+  given and the close "×" otherwise.
 
 ### Breaking
 
