@@ -75,6 +75,12 @@ impl IndicatorState {
 
 /// A small status light.
 ///
+/// # Accessibility
+///
+/// The light is a [`Role::Label`] readout. Its text defaults to the state's own words
+/// ("status: on"), which every light would repeat; [`label`](Self::label) names what this one
+/// reports.
+///
 /// ```
 /// # use egui::__run_test_ui;
 /// # use egui_elements::widgets::{Indicator, IndicatorState};
@@ -83,13 +89,14 @@ impl IndicatorState {
 /// ui.add(Indicator::new(IndicatorState::Connecting).size(14.0));
 /// # });
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[must_use = "Add with `ui.add(...)`."]
 pub struct Indicator {
    state: IndicatorState,
    size: f32,
    pulse: Option<BadgePulse>,
    ring: Option<Stroke>,
+   label: Option<String>,
 }
 
 impl Indicator {
@@ -100,6 +107,7 @@ impl Indicator {
          size: 10.0,
          pulse: None,
          ring: None,
+         label: None,
       }
    }
 
@@ -117,6 +125,16 @@ impl Indicator {
    /// lockstep. Default: no pulse; a pulsing indicator repaints every frame.
    pub fn pulse(mut self, pulse: BadgePulse) -> Self {
       self.pulse = Some(pulse);
+      self
+   }
+
+   /// The text assistive technology reads for this light. Default: the state's own words.
+   ///
+   /// Every light otherwise says "status: on", "status: off" or "status: connecting", so a row of
+   /// them sounds like one light repeated. Name what the light reports instead — "RPC: connected",
+   /// "Archive: syncing", "Delegation: delegated".
+   pub fn label(mut self, label: impl Into<String>) -> Self {
+      self.label = Some(label.into());
       self
    }
 
@@ -194,8 +212,8 @@ impl Widget for Indicator {
          self.paint(ui, rect.center(), radius, fill, response.id);
       }
 
-      response
-         .widget_info(|| WidgetInfo::labeled(Role::Label, ui.is_enabled(), self.state.label()));
+      let label = self.label.as_deref().unwrap_or_else(|| self.state.label());
+      response.widget_info(|| WidgetInfo::labeled(Role::Label, ui.is_enabled(), label));
       response
    }
 }
@@ -227,7 +245,9 @@ mod tests {
             ..Default::default()
          },
          |ui| {
-            ui.add(indicator);
+            // The label is owned, so the widget is `Clone` rather than `Copy`: one clone per frame
+            // is the price of a widget that can carry a name.
+            ui.add(indicator.clone());
             repaint_requested = ui.ctx().has_requested_repaint();
          },
       );
@@ -339,5 +359,44 @@ mod tests {
       output.drop_without_applying_deltas();
 
       assert_eq!(rect.size(), egui::vec2(20.0, 20.0));
+   }
+
+   /// The text one indicator puts on its AccessKit node.
+   fn accesskit_value(add: impl FnMut(&mut Ui)) -> Option<String> {
+      let ctx = Context::default();
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), add);
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let value = update
+         .nodes
+         .into_iter()
+         .find(|(_, node)| node.role() == Role::Label)
+         .and_then(|(_, node)| node.value().map(str::to_string));
+      output.drop_without_applying_deltas();
+
+      value
+   }
+
+   #[test]
+   fn an_unlabelled_indicator_keeps_the_states_words() {
+      let value = accesskit_value(|ui| {
+         ui.add(Indicator::new(IndicatorState::Connecting));
+      });
+
+      assert_eq!(value.as_deref(), Some("status: connecting"));
+   }
+
+   #[test]
+   fn a_label_names_what_the_light_reports() {
+      let value = accesskit_value(|ui| {
+         ui.add(Indicator::new(IndicatorState::On).label("RPC: connected"));
+      });
+
+      assert_eq!(value.as_deref(), Some("RPC: connected"));
    }
 }
