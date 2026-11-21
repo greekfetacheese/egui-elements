@@ -3,7 +3,7 @@
 //! Painted in two layers: a full-viewport dimmed backdrop that swallows
 //! clicks (and closes the modal when clicked), and a centered card-like
 //! window with an optional heading row and a close "×" button.
-//! Press `Esc` to dismiss.
+//! Press `Esc` to dismiss, whether or not the dialog is closable.
 //!
 //! Forked from <https://github.com/stephenberry/egui-elegance>
 
@@ -35,11 +35,26 @@ type UiFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 ///         ui.label("…");
 ///     });
 /// ```
+///
+/// # Accessibility
+///
+/// While it is open the modal owns egui's modal layer, so nothing behind it
+/// can take keyboard focus: `Tab` stays inside the dialog and a screen reader
+/// cannot reach the page underneath. The dialog exposes
+/// `accesskit::Role::Dialog` (or `accesskit::Role::AlertDialog` with
+/// [`Modal::alert`]), named by [`Modal::a11y_label`] when that is set and by
+/// the heading otherwise.
+///
+/// `Esc` closes the modal whenever [`Modal::close_on_escape`] is `true` — the
+/// default, and independent of [`Modal::closable`], so a dialog with no "×"
+/// still has a keyboard exit. When it opens, focus moves to
+/// [`Modal::initial_focus`], falling back to the close "×" button.
 #[must_use = "Call `.show(ctx, |ui| { ... })` to render the modal."]
 pub struct Modal<'a> {
    id_salt: Id,
    heading: Option<WidgetText>,
    subtitle: Option<WidgetText>,
+   a11y_label: Option<String>,
    header_icon: Option<Image<'a>>,
    frame: Option<Frame>,
    center_header_icon: bool,
@@ -51,6 +66,7 @@ pub struct Modal<'a> {
    closable: bool,
    close_on_backdrop: bool,
    close_on_escape: bool,
+   initial_focus: Option<Id>,
    alert: bool,
    center_header: bool,
    header_separator: bool,
@@ -71,6 +87,7 @@ impl<'a> std::fmt::Debug for Modal<'a> {
             "subtitle",
             &self.subtitle.as_ref().map(|h| h.text()),
          )
+         .field("a11y_label", &self.a11y_label)
          .field(
             "header_icon",
             &self.header_icon.as_ref().map(|_| "<image>"),
@@ -85,6 +102,7 @@ impl<'a> std::fmt::Debug for Modal<'a> {
          .field("closable", &self.closable)
          .field("close_on_backdrop", &self.close_on_backdrop)
          .field("close_on_escape", &self.close_on_escape)
+         .field("initial_focus", &self.initial_focus)
          .field("alert", &self.alert)
          .field("center_header", &self.center_header)
          .field("header_separator", &self.header_separator)
@@ -145,6 +163,7 @@ impl<'a> Modal<'a> {
          id_salt: id.into_modal_id(),
          heading: None,
          subtitle: None,
+         a11y_label: None,
          header_icon: None,
          frame: None,
          center_header_icon: false,
@@ -156,6 +175,7 @@ impl<'a> Modal<'a> {
          closable: true,
          close_on_backdrop: true,
          close_on_escape: true,
+         initial_focus: None,
          alert: false,
          center_header: false,
          header_separator: true,
@@ -174,6 +194,18 @@ impl<'a> Modal<'a> {
    /// Show a muted subtitle line under the heading.
    pub fn subtitle(mut self, subtitle: impl Into<WidgetText>) -> Self {
       self.subtitle = Some(subtitle.into());
+      self
+   }
+
+   /// The accessible name the dialog exposes to assistive technology when it
+   /// has no visible [`Modal::heading`] — and the name it exposes *instead of*
+   /// the heading when one is set.
+   ///
+   /// A dialog with neither has no name at all: a screen reader announces the
+   /// role and nothing else, which is why a body-only confirmation should name
+   /// itself here. Default: the heading's text.
+   pub fn a11y_label(mut self, label: impl Into<String>) -> Self {
+      self.a11y_label = Some(label.into());
       self
    }
 
@@ -232,9 +264,14 @@ impl<'a> Modal<'a> {
       self
    }
 
-   /// Whether the user may dismiss the modal at all. When `false`, the
-   /// close "×" button is hidden and `Esc` / backdrop clicks are ignored —
-   /// regardless of [`Modal::close_on_backdrop`] / [`Modal::close_on_escape`].
+   /// Whether the user may dismiss the modal with the close "×" button or a
+   /// backdrop click. When `false`, the "×" is hidden and
+   /// [`Modal::close_on_backdrop`] is ignored.
+   ///
+   /// `Esc` is not part of this: it closes the modal whenever
+   /// [`Modal::close_on_escape`] is `true` (the default), closable or not — a
+   /// keyboard user always needs a way out. Use `.closable(false)` against
+   /// `.close_on_escape(false)` for a dialog no key dismisses.
    ///
    /// Use this to force the user to see an in-progress action through (or
    /// cancel it via an explicit footer button) — for example, blocking
@@ -255,9 +292,25 @@ impl<'a> Modal<'a> {
       self
    }
 
-   /// Whether pressing `Esc` dismisses the modal. Default: `true`.
+   /// Whether pressing `Esc` dismisses the modal, independently of
+   /// [`Modal::closable`]: it closes a `.closable(false)` dialog too, so the
+   /// keyboard always has an exit. Default: `true`.
    pub fn close_on_escape(mut self, close: bool) -> Self {
       self.close_on_escape = close;
+      self
+   }
+
+   /// Which widget receives keyboard focus when the dialog opens. Pass a
+   /// widget id — the `response.id` of a field drawn in the body, or
+   /// `Id::unique(..)` for a widget created through a fixed scope.
+   ///
+   /// Default: the close "×" button, and nothing at all when the dialog has no
+   /// close button ([`Modal::closable`]`(false)`) — a body-only dialog should
+   /// point at its first control. The request is made on the first *painted*
+   /// pass, so the invisible sizing pass a shrink-wrapping modal takes cannot
+   /// withdraw it.
+   pub fn initial_focus(mut self, id: impl Into<Id>) -> Self {
+      self.initial_focus = Some(id.into());
       self
    }
 
@@ -345,6 +398,8 @@ impl<'a> Modal<'a> {
       if just_opened {
          focus_state.prev_focus = ctx.memory(|m| m.focused());
          focus_state.was_open = true;
+         focus_state.focus_pending = true;
+         focus_state.pending_focus = self.initial_focus;
          ctx.data_mut(|d| d.insert_temp(focus_storage, focus_state));
       }
 
@@ -365,32 +420,52 @@ impl<'a> Modal<'a> {
          measure.width
       };
 
-      // --- Backdrop ----------------------------------------------------
+      // --- Areas -------------------------------------------------------
+      // Both areas are built before either is shown: the modal layer must be
+      // known before the content area runs, and it must be the lower of the
+      // two. egui only lets widgets on the modal layer and above it take
+      // input, so a higher modal layer would drop the backdrop below it and
+      // the click that dismisses the modal would never arrive.
       let screen = ctx.content_rect();
       let backdrop_id = Id::unique("elegance_modal_backdrop").with(self.id_salt);
-      let backdrop = Area::new(backdrop_id)
+      let backdrop_area = Area::new(backdrop_id)
          .fixed_pos(screen.min)
          .order(self.backdrop_order)
-         .sizing_pass(measuring)
-         .show(ctx, |ui| {
-            ui.painter().rect_filled(
-               screen,
-               CornerRadius::ZERO,
-               Color32::from_rgba_premultiplied(0, 0, 0, 150),
-            );
-            ui.allocate_rect(screen, Sense::click())
-         });
+         .sizing_pass(measuring);
+      let mut area = Area::new(window_id)
+         .order(self.content_order)
+         .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+         .pivot(Align2::CENTER_CENTER);
+      let backdrop_layer = backdrop_area.layer();
+      let content_layer = area.layer();
+      let modal_layer = if backdrop_layer.order <= content_layer.order {
+         backdrop_layer
+      } else {
+         content_layer
+      };
+      ctx.memory_mut(|m| m.set_modal_layer(modal_layer));
+
+      // --- Backdrop ----------------------------------------------------
+      let backdrop = backdrop_area.show(ctx, |ui| {
+         ui.painter().rect_filled(
+            screen,
+            CornerRadius::ZERO,
+            Color32::from_rgba_premultiplied(0, 0, 0, 150),
+         );
+         ui.allocate_rect(screen, Sense::click())
+      });
       if closable && self.close_on_backdrop && backdrop.inner.clicked() {
          should_close = true;
       }
 
       // --- Content -----------------------------------------------------
       let alert = self.alert;
-      let heading_text: Option<String> = self.heading.as_ref().map(|h| h.text().to_string());
-      let mut area = Area::new(window_id)
-         .order(self.content_order)
-         .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-         .pivot(Align2::CENTER_CENTER);
+      // The dialog's accessible name: an explicit `.a11y_label(..)` wins
+      // over the heading, and a dialog with neither has no name to announce.
+      let dialog_label = self
+         .a11y_label
+         .clone()
+         .or_else(|| self.heading.as_ref().map(|h| h.text().to_string()));
       // Shrink-wrap (no `max_width`) has to measure the content before it
       // can anchor, and the first measurement is wrong: egui's own first-pass
       // sizing pass measures at width 0, where the body wraps into a too-tall
@@ -421,10 +496,10 @@ impl<'a> Modal<'a> {
          } else {
             accesskit::Role::Dialog
          };
-         let heading_for_label = heading_text.clone();
+         let label = dialog_label.clone();
          ui.ctx().accesskit_node_builder(ui.unique_id(), |node| {
             node.set_role(role);
-            if let Some(label) = heading_for_label {
+            if let Some(label) = label {
                node.set_label(label);
             }
          });
@@ -645,17 +720,23 @@ impl<'a> Modal<'a> {
          card.inner
       });
 
-      if closable && self.close_on_escape && ctx.input(|i| i.key_pressed(Key::Escape)) {
+      if self.close_on_escape && ctx.input(|i| i.key_pressed(Key::Escape)) {
          should_close = true;
       }
 
-      // On the first frame a modal is open, move keyboard focus into it so
-      // Tab navigates within the dialog rather than the background. We
-      // target the close button when a heading is present (it has a
-      // stable id and is always interactive); without a heading there's
-      // no intrinsic focus target, so focus is left to the caller.
-      if just_opened && let Some(id) = close_btn_id {
-         ctx.memory_mut(|m| m.request_focus(id));
+      // Move keyboard focus into the dialog so Tab starts inside it. An
+      // explicit [`Modal::initial_focus`] wins; otherwise the close "×" takes
+      // focus, and a dialog without one leaves focus to the caller. The
+      // request waits for a painted pass: egui withdraws a focus request made
+      // for a pass that only measures, and the request is cleared once made so
+      // it cannot pull focus back on later frames.
+      if focus_state.focus_pending && !measuring {
+         if let Some(id) = focus_state.pending_focus.or(close_btn_id) {
+            ctx.memory_mut(|m| m.request_focus(id));
+         }
+         focus_state.focus_pending = false;
+         focus_state.pending_focus = None;
+         ctx.data_mut(|d| d.insert_temp(focus_storage, focus_state));
       }
 
       if should_close {
@@ -689,6 +770,13 @@ struct ModalFocusState {
    /// Which widget (if any) had keyboard focus at the moment the modal
    /// opened. Restored on close.
    prev_focus: Option<Id>,
+   /// Whether the opening focus grab still has to run. It is deferred to the
+   /// first painted pass, because a request made on a sizing pass is
+   /// withdrawn before any widget can take it.
+   focus_pending: bool,
+   /// The widget that grab targets ([`Modal::initial_focus`]). `None` falls
+   /// back to the close button.
+   pending_focus: Option<Id>,
 }
 
 /// Number of invisible sizing passes a shrink-wrapping modal spends before
@@ -741,6 +829,8 @@ fn close_button(ui: &mut Ui, theme: &Theme) -> Response {
 #[cfg(test)]
 mod tests {
    use super::*;
+   use egui::accesskit::Node;
+   use egui::{Event, FullOutput, Modifiers, PointerButton, RawInput};
 
    fn run_until_painted(mut f: impl FnMut(&Context)) {
       let ctx = Context::default();
@@ -749,6 +839,60 @@ mod tests {
       // measured width, then the first painted frame.
       for _ in 0..3 {
          ctx.run_ui(Default::default(), |ui| f(ui.ctx())).drop_without_applying_deltas();
+      }
+   }
+
+   /// The three passes a shrink-wrapping modal takes, with `input` delivered on
+   /// each; returns the painted frame's output.
+   fn painted_output(
+      ctx: &Context,
+      input: impl Fn() -> RawInput,
+      mut f: impl FnMut(&Context),
+   ) -> FullOutput {
+      for _ in 0..2 {
+         ctx.run_ui(input(), |ui| f(ui.ctx())).drop_without_applying_deltas();
+      }
+      ctx.run_ui(input(), |ui| f(ui.ctx()))
+   }
+
+   /// The AccessKit tree the painted frame produced.
+   fn painted_accesskit_nodes(mut f: impl FnMut(&Context)) -> Vec<Node> {
+      let ctx = Context::default();
+      ctx.set_fonts(egui::FontDefinitions::empty());
+      ctx.enable_accesskit();
+      let mut output = painted_output(&ctx, RawInput::default, |ctx| f(ctx));
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled painted frame produces a tree update");
+      output.drop_without_applying_deltas();
+      update.nodes.into_iter().map(|(_, node)| node).collect()
+   }
+
+   fn node_with_role(nodes: &[Node], role: Role) -> &Node {
+      nodes
+         .iter()
+         .find(|node| node.role() == role)
+         .expect("no node with the expected role")
+   }
+
+   fn escape_press() -> Event {
+      Event::Key {
+         key: Key::Escape,
+         physical_key: None,
+         pressed: true,
+         repeat: false,
+         modifiers: Modifiers::NONE,
+      }
+   }
+
+   fn pointer(pos: Pos2, pressed: bool) -> Event {
+      Event::PointerButton {
+         pos,
+         button: PointerButton::Primary,
+         pressed,
+         modifiers: Modifiers::NONE,
       }
    }
 
@@ -797,5 +941,188 @@ mod tests {
       });
 
       assert!((width - 520.0).abs() <= 2.0, "card width {width}");
+   }
+
+   #[test]
+   fn a11y_label_names_a_dialog_without_a_heading() {
+      let nodes = painted_accesskit_nodes(|ctx| {
+         let mut open = true;
+         let _ = Modal::new("modal_a11y_label", &mut open)
+            .a11y_label("Delete all contacts")
+            .show(ctx, |ui| {
+               ui.label("…");
+            });
+      });
+
+      let node = node_with_role(&nodes, Role::Dialog);
+      assert_eq!(node.label(), Some("Delete all contacts"));
+   }
+
+   #[test]
+   fn a_heading_names_the_dialog_by_default() {
+      let nodes = painted_accesskit_nodes(|ctx| {
+         let mut open = true;
+         let modal = Modal::new("modal_a11y_heading", &mut open).heading("Discard changes?");
+         let _ = modal.show(ctx, |ui| {
+            ui.label("…");
+         });
+      });
+
+      let node = node_with_role(&nodes, Role::Dialog);
+      assert_eq!(node.label(), Some("Discard changes?"));
+   }
+
+   #[test]
+   fn a_non_closable_modal_still_closes_on_escape() {
+      let ctx = Context::default();
+      ctx.set_fonts(egui::FontDefinitions::empty());
+      let mut open = true;
+      painted_output(
+         &ctx,
+         || RawInput {
+            events: vec![escape_press()],
+            ..RawInput::default()
+         },
+         |ctx| {
+            let modal = Modal::new("modal_escape_non_closable", &mut open).closable(false);
+            let _ = modal.show(ctx, |ui| {
+               ui.label("blocking");
+            });
+         },
+      )
+      .drop_without_applying_deltas();
+
+      // The dialog hides its "×", so `Esc` is its only way out.
+      assert!(!open);
+   }
+
+   #[test]
+   fn escape_is_ignored_when_close_on_escape_is_off() {
+      let ctx = Context::default();
+      ctx.set_fonts(egui::FontDefinitions::empty());
+      let mut open = true;
+      painted_output(
+         &ctx,
+         || RawInput {
+            events: vec![escape_press()],
+            ..RawInput::default()
+         },
+         |ctx| {
+            let modal = Modal::new("modal_escape_off", &mut open).close_on_escape(false);
+            let _ = modal.show(ctx, |ui| {
+               ui.label("…");
+            });
+         },
+      )
+      .drop_without_applying_deltas();
+
+      // `.close_on_escape(false)` is the host's "keep it open" switch.
+      assert!(open);
+   }
+
+   #[test]
+   fn a_backdrop_click_still_closes_a_closable_modal() {
+      let ctx = Context::default();
+      ctx.set_fonts(egui::FontDefinitions::empty());
+      let mut open = true;
+      // A corner of the screen: outside the card, inside the backdrop.
+      let at = ctx.content_rect().left_top() + vec2(4.0, 4.0);
+      // Three passes paint the dialog and register the backdrop's rect, then a
+      // hover, a press and a release — a click reports on the release frame.
+      let frames: [Vec<Event>; 6] = [
+         vec![],
+         vec![],
+         vec![],
+         vec![Event::PointerMoved(at)],
+         vec![pointer(at, true)],
+         vec![pointer(at, false)],
+      ];
+      for events in frames {
+         let input = RawInput {
+            events,
+            ..RawInput::default()
+         };
+         ctx.run_ui(input, |ui| {
+            let _ = Modal::new("modal_backdrop_click", &mut open).show(ui.ctx(), |ui| {
+               ui.label("body");
+            });
+         })
+         .drop_without_applying_deltas();
+      }
+
+      // A click on the backdrop must still dismiss a closable modal.
+      assert!(!open);
+   }
+
+   #[test]
+   fn the_modal_layer_is_set_while_the_modal_is_open() {
+      let ctx = Context::default();
+      ctx.set_fonts(egui::FontDefinitions::empty());
+      let mut open = true;
+      painted_output(&ctx, RawInput::default, |ctx| {
+         let _ = Modal::new("modal_layer", &mut open).show(ctx, |ui| {
+            ui.label("body");
+         });
+      })
+      .drop_without_applying_deltas();
+
+      // egui promotes the layer at the end of the pass, so the painted frame
+      // is enough to observe it.
+      let layer = ctx.memory(|m| m.top_modal_layer()).expect("an open modal sets a modal layer");
+      // The lower of the two areas: the backdrop's `Middle`, not the card's
+      // `Foreground` — a higher layer would put the backdrop out of reach.
+      assert_eq!(layer.order, Order::Middle);
+
+      open = false;
+      painted_output(&ctx, RawInput::default, |ctx| {
+         let _ = Modal::new("modal_layer", &mut open).show(ctx, |ui| {
+            ui.label("body");
+         });
+      })
+      .drop_without_applying_deltas();
+
+      assert_eq!(ctx.memory(|m| m.top_modal_layer()), None);
+   }
+
+   #[test]
+   fn initial_focus_takes_the_caret_when_the_dialog_opens() {
+      let ctx = Context::default();
+      ctx.set_fonts(egui::FontDefinitions::empty());
+      let mut open = true;
+      let target: std::cell::Cell<Option<Id>> = std::cell::Cell::new(None);
+      let seen: std::cell::RefCell<Vec<Id>> = std::cell::RefCell::new(Vec::new());
+
+      let run = |ctx: &Context, open: &mut bool| {
+         let focus = target.get();
+         let mut modal = Modal::new("modal_initial_focus", open);
+         if let Some(id) = focus {
+            modal = modal.initial_focus(id);
+         }
+         let _ = modal.show(ctx, |ui| {
+            let response = ui.add(egui::Button::new("Rename"));
+            target.set(Some(response.id));
+            seen.borrow_mut().push(response.id);
+         });
+      };
+
+      // The first open only exists to learn the body widget's id.
+      painted_output(&ctx, RawInput::default, |ctx| run(ctx, &mut open))
+         .drop_without_applying_deltas();
+      let target_id = target.get().expect("the body's widget id");
+
+      // Close, then reopen with `.initial_focus(..)` — the host's situation.
+      open = false;
+      painted_output(&ctx, RawInput::default, |ctx| run(ctx, &mut open))
+         .drop_without_applying_deltas();
+      open = true;
+      painted_output(&ctx, RawInput::default, |ctx| run(ctx, &mut open))
+         .drop_without_applying_deltas();
+
+      let ids = seen.into_inner();
+      assert!(
+         ids.iter().all(|id| *id == target_id),
+         "the body widget keeps one id across the close and reopen, got {ids:?}"
+      );
+      assert_eq!(ctx.memory(|m| m.focused()), Some(target_id));
    }
 }

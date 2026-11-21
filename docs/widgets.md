@@ -898,9 +898,10 @@ pinned (and restored when `show` returns), so a themed title bar does not flicke
 ## Modal
 
 A centered themed card over a dimmed backdrop that swallows clicks: heading, optional subtitle and
-header icon, optional footer, and three ways out (`Esc`, the ×, the backdrop).
+header icon, optional footer, and three ways out — the × and the backdrop behind `.closable(..)`, and
+`Esc` behind `.close_on_escape(..)` alone.
 
-**Signature** `Modal::new(id, &mut open).heading(..).subtitle(..).footer(..).show(ctx, |ui| …) -> Option<R>`
+**Signature** `Modal::new(id, &mut open).heading(..).subtitle(..).a11y_label(..).initial_focus(..).footer(..).show(ctx, |ui| …) -> Option<R>`
 
 ```rust
 use egui_elements::{Button, Label, Modal};
@@ -925,8 +926,15 @@ Modal::new("confirm", &mut open)
 - Defaults: left-aligned title and icon, separators on, **no maximum width** — a long body stretches
   the card unless `.max_width(..)` or `.width(..)` is set.
 - `.center_header(true)` centres the title, `header_icon(egui::Image)` takes an image (a Lucide SVG,
-  not a glyph), `.closable(false)`, `.close_on_backdrop(false)` and `.close_on_escape(false)` remove
-  exits, and `.alert(true)` marks the dialog as an alert for assistive tech.
+  not a glyph), `.closable(false)` removes the × and the backdrop exit, `.close_on_backdrop(false)` and
+  `.close_on_escape(false)` remove those individually, and `.alert(true)` marks the dialog as an alert
+  for assistive tech.
+- `.a11y_label(..)` names the dialog for assistive technology when there is no visible heading, and
+  overrides the heading's name when there is one; `.initial_focus(id)` puts the caret on that widget when
+  the dialog opens — the close "×" is the fallback, and a body-only dialog should point at its first field.
+- `Esc` closes the dialog unless `.close_on_escape(false)`, even under `.closable(false)`: a keyboard
+  user always has a way out. While it is open the dialog also owns egui's modal layer, so `Tab` stays
+  inside it instead of reaching the page behind.
 
 ## Menus
 
