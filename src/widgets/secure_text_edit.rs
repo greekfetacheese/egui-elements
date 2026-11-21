@@ -177,8 +177,8 @@ pub enum SecureSpeech {
 /// Assistive technology receives the field's value under a name: the mask for a password field (see
 /// [`SecureSpeech`]), the plaintext otherwise.
 ///
-/// The name is required — without [`Self::a11y_label`] nothing names the field, and a reader
-/// announces it as "text, empty" with no sign of which field it is. [`Self::a11y_hint`] is the
+/// The name is required — without [`Self::accessible_name`] nothing names the field, and a reader
+/// announces it as "text, empty" with no sign of which field it is. [`Self::accessible_hint`] is the
 /// spoken placeholder when the drawn [`Self::hint_text`] is empty or is not what should be read.
 ///
 /// A field with a visible label next to it should associate that label with
@@ -189,8 +189,8 @@ pub struct SecureTextEdit<'a> {
    text: &'a mut dyn TextBuffer,
    visuals: Option<TextEditVisuals>,
    hint_text: WidgetText,
-   a11y_label: Option<String>,
-   a11y_hint: Option<String>,
+   accessible_name: Option<String>,
+   accessible_hint: Option<String>,
    id: Option<Id>,
    id_salt: Option<Id>,
    font_selection: FontSelection,
@@ -220,8 +220,8 @@ impl<'a> SecureTextEdit<'a> {
          text,
          visuals: None,
          hint_text: Default::default(),
-         a11y_label: None,
-         a11y_hint: None,
+         accessible_name: None,
+         accessible_hint: None,
          id: None,
          id_salt: None,
          font_selection: FontSelection::default(),
@@ -256,8 +256,8 @@ impl<'a> SecureTextEdit<'a> {
          text,
          visuals: None,
          hint_text: Default::default(),
-         a11y_label: None,
-         a11y_hint: None,
+         accessible_name: None,
+         accessible_hint: None,
          id: None,
          id_salt: None,
          font_selection: FontSelection::default(),
@@ -321,8 +321,8 @@ impl<'a> SecureTextEdit<'a> {
    /// [`egui::Response::labelled_by`] — without it the field is announced as "text, empty", with
    /// no sign of which field took focus. Prefer `labelled_by` when a visible label sits next to the
    /// field: the association clears the node label, so naming the field as well adds nothing.
-   pub fn a11y_label(mut self, label: impl Into<String>) -> Self {
-      self.a11y_label = Some(label.into());
+   pub fn accessible_name(mut self, label: impl Into<String>) -> Self {
+      self.accessible_name = Some(label.into());
       self
    }
 
@@ -330,8 +330,8 @@ impl<'a> SecureTextEdit<'a> {
    /// read.
    ///
    /// Defaults to the drawn hint.
-   pub fn a11y_hint(mut self, hint: impl Into<String>) -> Self {
-      self.a11y_hint = Some(hint.into());
+   pub fn accessible_hint(mut self, hint: impl Into<String>) -> Self {
+      self.accessible_hint = Some(hint.into());
       self
    }
 
@@ -805,13 +805,13 @@ impl<'a> SecureTextEdit<'a> {
             ui.is_enabled(),
             String::new(),
             &*spoken_text,
-            self.a11y_hint.as_deref().unwrap_or_else(|| self.hint_text.text()),
+            self.accessible_hint.as_deref().unwrap_or_else(|| self.hint_text.text()),
          )
       });
 
       // `widget_info` registered the node above, so the name lands on the node this widget owns. It
       // is opt-in: a host that wires a visible label with `labelled_by` already names the field.
-      if let Some(label) = self.a11y_label.as_deref() {
+      if let Some(label) = self.accessible_name.as_deref() {
          response = response.accessible_name(label);
       }
 
@@ -1588,7 +1588,7 @@ mod tests {
       let ctx = Context::default();
       let mut text = String::new();
       let nodes = accesskit_nodes(&ctx, |ui| {
-         ui.add(SecureTextEdit::singleline(&mut text).a11y_label("Wallet name"));
+         ui.add(SecureTextEdit::singleline(&mut text).accessible_name("Wallet name"));
       });
 
       let node = node_with_role(&nodes, Role::TextInput);
@@ -1612,14 +1612,14 @@ mod tests {
    }
 
    #[test]
-   fn a11y_hint_replaces_the_drawn_hint() {
+   fn accessible_hint_replaces_the_drawn_hint() {
       let ctx = Context::default();
       let mut text = String::new();
       let nodes = accesskit_nodes(&ctx, |ui| {
          ui.add(
             SecureTextEdit::singleline(&mut text)
                .hint_text("0x…")
-               .a11y_hint("Contract address, hex"),
+               .accessible_hint("Contract address, hex"),
          );
       });
 
