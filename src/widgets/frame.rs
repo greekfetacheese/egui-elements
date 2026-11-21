@@ -32,23 +32,24 @@ use crate::visuals::FrameVisuals;
 /// A frame says nothing to assistive technology unless it is told what to say, and what it says
 /// depends on what it is on screen:
 ///
-/// - An interactive plate is a [`Role::Button`] named by [`Self::accessible_name`] — a nav entry, a list
-///   row, a picker. It needs that label: a button with no name is a control a reader can focus and
-///   cannot describe. `.selected(true)` also reports `Toggled::True`, so the selected fill crosses
-///   over to the reader instead of staying visual.
-/// - A non-interactive frame with a label is a [`Role::Label`] whose value is that text: the readout
+/// - An interactive plate is a [`Role::Button`] named by [`Self::accessible_name`] or
+///   [`Self::labelled_by`] — a nav entry, a list row, a picker. `.selected(true)` also reports
+///   `Toggled::True`, so the selected fill crosses over to the reader instead of staying visual.
+/// - A non-interactive frame with a name is a [`Role::Label`] whose value is that text: the readout
 ///   card a host shows a balance or a status in.
-/// - [`Self::accessible_description`] adds the sentence read after the name — the address behind a
-///   contact, or what activating the row does.
+/// - [`Self::accessible_description`] / [`Self::described_by`] add the sentence read after the name —
+///   the address behind a contact, or what activating the row does.
 /// - [`Self::accessible_role`] overrides the role either case picked.
-/// - [`Self::hide_from_accessibility`] hides a child node the host draws inside the frame. A plate labelled
-///   "Home" whose child `Label` also says "Home" is two nodes with the same words, and a reader
+/// - [`Self::hide_from_accessibility`] hides a child node the host draws inside the frame. A plate
+///   named "Home" whose child `Label` also says "Home" is two nodes with the same words, and a reader
 ///   browsing the tree hears the name twice; hiding the child leaves the frame's own name.
 ///
-/// A frame with no accessibility fields that is not interactive adds no node, so a plain card costs
-/// the tree nothing.
+/// Naming costs nothing: [`Self::accessible_name`] takes a `&'static str` and [`Self::labelled_by`]
+/// borrows the name from a node the host already draws, so [`Frame`] stays [`Copy`] and no name is
+/// allocated. A frame with no accessibility fields that is not interactive adds no node, so a plain
+/// card costs the tree nothing.
 #[must_use = "You should call .show()"]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
    pub inner_margin: Margin,
    pub outer_margin: Margin,
@@ -70,13 +71,16 @@ pub struct Frame {
 
 /// What a [`Frame`] says to assistive technology.
 ///
-/// Set it through the frame's `.accessible_*` builders rather than by hand: [`Self::NONE`] says nothing,
-/// and is what every frame starts with.
-#[derive(Clone, Debug, PartialEq)]
+/// Set it through the frame's builders rather than by hand: [`Self::NONE`] says nothing, and is what
+/// every frame starts with. Everything here is [`Copy`] and borrowed — a static string or the id of a
+/// node the host already draws — so naming a plate allocates nothing and [`Frame`] stays [`Copy`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FrameAccessibility {
    role: Option<Role>,
-   label: Option<String>,
-   description: Option<String>,
+   name: Option<&'static str>,
+   labelled_by: Option<Id>,
+   description: Option<&'static str>,
+   described_by: Option<Id>,
    hide_child: Option<Id>,
 }
 
@@ -85,8 +89,10 @@ impl FrameAccessibility {
    /// stays out of the tree.
    pub const NONE: Self = Self {
       role: None,
-      label: None,
+      name: None,
+      labelled_by: None,
       description: None,
+      described_by: None,
       hide_child: None,
    };
 
@@ -95,7 +101,11 @@ impl FrameAccessibility {
    /// [`Self::hide_child`] is not part of this: hiding a child edits another node, it does not give
    /// the plate one of its own.
    fn announces(&self) -> bool {
-      self.role.is_some() || self.label.is_some() || self.description.is_some()
+      self.role.is_some()
+         || self.name.is_some()
+         || self.labelled_by.is_some()
+         || self.description.is_some()
+         || self.described_by.is_some()
    }
 }
 
@@ -348,27 +358,54 @@ impl Frame {
 
    /// The name a screen reader reads for this plate.
    ///
-   /// Required on an interactive frame: the plate paints as a button, and a button without a name is
-   /// a control a reader can focus and cannot describe. On a non-interactive frame the label is what
-   /// makes the plate a readout ([`Role::Label`]) instead of silent chrome.
+   /// It takes a `&'static str` on purpose: naming a plate must not allocate, and [`Frame`] stays
+   /// [`Copy`] because of it. A name that only exists at runtime belongs on a node the host already
+   /// draws — pass that node's id to [`Self::labelled_by`] instead.
+   ///
+   /// On a non-interactive frame the name is what makes the plate a readout ([`Role::Label`]) instead
+   /// of silent chrome.
    #[inline]
-   pub fn accessible_name(mut self, label: impl Into<String>) -> Self {
-      self.accessibility.label = Some(label.into());
+   pub fn accessible_name(mut self, name: &'static str) -> Self {
+      self.accessibility.name = Some(name);
+      self
+   }
+
+   /// Name the plate after a node the host already draws inside it.
+   ///
+   /// The dynamic case: a wallet row named by the wallet's label, a token row, a contact. AccessKit
+   /// reads the name through the reference, so the string is never copied and [`Frame`] stays
+   /// [`Copy`]. It wins over [`Self::accessible_name`] when both are set.
+   #[inline]
+   pub fn labelled_by(mut self, id: Id) -> Self {
+      self.accessibility.labelled_by = Some(id);
       self
    }
 
    /// The detail a reader hears after the name: the address behind a contact, or what activating the
    /// row does.
+   ///
+   /// Like [`Self::accessible_name`] it takes a `&'static str` and allocates nothing; use
+   /// [`Self::described_by`] for text that is only known at runtime.
    #[inline]
-   pub fn accessible_description(mut self, description: impl Into<String>) -> Self {
-      self.accessibility.description = Some(description.into());
+   pub fn accessible_description(mut self, description: &'static str) -> Self {
+      self.accessibility.description = Some(description);
+      self
+   }
+
+   /// Describe the plate after a node the host already draws inside it.
+   ///
+   /// The dynamic counterpart of [`Self::accessible_description`]: the text stays where the host drew
+   /// it and AccessKit reads it through the relation, so nothing is copied.
+   #[inline]
+   pub fn described_by(mut self, id: Id) -> Self {
+      self.accessibility.described_by = Some(id);
       self
    }
 
    /// Override the role announced for the plate.
    ///
    /// The default is [`Role::Button`] when [`Self::interactive`], [`Role::Label`] when a
-   /// non-interactive frame carries a label, and [`Role::GenericContainer`] otherwise.
+   /// non-interactive frame carries a name, and [`Role::GenericContainer`] otherwise.
    #[inline]
    pub fn accessible_role(mut self, role: Role) -> Self {
       self.accessibility.role = Some(role);
@@ -377,7 +414,7 @@ impl Frame {
 
    /// Hide the node of a child drawn inside this frame.
    ///
-   /// It exists for the host's own child `Label`: a plate labelled "Home" whose label also says
+   /// It exists for the host's own child `Label`: a plate named "Home" whose label also says
    /// "Home" is two nodes with the same words, so a reader browsing the tree hears the name twice.
    /// Hiding the child leaves only the frame's own name. The child is still drawn and still takes
    /// its clicks — only its node disappears.
@@ -392,10 +429,8 @@ impl Frame {
       if let Some(role) = self.accessibility.role {
          return role;
       }
-      match (
-         self.interactive,
-         self.accessibility.label.is_some(),
-      ) {
+      let named = self.accessibility.name.is_some() || self.accessibility.labelled_by.is_some();
+      match (self.interactive, named) {
          (true, _) => Role::Button,
          (false, true) => Role::Label,
          (false, false) => Role::GenericContainer,
@@ -404,9 +439,9 @@ impl Frame {
 
    /// Put the plate's own node in the tree, after `interact` filled in its rect.
    ///
-   /// `WidgetInfo` carries the role, the name and the toggled state but has no description field, so
-   /// the description goes on the same node afterwards. `hide_from_accessibility` runs last, once the
-   /// contents have added the child node it hides.
+   /// `WidgetInfo` carries the role, the static name and the toggled state but has no description and
+   /// no relations, so the rest is written onto the same node afterwards. `hide_from_accessibility`
+   /// runs last, once the contents have added the child node it hides.
    fn declare_accessibility(&self, ui: &Ui, response: &Response) {
       if !self.interactive && !self.accessibility.announces() {
          return;
@@ -414,19 +449,30 @@ impl Frame {
 
       let role = self.announced_role();
       let enabled = ui.is_enabled();
-      let label = self.accessibility.label.as_deref().unwrap_or_default();
+      let name = self.accessibility.name.unwrap_or_default();
 
       response.widget_info(|| {
          if role == Role::Button && self.selected {
-            WidgetInfo::selected(Role::Button, enabled, true, label)
+            WidgetInfo::selected(Role::Button, enabled, true, name)
          } else {
-            WidgetInfo::labeled(role, enabled, label)
+            WidgetInfo::labeled(role, enabled, name)
          }
       });
 
-      if let Some(description) = &self.accessibility.description {
+      // A borrowed name: egui clears the label first, so the referenced node's text is the name.
+      if let Some(child) = self.accessibility.labelled_by {
+         let _ = response.clone().labelled_by(child);
+      }
+
+      if let Some(child) = self.accessibility.described_by {
          ui.ctx().accesskit_node_builder(response.id, |node| {
-            node.set_description(description.clone());
+            node.push_described_by(child.accesskit_id());
+         });
+      }
+
+      if let Some(description) = self.accessibility.description {
+         ui.ctx().accesskit_node_builder(response.id, |node| {
+            node.set_description(description);
          });
       }
 
@@ -462,7 +508,7 @@ impl Frame {
       egui::Frame {
          fill: Color32::TRANSPARENT,
          stroke: Stroke::new(self.visuals.border.width, Color32::TRANSPARENT),
-         ..self.clone().to_egui()
+         ..self.to_egui()
       }
    }
 
@@ -935,6 +981,80 @@ mod tests {
       assert!(
          child_node.is_hidden(),
          "the child repeats the plate's name, so its node must be hidden"
+      );
+   }
+
+   /// The reason the names are borrowed and static: naming a plate must not turn it into an owned
+   /// value. If this stops compiling, `FrameAccessibility` grew an allocation.
+   #[test]
+   fn frame_stays_copy() {
+      fn assert_copy<T: Copy>() {}
+      assert_copy::<Frame>();
+      assert_copy::<FrameAccessibility>();
+   }
+
+   #[test]
+   fn labelled_by_borrows_the_childs_text_as_the_name() {
+      let ctx = Context::default();
+      let mut child = None;
+
+      // The first pass learns the child's id, as in the hide test above.
+      let mut first = ctx.run_ui(RawInput::default(), |ui| {
+         Frame::new().interactive(true).show(ui, |ui| {
+            child = Some(ui.add(egui::Label::new("Main wallet")).id);
+         });
+      });
+      first.textures_delta.clear();
+      let child = child.expect("the child label was added");
+
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         Frame::new().interactive(true).labelled_by(child).show(ui, |ui| {
+            ui.add(egui::Label::new("Main wallet"));
+         });
+      });
+
+      let plate = nodes
+         .iter()
+         .find(|node| node.role() == Role::Button)
+         .expect("the plate has no node");
+      assert!(
+         plate.labelled_by().contains(&child.accesskit_id()),
+         "the plate must borrow the child's text as its name"
+      );
+      assert_eq!(
+         plate.label(),
+         None,
+         "a borrowed name leaves the label to the child"
+      );
+   }
+
+   #[test]
+   fn described_by_borrows_the_childs_text_as_the_description() {
+      let ctx = Context::default();
+      let mut child = None;
+
+      let mut first = ctx.run_ui(RawInput::default(), |ui| {
+         Frame::new().interactive(true).show(ui, |ui| {
+            child = Some(ui.add(egui::Label::new("0x1234...cdef")).id);
+         });
+      });
+      first.textures_delta.clear();
+      let child = child.expect("the child label was added");
+
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         Frame::new()
+            .interactive(true)
+            .accessible_name("Recipient")
+            .described_by(child)
+            .show(ui, |ui| {
+               ui.add(egui::Label::new("0x1234...cdef"));
+            });
+      });
+
+      let plate = node_with_label(&nodes, "Recipient");
+      assert!(
+         plate.described_by().contains(&child.accesskit_id()),
+         "the plate must borrow the child's text as its description"
       );
    }
 }
