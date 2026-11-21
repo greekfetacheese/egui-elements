@@ -42,7 +42,7 @@ type UiFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
 /// can take keyboard focus: `Tab` stays inside the dialog and a screen reader
 /// cannot reach the page underneath. The dialog exposes
 /// `accesskit::Role::Dialog` (or `accesskit::Role::AlertDialog` with
-/// [`Modal::alert`]), named by [`Modal::a11y_label`] when that is set and by
+/// [`Modal::alert`]), named by [`Modal::accessible_name`] when that is set and by
 /// the heading otherwise.
 ///
 /// `Esc` closes the modal whenever [`Modal::close_on_escape`] is `true` — the
@@ -54,7 +54,7 @@ pub struct Modal<'a> {
    id_salt: Id,
    heading: Option<WidgetText>,
    subtitle: Option<WidgetText>,
-   a11y_label: Option<String>,
+   accessible_name: Option<String>,
    header_icon: Option<Image<'a>>,
    frame: Option<Frame>,
    center_header_icon: bool,
@@ -87,7 +87,7 @@ impl<'a> std::fmt::Debug for Modal<'a> {
             "subtitle",
             &self.subtitle.as_ref().map(|h| h.text()),
          )
-         .field("a11y_label", &self.a11y_label)
+         .field("accessible_name", &self.accessible_name)
          .field(
             "header_icon",
             &self.header_icon.as_ref().map(|_| "<image>"),
@@ -163,7 +163,7 @@ impl<'a> Modal<'a> {
          id_salt: id.into_modal_id(),
          heading: None,
          subtitle: None,
-         a11y_label: None,
+         accessible_name: None,
          header_icon: None,
          frame: None,
          center_header_icon: false,
@@ -204,8 +204,8 @@ impl<'a> Modal<'a> {
    /// A dialog with neither has no name at all: a screen reader announces the
    /// role and nothing else, which is why a body-only confirmation should name
    /// itself here. Default: the heading's text.
-   pub fn a11y_label(mut self, label: impl Into<String>) -> Self {
-      self.a11y_label = Some(label.into());
+   pub fn accessible_name(mut self, label: impl Into<String>) -> Self {
+      self.accessible_name = Some(label.into());
       self
    }
 
@@ -464,10 +464,10 @@ impl<'a> Modal<'a> {
 
       // --- Content -----------------------------------------------------
       let alert = self.alert;
-      // The dialog's accessible name: an explicit `.a11y_label(..)` wins
+      // The dialog's accessible name: an explicit `.accessible_name(..)` wins
       // over the heading, and a dialog with neither has no name to announce.
       let dialog_label = self
-         .a11y_label
+         .accessible_name
          .clone()
          .or_else(|| self.heading.as_ref().map(|h| h.text().to_string()));
       // Shrink-wrap (no `max_width`) has to measure the content before it
@@ -948,11 +948,11 @@ mod tests {
    }
 
    #[test]
-   fn a11y_label_names_a_dialog_without_a_heading() {
+   fn accessible_name_names_a_dialog_without_a_heading() {
       let nodes = painted_accesskit_nodes(|ctx| {
          let mut open = true;
-         let _ = Modal::new("modal_a11y_label", &mut open)
-            .a11y_label("Delete all contacts")
+         let _ = Modal::new("modal_accessible_name", &mut open)
+            .accessible_name("Delete all contacts")
             .show(ctx, |ui| {
                ui.label("…");
             });
@@ -966,7 +966,8 @@ mod tests {
    fn a_heading_names_the_dialog_by_default() {
       let nodes = painted_accesskit_nodes(|ctx| {
          let mut open = true;
-         let modal = Modal::new("modal_a11y_heading", &mut open).heading("Discard changes?");
+         let modal =
+            Modal::new("modal_accessibility_heading", &mut open).heading("Discard changes?");
          let _ = modal.show(ctx, |ui| {
             ui.label("…");
          });

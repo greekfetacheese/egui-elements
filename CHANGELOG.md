@@ -51,7 +51,7 @@ on purpose**: bumping it, tagging and publishing is the release step, not part o
   option row.
 - `MenuItem::image` — a Lucide (or any) image in the leading gutter, beside `.icon()`.
 - `Modal::max_width`, `Frame::fit` and the `TextEdit` / `TextEditOutput` names for the themed field.
-- `Modal::a11y_label` — the dialog's accessible name, for the body-only dialogs that had none: it is used
+- `Modal::accessible_name` — the dialog's accessible name, for the body-only dialogs that had none: it is used
   when there is no visible heading, and overrides the heading when there is one.
 - `Modal::initial_focus` — the widget that takes keyboard focus when the dialog opens, ahead of the close
   "×" it falls back to.

@@ -901,7 +901,7 @@ A centered themed card over a dimmed backdrop that swallows clicks: heading, opt
 header icon, optional footer, and three ways out — the × and the backdrop behind `.closable(..)`, and
 `Esc` behind `.close_on_escape(..)` alone.
 
-**Signature** `Modal::new(id, &mut open).heading(..).subtitle(..).a11y_label(..).initial_focus(..).footer(..).show(ctx, |ui| …) -> Option<R>`
+**Signature** `Modal::new(id, &mut open).heading(..).subtitle(..).accessible_name(..).initial_focus(..).footer(..).show(ctx, |ui| …) -> Option<R>`
 
 ```rust
 use egui_elements::{Button, Label, Modal};
@@ -929,7 +929,7 @@ Modal::new("confirm", &mut open)
   not a glyph), `.closable(false)` removes the × and the backdrop exit, `.close_on_backdrop(false)` and
   `.close_on_escape(false)` remove those individually, and `.alert(true)` marks the dialog as an alert
   for assistive tech.
-- `.a11y_label(..)` names the dialog for assistive technology when there is no visible heading, and
+- `.accessible_name(..)` names the dialog for assistive technology when there is no visible heading, and
   overrides the heading's name when there is one; `.initial_focus(id)` puts the caret on that widget when
   the dialog opens — the close "×" is the fallback, and a body-only dialog should point at its first field.
 - `Esc` closes the dialog unless `.close_on_escape(false)`, even under `.closable(false)`: a keyboard
