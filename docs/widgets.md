@@ -117,6 +117,10 @@ which clears AA on every built-in palette, and hover/press mix the fill toward `
 Hold-to-confirm is a button mode, not a separate widget — see
 [Hold-to-confirm buttons](#hold-to-confirm-buttons).
 
+An icon-only button draws no text, so its node has no name and a screen reader says only
+"button": `.alt("Refresh")` names the action it performs, and the button's own text always
+wins over it. A debug build asserts on an image-only button that has neither.
+
 `Button` shadows `egui::Button`: import it after `use egui::*` or alias one of the two.
 
 ## Hold-to-confirm buttons
@@ -214,6 +218,9 @@ style's `animation_time`; `.motion(..)` overrides it and `Motion::instant()` sna
 `CheckboxVisuals::from_theme(theme.colors)` to keep the rest. A click reports
 `Response::changed`, Space/Enter work while the box is focused, and
 `ui.add_enabled(false, Checkbox::new(..))` mutes the whole row.
+
+`.name("Use API")` names the box-only form for assistive technology — a `without_text` checkbox is
+otherwise unnamed, and a visible text always wins.
 
 ## Radios
 
@@ -318,6 +325,9 @@ drives both the number and the tooltip, and the step decides the written precisi
 arrow keys (Home and End jump to the ends) and `Response::changed` fires on the frame that
 moves the value. `.visuals(SliderVisuals { .. })` replaces the colours for one slider — start
 from `SliderVisuals::from_theme(theme.colors)` to keep the rest.
+
+The slider's AccessKit node carries the formatted value, so a reader speaks what the screen shows
+(`"0.75 s"`, `"$42"`) instead of the bare number; the numeric value and the step stay on the node.
 
 Proof: `cargo run --example slider`.
 
@@ -648,6 +658,9 @@ ui.add(Indicator::new(IndicatorState::Connecting).pulse(BadgePulse::new().period
 presence cut-out, or a border tone for an outlined status light. The ring extends the widget's visible
 reach, so an edge-of-row dot keeps painting.
 
+`.label("RPC: connected")` names what the light reports; without it a reader hears only the state's
+own words ("status: on"), which say nothing about *which* light it is.
+
 The phase is derived from each light's id, so siblings in one row are staggered
 instead of beating in lockstep. The glow and the pulse paint outside the allocated
 square, exactly like the badge halo — leave a gap in a tight layout. A pulsing light
@@ -724,6 +737,9 @@ ui.add(
   (for example `Lucide::Bell.image()` with the `lucide` feature).
 - `.height(points)` overrides the default. `.sense(Sense)` defaults to `Sense::click()`; pass
   `Sense::hover()` when a trailing control owns the click.
+- `.read_only(true)` announces the row as a `Label` readout — the same text, hovered instead of
+  clicked and out of the tab order — and every row's name is "Title — Subtitle", so a readout row's
+  second line is spoken.
 - The trailing closure runs in a right-aligned child `Ui` whose width the row measures, so the title
   truncates before it. `.id_salt(..)` salts that child when the same row repeats on several surfaces.
 - Proof: `examples/row.rs` — `cargo run --example row --features lucide`.
@@ -901,9 +917,10 @@ pinned (and restored when `show` returns), so a themed title bar does not flicke
 ## Modal
 
 A centered themed card over a dimmed backdrop that swallows clicks: heading, optional subtitle and
-header icon, optional footer, and three ways out (`Esc`, the ×, the backdrop).
+header icon, optional footer, and three ways out — the × and the backdrop behind `.closable(..)`, and
+`Esc` behind `.close_on_escape(..)` alone.
 
-**Signature** `Modal::new(id, &mut open).heading(..).subtitle(..).footer(..).show(ctx, |ui| …) -> Option<R>`
+**Signature** `Modal::new(id, &mut open).heading(..).subtitle(..).accessible_name(..).initial_focus(..).footer(..).show(ctx, |ui| …) -> Option<R>`
 
 ```rust
 use egui_elements::{Button, Label, Modal};
@@ -928,8 +945,15 @@ Modal::new("confirm", &mut open)
 - Defaults: left-aligned title and icon, separators on, **no maximum width** — a long body stretches
   the card unless `.max_width(..)` or `.width(..)` is set.
 - `.center_header(true)` centres the title, `header_icon(egui::Image)` takes an image (a Lucide SVG,
-  not a glyph), `.closable(false)`, `.close_on_backdrop(false)` and `.close_on_escape(false)` remove
-  exits, and `.alert(true)` marks the dialog as an alert for assistive tech.
+  not a glyph), `.closable(false)` removes the × and the backdrop exit, `.close_on_backdrop(false)` and
+  `.close_on_escape(false)` remove those individually, and `.alert(true)` marks the dialog as an alert
+  for assistive tech.
+- `.accessible_name(..)` names the dialog for assistive technology when there is no visible heading, and
+  overrides the heading's name when there is one; `.initial_focus(id)` puts the caret on that widget when
+  the dialog opens — the close "×" is the fallback, and a body-only dialog should point at its first field.
+- `Esc` closes the dialog unless `.close_on_escape(false)`, even under `.closable(false)`: a keyboard
+  user always has a way out. While it is open the dialog also owns egui's modal layer, so `Tab` stays
+  inside it instead of reaching the page behind.
 
 ## Menus
 
@@ -1138,3 +1162,12 @@ label's 1.5 x body default, and `.size()` pins the square — without it the bal
 so the label keeps 60 % of the diameter, which is the reference's 108 pt of text in
 180 pt. An empty `.text("")` is the same as no label. `paint_at(&Ui, Rect)` draws it
 inside a widget you already own.
+
+## QR images
+
+`QrImage::alt("Receive address QR")` names the symbol for assistive technology and
+`QrImage::hidden()` keeps it out of that tree; `QrImage::show(ui)` draws it at its
+natural size and is the method that guarantees the node never speaks egui's pending
+"Loading bytes://…" texture text (a QR that encodes a secret must not be announced by
+its texture URI). `image()` stays the drawing method for a host that needs a custom
+size, and it only names the node through egui's own `alt_text`.

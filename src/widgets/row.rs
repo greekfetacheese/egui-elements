@@ -26,6 +26,16 @@ const ICON_SIZE: f32 = 20.0;
 /// The default height is two interaction heights (≈40 pt); set [`height`](Self::height) for a compact
 /// or roomier row. The title and subtitle truncate at the space the trailing control leaves.
 ///
+/// # Accessibility
+///
+/// The row is a [`Role::Button`] named "Title — Subtitle": the second line is part of the name,
+/// because a readout row carries its meaning there ("Load now" over "0.4, rising" is one sentence,
+/// not two nodes).
+///
+/// [`read_only`](Self::read_only) turns the row into a readout — a [`Role::Label`] whose value is the
+/// same text, hovered rather than clicked — for a row that reports a value instead of doing
+/// something. A read-only row is not in the tab order.
+///
 /// ```
 /// # use egui::__run_test_ui;
 /// # use egui_elements::widgets::{Row, Switch};
@@ -47,6 +57,7 @@ pub struct Row<'a> {
    text: WidgetText,
    subtitle: Option<WidgetText>,
    selected: bool,
+   read_only: bool,
    chevron: bool,
    trailing: Option<Box<dyn FnOnce(&mut Ui) + 'a>>,
    height: Option<f32>,
@@ -62,6 +73,7 @@ impl<'a> Row<'a> {
          text: text.into(),
          subtitle: None,
          selected: false,
+         read_only: false,
          chevron: false,
          trailing: None,
          height: None,
@@ -77,6 +89,7 @@ impl<'a> Row<'a> {
          text: text.into(),
          subtitle: None,
          selected: false,
+         read_only: false,
          chevron: false,
          trailing: None,
          height: None,
@@ -94,6 +107,17 @@ impl<'a> Row<'a> {
    /// Paint the selection fill and its matching ink. Default `false`.
    pub fn selected(mut self, selected: bool) -> Self {
       self.selected = selected;
+      self
+   }
+
+   /// Announce the row as a readout instead of a control. Default `false`.
+   ///
+   /// A read-only row is a [`Role::Label`] whose value is the row's text, and its sense defaults to
+   /// [`Sense::hover`] instead of [`Sense::click`]: it leaves the tab order, and a reader is not
+   /// offered a click the row has no action for. Pass [`sense`](Self::sense) explicitly when a
+   /// readout still opens something — the sense you set decides.
+   pub fn read_only(mut self, read_only: bool) -> Self {
+      self.read_only = read_only;
       self
    }
 
@@ -148,7 +172,15 @@ impl<'a> Row<'a> {
          Some(salt) => ui.scope_id().with(salt),
          None => ui.auto_id_with("row"),
       };
-      let sense = self.sense.unwrap_or(Sense::click());
+      // A readout is hovered, not clicked: the default sense follows what the row is for, and an
+      // explicit `.sense(..)` still wins.
+      let sense = self.sense.unwrap_or_else(|| {
+         if self.read_only {
+            Sense::hover()
+         } else {
+            Sense::click()
+         }
+      });
       let response = ui.interact(rect, id, sense);
 
       let ink = if self.selected {
@@ -161,7 +193,14 @@ impl<'a> Row<'a> {
       } else {
          colors.text_muted
       };
-      let label = self.text.text().to_owned();
+      let title = self.text.text().to_owned();
+      // The subtitle rides the name: a readout row says nothing without its second line. Read here,
+      // before the subtitle is moved into its galley below.
+      let subtitle_text = self.subtitle.as_ref().map(|subtitle| subtitle.text().to_owned());
+      let label = match subtitle_text {
+         Some(subtitle) => format!("{title} — {subtitle}"),
+         None => title,
+      };
 
       if ui.is_rect_visible(rect) {
          let fill = if self.selected {
@@ -278,7 +317,15 @@ impl<'a> Row<'a> {
       }
 
       let selected = self.selected;
-      response.widget_info(|| WidgetInfo::selected(Role::Button, true, selected, label.as_str()));
+      let read_only = self.read_only;
+      response.widget_info(|| {
+         if read_only {
+            // A label's text rides the node value, like every `Role::Label` in the crate.
+            WidgetInfo::labeled(Role::Label, true, label.as_str())
+         } else {
+            WidgetInfo::selected(Role::Button, true, selected, label.as_str())
+         }
+      });
 
       response
    }
@@ -293,6 +340,7 @@ impl Widget for Row<'_> {
 #[cfg(test)]
 mod tests {
    use super::*;
+   use egui::accesskit::{Action, Node};
    use egui::{CentralPanel, Context, Event, FullOutput, Modifiers, PointerButton, Pos2, RawInput};
 
    /// Screen the test rows live in; small enough to keep clicks deterministic.
@@ -389,5 +437,68 @@ mod tests {
          );
          assert!(ui.is_rect_visible(response.rect));
       });
+   }
+
+   /// The nodes one frame of `add` leaves in the AccessKit tree.
+   fn accesskit_nodes(ctx: &Context, mut add: impl FnMut(&mut Ui)) -> Vec<Node> {
+      ctx.enable_accesskit();
+
+      let mut output = ctx.run_ui(RawInput::default(), |ui| add(ui));
+      let update = output
+         .platform_output
+         .accesskit_update
+         .take()
+         .expect("an AccessKit-enabled frame must produce a tree update");
+      let nodes = update.nodes.into_iter().map(|(_, node)| node).collect();
+      output.drop_without_applying_deltas();
+
+      nodes
+   }
+
+   fn node_with_role(nodes: &[Node], role: Role) -> &Node {
+      nodes
+         .iter()
+         .find(|node| node.role() == role)
+         .expect("no node with the expected role")
+   }
+
+   #[test]
+   fn a_row_names_itself_with_its_subtitle() {
+      let ctx = Context::default();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(Row::text("Load now").subtitle("0.4, rising"));
+      });
+
+      let node = node_with_role(&nodes, Role::Button);
+
+      assert_eq!(
+         node.label(),
+         Some("Load now — 0.4, rising"),
+         "the subtitle must be part of the row's name"
+      );
+   }
+
+   #[test]
+   fn a_read_only_row_is_a_label_instead_of_a_button() {
+      let ctx = Context::default();
+      let nodes = accesskit_nodes(&ctx, |ui| {
+         ui.add(Row::text("Load now").subtitle("0.4, rising").read_only(true));
+      });
+
+      let node = node_with_role(&nodes, Role::Label);
+
+      assert_eq!(
+         node.value(),
+         Some("Load now — 0.4, rising"),
+         "a label's text rides the value"
+      );
+      assert!(
+         !node.supports_action(Action::Click),
+         "a readout has no click to offer"
+      );
+      assert!(
+         !node.supports_action(Action::Focus),
+         "a read-only row is not in the tab order"
+      );
    }
 }
